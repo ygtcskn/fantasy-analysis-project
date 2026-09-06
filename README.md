@@ -32,6 +32,20 @@ If your normal Python command is unavailable, replace `python` in the commands b
 & 'C:\Users\ygtcs\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe' src/fetch/download_season.py --season 2026/2027
 ```
 
+## Match probability research
+
+The separate research area is documented in [temp/odds/README.md](temp/odds/README.md).
+It audits existing season CSVs and supports chronological comparisons of frequency,
+Poisson, and Dixon-Coles models. Research reports are saved in unique run folders
+under `data/temp/odds`; they do not feed the website automatically.
+
+```powershell
+python temp/odds/run.py coverage
+```
+
+Coverage uses the standard library. Backtests require the research dependencies
+and at least five complete historical seasons; see the research README for commands.
+
 ## Workflow
 
 Run from the project directory:
