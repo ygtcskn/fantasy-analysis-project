@@ -1,0 +1,32 @@
+﻿setting,index,value
+command,,predict
+seasons,,
+input_root,,C:\Users\ygtcs\Desktop\superlig\analysis\data\final\sportmonks
+output_root,,C:\Users\ygtcs\Desktop\superlig\analysis\temp\odds\runs
+league_id,,600
+cutoff_hours,,24.0
+window_days,,1095.0
+half_life_days,,365.0
+decay_candidates,,
+ridge,,5.0
+trials,,40
+no_diagnostics,,False
+no_tune,,False
+tune_folds,,4
+min_tune_rows,,400
+tune_timeout,,
+seed,,600
+gbdt,,
+min_train_matches,,200
+model,0,poisson
+model,1,xgboost
+gbdt_params,,
+round,,next
+from_date,,
+to_date,,
+result_availability_assumption,,"later of kickoff plus 3 hours and valid second-half period end, where available"
+brier_normalization,,sum of three squared outcome errors (range 0 to 2)
+history_limitation,,Reconstructed from present exports; past publication times and schedule revisions not archived.
+python,,3.12.0
+numpy,,2.5.2
+scipy,,1.18.1

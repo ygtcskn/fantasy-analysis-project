@@ -1,0 +1,396 @@
+player_name,team_name,position,player_id,official_points,computed_points,difference,official_minutes,computed_minutes
+Rıdvan,Beşiktaş,DEF,4545417,10.0,20.0,10.0,235.0,281.0
+Škriniar,Fenerbahçe,DEF,130142,10.0,18.0,8.0,270.0,360.0
+Vlahović,Beşiktaş,FOR,177988,17.0,23.0,6.0,104.0,189.0
+Olaitan,Beşiktaş,OS,37572227,14.0,20.0,6.0,211.0,286.0
+Bahadır,TÜMOSAN Konyaspor,KL,390278,13.0,7.0,-6.0,158.0,158.0
+Orkun,Beşiktaş,OS,4545376,6.0,12.0,6.0,251.0,341.0
+Trossard,Beşiktaş,OS,61780,7.0,12.0,5.0,212.0,302.0
+Kanté,Fenerbahçe,OS,1193,6.0,9.0,3.0,184.0,274.0
+Matos,Göztepe,OS,37545764,6.0,9.0,3.0,106.0,107.0
+Muriqi,Fenerbahçe,FOR,49353,20.0,22.0,2.0,162.0,230.0
+Greenwood,Fenerbahçe,OS,20333643,20.0,22.0,2.0,180.0,270.0
+Oğuz,Fenerbahçe,OS,10967396,17.0,19.0,2.0,173.0,241.0
+Agbadou,Beşiktaş,DEF,37261923,14.0,16.0,2.0,270.0,360.0
+Nübel,Beşiktaş,KL,32550,11.0,13.0,2.0,270.0,360.0
+Colley,TÜMOSAN Konyaspor,OS,37257780,10.0,12.0,2.0,210.0,212.0
+Ilie,Kasımpaşa,DEF,37361459,9.0,11.0,2.0,270.0,270.0
+Sagnan,Çaykur Rizespor,DEF,529405,8.0,10.0,2.0,268.0,268.0
+Mocsi,Çaykur Rizespor,DEF,1525202,8.0,10.0,2.0,270.0,270.0
+Guendouzi,Fenerbahçe,OS,97087,7.0,9.0,2.0,266.0,350.0
+Ariss,Çaykur Rizespor,DEF,37616144,7.0,9.0,2.0,261.0,261.0
+Djaló,Beşiktaş,DEF,540319,6.0,8.0,2.0,180.0,193.0
+Salih,Beşiktaş,OS,32622,6.0,8.0,2.0,225.0,316.0
+Giordano,Eyüpspor,DEF,37580151,2.0,4.0,2.0,90.0,106.0
+İrfan Can,Gençlerbirliği,KL,202070,24.0,25.0,1.0,270.0,270.0
+Operi,İstanbul Başakşehir,DEF,97319,19.0,20.0,1.0,333.0,333.0
+Emrecan,Çaykur Rizespor,OS,37654172,16.0,15.0,-1.0,93.0,93.0
+Koïta,Gençlerbirliği,FOR,751437,15.0,16.0,1.0,250.0,250.0
+Abdurrahim,Gençlerbirliği,DEF,765766,15.0,16.0,1.0,247.0,247.0
+Muhammed,İstanbul Başakşehir,KL,391366,14.0,15.0,1.0,270.0,270.0
+Ruan,Corendon Alanyaspor,OS,37654301,14.0,15.0,1.0,263.0,263.0
+İlhan,Beşiktaş,OS,37727058,13.0,14.0,1.0,71.0,97.0
+Gianniotis,Kasımpaşa,KL,108695,13.0,14.0,1.0,270.0,270.0
+Mithat,Çaykur Rizespor,DEF,37308595,12.0,13.0,1.0,270.0,270.0
+Arous,Kasımpaşa,DEF,37667492,12.0,13.0,1.0,270.0,270.0
+Ederson,Fenerbahçe,KL,159142,11.0,12.0,1.0,180.0,270.0
+Emin,İstanbul Başakşehir,DEF,37317372,11.0,12.0,1.0,360.0,360.0
+Muçi,Trabzonspor,OS,10966299,11.0,12.0,1.0,141.0,141.0
+Diomandé,Arca Çorum FK,OS,37434598,11.0,10.0,-1.0,204.0,204.0
+Semedo,Fenerbahçe,DEF,160110,10.0,11.0,1.0,190.0,280.0
+Ake,Fenerbahçe,DEF,1869,10.0,11.0,1.0,270.0,360.0
+Brown,Fenerbahçe,DEF,28912973,10.0,11.0,1.0,153.0,243.0
+Asensio,Fenerbahçe,OS,186668,9.0,10.0,1.0,128.0,128.0
+İrfan Can,Fenerbahçe,OS,201444,9.0,10.0,1.0,137.0,183.0
+Melih,TÜMOSAN Konyaspor,OS,21036708,9.0,8.0,-1.0,349.0,349.0
+Murillo,Beşiktaş,DEF,512560,9.0,10.0,1.0,98.0,188.0
+Goutas,Gençlerbirliği,DEF,63184,9.0,10.0,1.0,270.0,270.0
+Ömer Ali,İstanbul Başakşehir,DEF,201369,9.0,10.0,1.0,333.0,333.0
+Baiye,Erzurumspor FK,OS,540571,9.0,10.0,1.0,360.0,360.0
+Taylan,Çaykur Rizespor,OS,201516,8.0,7.0,-1.0,254.0,254.0
+Ahmed,Çaykur Rizespor,OS,3862121,8.0,7.0,-1.0,263.0,263.0
+Kemen,İstanbul Başakşehir,OS,4546,8.0,7.0,-1.0,334.0,334.0
+Abena,Gaziantep FK,DEF,26771,8.0,9.0,1.0,270.0,270.0
+Sinclair,Göztepe,FOR,37354878,7.0,8.0,1.0,132.0,133.0
+Moldovan,Eyüpspor,KL,1872767,7.0,8.0,1.0,270.0,270.0
+Jessen,Kasımpaşa,DEF,37705883,7.0,8.0,1.0,180.0,180.0
+Juan,Göztepe,FOR,37451261,6.0,7.0,1.0,100.0,99.0
+Olawoyin,Çaykur Rizespor,OS,37369292,6.0,5.0,-1.0,173.0,173.0
+Hwang,Corendon Alanyaspor,FOR,320795,6.0,7.0,1.0,208.0,208.0
+İbrahim,Corendon Alanyaspor,FOR,37352825,6.0,7.0,1.0,222.0,222.0
+Makouta,Corendon Alanyaspor,OS,111694,6.0,7.0,1.0,258.0,258.0
+El Yamiq,Eyüpspor,DEF,751551,6.0,7.0,1.0,270.0,270.0
+Baran,Corendon Alanyaspor,OS,37632013,6.0,7.0,1.0,182.0,182.0
+Baldursson,Kasımpaşa,OS,16496642,6.0,7.0,1.0,247.0,247.0
+Zoukrou,Kocaelispor,DEF,37540374,5.0,6.0,1.0,240.0,240.0
+Michalak,Eyüpspor,OS,157030,5.0,6.0,1.0,201.0,201.0
+Boutobba,Eyüpspor,OS,97149,5.0,6.0,1.0,157.0,157.0
+Kerem,Kasımpaşa,OS,31854,5.0,6.0,1.0,180.0,180.0
+Mendes,Kasımpaşa,OS,37717106,5.0,6.0,1.0,184.0,184.0
+Ndidi,Beşiktaş,OS,5319,4.0,5.0,1.0,110.0,124.0
+İsmail,Fenerbahçe,OS,22528506,3.0,4.0,1.0,112.0,118.0
+Oh,Beşiktaş,FOR,29735915,3.0,4.0,1.0,103.0,108.0
+Ayberk,Kasımpaşa,DEF,37603238,3.0,4.0,1.0,126.0,126.0
+Susoho,Kocaelispor,OS,37581761,2.0,3.0,1.0,105.0,106.0
+Nene,Fenerbahçe,OS,37555777,2.0,3.0,1.0,48.0,70.0
+Outtara,Beşiktaş,DEF,37590868,2.0,3.0,1.0,35.0,79.0
+Emirhan,Beşiktaş,DEF,3187864,2.0,3.0,1.0,90.0,167.0
+Kerem,Fenerbahçe,OS,534383,1.0,2.0,1.0,79.0,123.0
+Antunes,Göztepe,OS,2206568,1.0,2.0,1.0,60.0,60.0
+Lukaku,Fenerbahçe,FOR,995,1.0,2.0,1.0,48.0,70.0
+Osimhen,Galatasaray,FOR,455805,46.0,46.0,0.0,303.0,303.0
+Shomu,İstanbul Başakşehir,FOR,330582,31.0,31.0,0.0,345.0,345.0
+Sara,Galatasaray,OS,8417851,30.0,30.0,0.0,343.0,343.0
+Sorescu,Gaziantep FK,DEF,165701,27.0,27.0,0.0,266.0,266.0
+Salah,Trabzonspor,OS,4125,25.0,25.0,0.0,212.0,212.0
+Torreira,Galatasaray,OS,130022,24.0,24.0,0.0,344.0,345.0
+Benedyczak,Kasımpaşa,FOR,13186483,23.0,23.0,0.0,264.0,265.0
+Cerny,Beşiktaş,OS,25709,21.0,21.0,0.0,249.0,313.0
+Dia Saba,Amed Sportif Faaliyetler,OS,124327,20.0,20.0,0.0,252.0,252.0
+Mendes,Samsunspor,DEF,37723761,20.0,20.0,0.0,270.0,270.0
+Eren,Erzurumspor FK,FOR,201245,20.0,20.0,0.0,295.0,295.0
+Oğulcan,Gençlerbirliği,OS,205067,19.0,19.0,0.0,233.0,233.0
+Haïdara,Kocaelispor,DEF,1376,18.0,18.0,0.0,270.0,270.0
+Lima,Corendon Alanyaspor,DEF,37540578,18.0,18.0,0.0,269.0,270.0
+Jules,Eyüpspor,DEF,18356,18.0,18.0,0.0,270.0,270.0
+Onana,Trabzonspor,KL,26393,16.0,16.0,0.0,270.0,270.0
+Sallai,Galatasaray,DEF,114021,16.0,16.0,0.0,336.0,336.0
+Dijksteel,Kocaelispor,DEF,10780,15.0,15.0,0.0,270.0,270.0
+Traoré,Gençlerbirliği,OS,430505,15.0,15.0,0.0,270.0,270.0
+Tongya,Gençlerbirliği,OS,23278665,15.0,15.0,0.0,270.0,270.0
+Celil,Samsunspor,OS,540342,15.0,15.0,0.0,266.0,266.0
+Emre,Samsunspor,OS,203305,15.0,15.0,0.0,270.0,270.0
+Jarju,Samsunspor,OS,38208058,15.0,15.0,0.0,249.0,249.0
+Winck,Kasımpaşa,DEF,129679,15.0,15.0,0.0,265.0,265.0
+Berkan,Kocaelispor,OS,37520128,14.0,14.0,0.0,242.0,242.0
+Laçi,Çaykur Rizespor,OS,78462,14.0,14.0,0.0,270.0,270.0
+Fofana,Çaykur Rizespor,KL,433194,14.0,14.0,0.0,270.0,270.0
+Olsen,İstanbul Başakşehir,OS,1685328,14.0,14.0,0.0,325.0,325.0
+Hadërgjonaj,Corendon Alanyaspor,DEF,32518,14.0,14.0,0.0,270.0,270.0
+Giorbelidze,Erzurumspor FK,DEF,106494,14.0,14.0,0.0,179.0,179.0
+Yunus,Galatasaray,OS,5640825,14.0,14.0,0.0,327.0,327.0
+Sánchez,Galatasaray,DEF,26294,14.0,14.0,0.0,341.0,341.0
+Dellova,Amed Sportif Faaliyetler,DEF,22535472,13.0,13.0,0.0,270.0,270.0
+Victor,Corendon Alanyaspor,KL,203040,13.0,13.0,0.0,270.0,270.0
+Okan,Samsunspor,KL,201473,13.0,13.0,0.0,270.0,270.0
+Sor,Amed Sportif Faaliyetler,OS,36083970,13.0,13.0,0.0,217.0,217.0
+Diabaté,Kasımpaşa,OS,97600,13.0,13.0,0.0,180.0,180.0
+Saviolo,Trabzonspor,OS,37736801,12.0,12.0,0.0,121.0,121.0
+Mehmet,Amed Sportif Faaliyetler,DEF,203359,12.0,12.0,0.0,164.0,165.0
+Zuzek,Gençlerbirliği,DEF,183451,12.0,12.0,0.0,270.0,270.0
+Orhan,Erzurumspor FK,DEF,201365,12.0,12.0,0.0,328.0,327.0
+Arda,Corendon Alanyaspor,FOR,37618353,12.0,12.0,0.0,209.0,209.0
+Ahmed,Eyüpspor,FOR,37660283,12.0,12.0,0.0,231.0,231.0
+Jacobs,Galatasaray,DEF,3861304,12.0,12.0,0.0,310.0,310.0
+Orban,Amed Sportif Faaliyetler,FOR,37632306,11.0,11.0,0.0,218.0,218.0
+Ramirez,Arca Çorum FK,FOR,286894,11.0,11.0,0.0,251.0,251.0
+Efkan,Göztepe,OS,43244,11.0,11.0,0.0,139.0,140.0
+Pereira,Gençlerbirliği,DEF,129907,11.0,11.0,0.0,270.0,270.0
+Ali Sowe,Çaykur Rizespor,FOR,132244,11.0,11.0,0.0,269.0,269.0
+Fatih,Samsunspor,FOR,14685565,11.0,11.0,0.0,125.0,126.0
+Ertuğrul,Erzurumspor FK,KL,200879,11.0,11.0,0.0,180.0,180.0
+Gerxhaliu,Erzurumspor FK,DEF,37618642,11.0,11.0,0.0,360.0,360.0
+Tobiasz,Gaziantep FK,KL,37544272,11.0,11.0,0.0,270.0,270.0
+Ștefan,Gaziantep FK,DEF,167842,11.0,11.0,0.0,245.0,245.0
+Pérez,Gaziantep FK,DEF,189707,11.0,11.0,0.0,270.0,270.0
+Serhat,Kocaelispor,KL,37375395,10.0,10.0,0.0,270.0,270.0
+Bates,Amed Sportif Faaliyetler,DEF,173220,10.0,10.0,0.0,241.0,241.0
+Lafont,Amed Sportif Faaliyetler,KL,96798,10.0,10.0,0.0,270.0,270.0
+Taylan,Beşiktaş,DEF,37650803,10.0,10.0,0.0,172.0,172.0
+Diabate,Gençlerbirliği,OS,38209457,10.0,10.0,0.0,255.0,255.0
+Opoku,İstanbul Başakşehir,DEF,1494704,10.0,10.0,0.0,360.0,360.0
+Mujakic,Erzurumspor FK,DEF,1356266,10.0,10.0,0.0,360.0,360.0
+Gökhan,Amed Sportif Faaliyetler,OS,35349,10.0,10.0,0.0,109.0,109.0
+Sousa,Kocaelispor,OS,37673619,10.0,10.0,0.0,159.0,160.0
+Metehan,Kocaelispor,FOR,23637808,9.0,9.0,0.0,52.0,52.0
+Fayzullayev,İstanbul Başakşehir,OS,37509454,9.0,9.0,0.0,240.0,241.0
+Uğurcan,Galatasaray,KL,201739,9.0,9.0,0.0,270.0,270.0
+Maglica,Kocaelispor,DEF,37528918,9.0,9.0,0.0,110.0,110.0
+Andzouana,TÜMOSAN Konyaspor,DEF,97434,8.0,8.0,0.0,360.0,360.0
+Gonçalves,TÜMOSAN Konyaspor,OS,162177,8.0,8.0,0.0,295.0,295.0
+Henrique,Göztepe,FOR,37426978,8.0,8.0,0.0,230.0,230.0
+Aliti,Corendon Alanyaspor,DEF,74305,8.0,8.0,0.0,270.0,270.0
+Ümit,Beşiktaş,DEF,37606065,8.0,8.0,0.0,270.0,270.0
+Abdulkerim,Galatasaray,DEF,201370,8.0,8.0,0.0,264.0,264.0
+Rodríguez,Erzurumspor FK,OS,233878,8.0,8.0,0.0,323.0,323.0
+Emir,Kocaelispor,DEF,37548309,7.0,7.0,0.0,104.0,104.0
+Baku,Kocaelispor,OS,1452177,7.0,7.0,0.0,241.0,241.0
+Muleka,TÜMOSAN Konyaspor,FOR,12789480,7.0,7.0,0.0,343.0,343.0
+Janderson,Göztepe,FOR,37615973,7.0,7.0,0.0,138.0,137.0
+Borevkovic,Samsunspor,DEF,75226,7.0,7.0,0.0,225.0,226.0
+Tómasson,Samsunspor,DEF,119634,7.0,7.0,0.0,270.0,270.0
+Yalçın,Samsunspor,OS,20691946,7.0,7.0,0.0,209.0,209.0
+Barış A.,Galatasaray,OS,4243131,7.0,7.0,0.0,310.0,310.0
+Lemina,Galatasaray,OS,96017,7.0,7.0,0.0,220.0,221.0
+Meleke,Gaziantep FK,OS,14726292,7.0,7.0,0.0,258.0,258.0
+Maxim,Gaziantep FK,OS,31822,7.0,7.0,0.0,270.0,270.0
+Kozlowski,Gaziantep FK,OS,24817079,7.0,7.0,0.0,248.0,248.0
+Ballet,Amed Sportif Faaliyetler,OS,23278710,7.0,7.0,0.0,184.0,184.0
+Agyei,Kocaelispor,OS,5381,6.0,6.0,0.0,259.0,260.0
+Uğur,Kocaelispor,DEF,37306851,6.0,6.0,0.0,165.0,164.0
+Mahmic,Arca Çorum FK,OS,37589293,6.0,6.0,0.0,45.0,44.0
+Krasniqi,Amed Sportif Faaliyetler,OS,31616654,6.0,6.0,0.0,270.0,270.0
+Onuachu,Trabzonspor,FOR,84143,6.0,6.0,0.0,267.0,267.0
+Metehan,Trabzonspor,OS,393336,6.0,6.0,0.0,77.0,77.0
+Luka,Göztepe,KL,106673,6.0,6.0,0.0,270.0,270.0
+Kaluzinski,İstanbul Başakşehir,OS,37420391,6.0,6.0,0.0,221.0,222.0
+Sané,Galatasaray,OS,4783,6.0,6.0,0.0,213.0,213.0
+Aral,Trabzonspor,OS,24818229,5.0,5.0,0.0,193.0,193.0
+Mustafa,Trabzonspor,DEF,534376,5.0,5.0,0.0,270.0,270.0
+Cem,Amed Sportif Faaliyetler,OS,37530649,5.0,5.0,0.0,132.0,132.0
+Jevtovic,TÜMOSAN Konyaspor,OS,177670,5.0,5.0,0.0,219.0,219.0
+Felipe,Arca Çorum FK,KL,219080,5.0,5.0,0.0,270.0,270.0
+Borza,Arca Çorum FK,DEF,37600525,5.0,5.0,0.0,270.0,270.0
+Melih,Trabzonspor,OS,202620,5.0,5.0,0.0,203.0,203.0
+Berat,Arca Çorum FK,OS,450413,5.0,5.0,0.0,173.0,173.0
+Watt,Samsunspor,OS,1494342,5.0,5.0,0.0,180.0,180.0
+Massanga,Eyüpspor,OS,37431014,5.0,5.0,0.0,270.0,270.0
+Pintor,Eyüpspor,OS,529880,5.0,5.0,0.0,151.0,151.0
+Talha,Eyüpspor,DEF,37616342,5.0,5.0,0.0,270.0,270.0
+Bacuna,Gaziantep FK,OS,25515,5.0,5.0,0.0,134.0,134.0
+Camara,Gaziantep FK,OS,23717944,5.0,5.0,0.0,158.0,158.0
+Gouveia,Gençlerbirliği,OS,25548824,5.0,5.0,0.0,150.0,151.0
+Cengiz,Arca Çorum FK,OS,202002,4.0,4.0,0.0,45.0,44.0
+Taha,Göztepe,DEF,37423121,4.0,4.0,0.0,270.0,270.0
+Ogün,Göztepe,OS,3187919,4.0,4.0,0.0,91.0,91.0
+Rhaldney,Göztepe,OS,10967436,4.0,4.0,0.0,164.0,163.0
+Cabral,Trabzonspor,DEF,37559583,4.0,4.0,0.0,184.0,184.0
+Mebude,Çaykur Rizespor,OS,37336898,4.0,4.0,0.0,140.0,140.0
+Varesanovic,Çaykur Rizespor,OS,37259244,4.0,4.0,0.0,97.0,97.0
+Marius,Samsunspor,FOR,21045781,4.0,4.0,0.0,90.0,90.0
+Sekongo,Samsunspor,OS,37715435,4.0,4.0,0.0,87.0,87.0
+Stewart,Gaziantep FK,FOR,37303949,4.0,4.0,0.0,146.0,146.0
+Kyziridis,Arca Çorum FK,OS,35259800,4.0,4.0,0.0,70.0,70.0
+Sefa,Erzurumspor FK,OS,5640822,4.0,4.0,0.0,110.0,110.0
+Owusu,Erzurumspor FK,OS,433075,4.0,4.0,0.0,238.0,238.0
+Güven,Kasımpaşa,FOR,3862128,4.0,4.0,0.0,186.0,187.0
+Umut,Amed Sportif Faaliyetler,DEF,203698,3.0,3.0,0.0,148.0,147.0
+Ozan,Trabzonspor,OS,201172,3.0,3.0,0.0,40.0,40.0
+Diagne,Amed Sportif Faaliyetler,FOR,62258,3.0,3.0,0.0,165.0,165.0
+Uğurcan,TÜMOSAN Konyaspor,DEF,450488,3.0,3.0,0.0,205.0,205.0
+Baniya,TÜMOSAN Konyaspor,DEF,37262280,3.0,3.0,0.0,99.0,99.0
+Adil,TÜMOSAN Konyaspor,DEF,203954,3.0,3.0,0.0,360.0,360.0
+Smolcic,Arca Çorum FK,DEF,30071846,3.0,3.0,0.0,256.0,256.0
+Thiam,Arca Çorum FK,FOR,62963,3.0,3.0,0.0,83.0,83.0
+Savic,Trabzonspor,DEF,1367,3.0,3.0,0.0,270.0,270.0
+Pina,Trabzonspor,DEF,37586867,3.0,3.0,0.0,109.0,109.0
+Ege,Göztepe,DEF,37714842,3.0,3.0,0.0,226.0,225.0
+Nwaiwu,Trabzonspor,DEF,37635461,3.0,3.0,0.0,270.0,270.0
+Ebosele,Erzurumspor FK,DEF,28912983,3.0,3.0,0.0,50.0,51.0
+Yusuf,Corendon Alanyaspor,OS,31226971,3.0,3.0,0.0,7.0,7.0
+Omar,Corendon Alanyaspor,FOR,37744755,3.0,3.0,0.0,61.0,61.0
+Yakup,Erzurumspor FK,DEF,37563189,3.0,3.0,0.0,184.0,184.0
+Samed,Samsunspor,OS,32777442,3.0,3.0,0.0,41.0,41.0
+Charles,Eyüpspor,OS,37590303,3.0,3.0,0.0,216.0,215.0
+Sabiri,Eyüpspor,OS,36457,3.0,3.0,0.0,109.0,110.0
+Eren,Galatasaray,DEF,31226528,3.0,3.0,0.0,59.0,59.0
+Gidado,Gaziantep FK,OS,37732860,3.0,3.0,0.0,132.0,132.0
+Andrade,Erzurumspor FK,OS,162101,3.0,3.0,0.0,84.0,84.0
+Karlsbakk,Arca Çorum FK,OS,1477612,3.0,3.0,0.0,132.0,132.0
+Bouchouari,Trabzonspor,OS,37532885,3.0,3.0,0.0,99.0,99.0
+Cardoso,Erzurumspor FK,OS,160196,3.0,3.0,0.0,59.0,59.0
+Rafferty,Kasımpaşa,OS,37595901,3.0,3.0,0.0,76.0,77.0
+Barası,Eyüpspor,FOR,28931569,3.0,3.0,0.0,55.0,55.0
+Hansen,Gaziantep FK,OS,23278580,3.0,3.0,0.0,67.0,67.0
+Batrakov,Galatasaray,OS,37674431,3.0,3.0,0.0,113.0,112.0
+Diabate,Erzurumspor FK,FOR,35682209,2.0,2.0,0.0,50.0,50.0
+Rivas,Kocaelispor,OS,505047,2.0,2.0,0.0,90.0,90.0
+Bartuğ,Fenerbahçe,OS,37317375,2.0,2.0,0.0,9.0,9.0
+Kramer,TÜMOSAN Konyaspor,FOR,183503,2.0,2.0,0.0,39.0,39.0
+Awaziem,TÜMOSAN Konyaspor,DEF,161320,2.0,2.0,0.0,259.0,259.0
+Arif,TÜMOSAN Konyaspor,DEF,37563181,2.0,2.0,0.0,90.0,90.0
+Ramadani,Arca Çorum FK,OS,50828,2.0,2.0,0.0,123.0,124.0
+Penetra,Arca Çorum FK,DEF,23278611,2.0,2.0,0.0,270.0,270.0
+Semih,Beşiktaş,FOR,37564566,2.0,2.0,0.0,63.0,63.0
+Fıratcan,Gençlerbirliği,DEF,2483848,2.0,2.0,0.0,23.0,23.0
+Tayyip Talha,Çaykur Rizespor,DEF,202738,2.0,2.0,0.0,10.0,10.0
+Faye,Çaykur Rizespor,OS,37683594,2.0,2.0,0.0,19.0,19.0
+Brnic,İstanbul Başakşehir,OS,22515422,2.0,2.0,0.0,48.0,48.0
+Deniz,İstanbul Başakşehir,KL,37537178,2.0,2.0,0.0,90.0,90.0
+Selke,İstanbul Başakşehir,FOR,32070,2.0,2.0,0.0,64.0,64.0
+Karbownik,İstanbul Başakşehir,DEF,5283785,2.0,2.0,0.0,27.0,27.0
+Yusuf,İstanbul Başakşehir,OS,526347,2.0,2.0,0.0,72.0,71.0
+Bertuğ,İstanbul Başakşehir,FOR,34873979,2.0,2.0,0.0,120.0,121.0
+Elia,Corendon Alanyaspor,FOR,516245,2.0,2.0,0.0,48.0,48.0
+Antoine,Samsunspor,OS,540694,2.0,2.0,0.0,70.0,70.0
+Hamza,Eyüpspor,OS,37563663,2.0,2.0,0.0,34.0,34.0
+Calegari,Eyüpspor,DEF,37261344,2.0,2.0,0.0,89.0,90.0
+Lesley,Galatasaray,OS,37423141,2.0,2.0,0.0,25.0,25.0
+Metehan,Gençlerbirliği,DEF,36084749,2.0,2.0,0.0,6.0,6.0
+Singo,Galatasaray,DEF,31640130,2.0,2.0,0.0,41.0,41.0
+Fuat,Gaziantep FK,FOR,20355818,2.0,2.0,0.0,54.0,54.0
+Salih,Gençlerbirliği,OS,129416,2.0,2.0,0.0,37.0,37.0
+Masuaku,TÜMOSAN Konyaspor,DEF,1941,2.0,2.0,0.0,110.0,111.0
+Lutin,Amed Sportif Faaliyetler,OS,37624889,2.0,2.0,0.0,23.0,23.0
+Kerk,Erzurumspor FK,FOR,25564,2.0,2.0,0.0,81.0,81.0
+Akonnor,Göztepe,DEF,37674862,2.0,2.0,0.0,90.0,90.0
+Arda,Kocaelispor,FOR,37770889,1.0,1.0,0.0,5.0,5.0
+Tayfur,Kocaelispor,OS,201103,1.0,1.0,0.0,76.0,76.0
+Doicaru,Çaykur Rizespor,OS,37721353,1.0,1.0,0.0,1.0,1.0
+Muharrem,Kocaelispor,DEF,22860508,1.0,1.0,0.0,1.0,1.0
+Poku,Beşiktaş,OS,37568511,1.0,1.0,0.0,6.0,6.0
+Dompe,TÜMOSAN Konyaspor,OS,62734,1.0,1.0,0.0,19.0,19.0
+Aye,Kocaelispor,FOR,98863,1.0,1.0,0.0,30.0,30.0
+Miretti,Beşiktaş,OS,37316942,1.0,1.0,0.0,13.0,13.0
+Mohamed,TÜMOSAN Konyaspor,FOR,293951,1.0,1.0,0.0,45.0,44.0
+Deniz,Galatasaray,FOR,37661377,1.0,1.0,0.0,7.0,7.0
+Cissé,Amed Sportif Faaliyetler,DEF,37908102,1.0,1.0,0.0,11.0,11.0
+Furkan,Amed Sportif Faaliyetler,OS,201765,1.0,1.0,0.0,34.0,34.0
+Tarık,Fenerbahçe,KL,1512208,1.0,1.0,0.0,90.0,90.0
+Ahmed,Arca Çorum FK,OS,202503,1.0,1.0,0.0,36.0,36.0
+Gökhan,Arca Çorum FK,DEF,203462,1.0,1.0,0.0,270.0,270.0
+Arda,Arca Çorum FK,DEF,537994,1.0,1.0,0.0,14.0,14.0
+Rashica,Beşiktaş,OS,25589,1.0,1.0,0.0,2.0,2.0
+Godói,Göztepe,DEF,31607879,1.0,1.0,0.0,134.0,135.0
+Cherni,Göztepe,DEF,37404054,1.0,1.0,0.0,90.0,90.0
+Kyabou,Gençlerbirliği,OS,37553520,1.0,1.0,0.0,24.0,24.0
+Etebo,Gençlerbirliği,OS,160568,1.0,1.0,0.0,15.0,15.0
+Cenk,Trabzonspor,DEF,23223420,1.0,1.0,0.0,20.0,20.0
+Mihăilă,Çaykur Rizespor,FOR,6013442,1.0,1.0,0.0,26.0,26.0
+Ba,İstanbul Başakşehir,DEF,2178600,1.0,1.0,0.0,7.0,7.0
+Hamza,İstanbul Başakşehir,DEF,37620666,1.0,1.0,0.0,17.0,17.0
+Hagi,Corendon Alanyaspor,OS,129857,1.0,1.0,0.0,16.0,16.0
+Enes,Corendon Alanyaspor,OS,37262119,1.0,1.0,0.0,46.0,46.0
+İzzet,Corendon Alanyaspor,OS,37540455,1.0,1.0,0.0,12.0,12.0
+Yunus,Samsunspor,DEF,37532664,1.0,1.0,0.0,45.0,44.0
+Sousa,Samsunspor,OS,540311,1.0,1.0,0.0,24.0,24.0
+Costa,Eyüpspor,OS,37704485,1.0,1.0,0.0,158.0,158.0
+Mete,Eyüpspor,OS,42980,1.0,1.0,0.0,16.0,16.0
+Arda,Eyüpspor,DEF,37714787,1.0,1.0,0.0,1.0,1.0
+İlkan,Erzurumspor FK,FOR,37678080,1.0,1.0,0.0,8.0,8.0
+Jankat,Galatasaray,KL,37573833,1.0,1.0,0.0,90.0,90.0
+Kazımcan,Galatasaray,DEF,37308096,1.0,1.0,0.0,6.0,6.0
+Kaan,Galatasaray,DEF,31878,1.0,1.0,0.0,1.0,1.0
+Nhaga,Galatasaray,OS,37928897,1.0,1.0,0.0,9.0,9.0
+İlkay,Galatasaray,OS,4842,1.0,1.0,0.0,6.0,6.0
+Murat,Erzurumspor FK,OS,4925805,1.0,1.0,0.0,15.0,15.0
+Arda,Gaziantep FK,DEF,3510215,1.0,1.0,0.0,12.0,12.0
+Kerim,Gaziantep FK,DEF,23277919,1.0,1.0,0.0,25.0,25.0
+Serdar,Gaziantep FK,FOR,35180,1.0,1.0,0.0,70.0,70.0
+Guarino,Samsunspor,DEF,37596530,1.0,1.0,0.0,90.0,90.0
+Diakité,Çaykur Rizespor,OS,37615913,1.0,1.0,0.0,6.0,6.0
+Orbanic,Erzurumspor FK,KL,6642530,1.0,1.0,0.0,180.0,180.0
+Bekir,Göztepe,FOR,526418,1.0,1.0,0.0,11.0,11.0
+Ouanes,Kasımpaşa,OS,305950,1.0,1.0,0.0,78.0,78.0
+Haris,Kasımpaşa,OS,62486,1.0,1.0,0.0,45.0,44.0
+Diarra,Kasımpaşa,OS,37583799,0.0,0.0,0.0,0.0,0.0
+Oskar,Samsunspor,OS,37701865,0.0,0.0,0.0,0.0,0.0
+Ali Emre,Kasımpaşa,KL,205252,0.0,0.0,0.0,0.0,0.0
+Mouanga,Kasımpaşa,DEF,4977653,0.0,0.0,0.0,0.0,0.0
+Haydar,Kocaelispor,OS,37745146,0.0,0.0,0.0,0.0,0.0
+Yiğit,Eyüpspor,DEF,37563654,0.0,0.0,0.0,0.0,0.0
+Onurcan,Kocaelispor,KL,201745,0.0,0.0,0.0,0.0,0.0
+Oppong,Fenerbahçe,DEF,37678433,0.0,0.0,0.0,0.0,0.0
+Leao,Galatasaray,OS,540251,0.0,0.0,0.0,22.0,22.0
+Kahraman,Amed Sportif Faaliyetler,DEF,26646,0.0,0.0,0.0,0.0,0.0
+Gulliksen,Kocaelispor,OS,37315654,0.0,0.0,0.0,0.0,0.0
+Moukoko,Arca Çorum FK,FOR,37266015,0.0,0.0,0.0,0.0,0.0
+Hasani,Amed Sportif Faaliyetler,FOR,37605945,0.0,0.0,0.0,0.0,0.0
+Bitshiabu,Galatasaray,DEF,37528548,0.0,0.0,0.0,0.0,0.0
+Burak,Amed Sportif Faaliyetler,KL,16475787,0.0,0.0,0.0,0.0,0.0
+Dju,Trabzonspor,FOR,37597771,0.0,0.0,0.0,0.0,0.0
+Orakpo,Gençlerbirliği,FOR,37764801,0.0,0.0,0.0,0.0,0.0
+Veysel,Amed Sportif Faaliyetler,KL,202535,0.0,0.0,0.0,0.0,0.0
+Berk,Amed Sportif Faaliyetler,OS,37659071,0.0,0.0,0.0,0.0,0.0
+Diouf,Fenerbahçe,OS,37694321,0.0,0.0,0.0,0.0,0.0
+Yiğit,Fenerbahçe,DEF,37568397,0.0,0.0,0.0,0.0,0.0
+Çağlar,Arca Çorum FK,DEF,32574,0.0,0.0,0.0,0.0,0.0
+Mimović,Fenerbahçe,DEF,37597972,0.0,0.0,0.0,0.0,0.0
+Mitongo,Trabzonspor,FOR,37743693,0.0,0.0,0.0,0.0,0.0
+Egemen,TÜMOSAN Konyaspor,KL,37690148,0.0,0.0,0.0,0.0,0.0
+Da Mata,TÜMOSAN Konyaspor,DEF,37689560,0.0,0.0,0.0,0.0,0.0
+Hüseyin,Arca Çorum FK,DEF,4237019,0.0,0.0,0.0,0.0,0.0
+Hasanege,Arca Çorum FK,FOR,37726270,0.0,0.0,0.0,0.0,0.0
+Erhan,Arca Çorum FK,KL,203711,0.0,0.0,0.0,0.0,0.0
+Abdulkareem,Arca Çorum FK,OS,24444911,0.0,0.0,0.0,0.0,0.0
+Kartal,Beşiktaş,OS,5270487,0.0,0.0,0.0,0.0,0.0
+Doğan,Beşiktaş,KL,20673391,0.0,0.0,0.0,0.0,0.0
+Emre,Eyüpspor,KL,37532259,0.0,0.0,0.0,0.0,0.0
+Amir,Beşiktaş,OS,67948,0.0,0.0,0.0,0.0,0.0
+Bokele,Göztepe,DEF,9307576,0.0,0.0,0.0,180.0,180.0
+Gökdeniz,Göztepe,FOR,3219737,0.0,0.0,0.0,0.0,0.0
+Onuralp,Trabzonspor,KL,37566870,0.0,0.0,0.0,0.0,0.0
+Sundberg,Göztepe,DEF,191018,0.0,0.0,0.0,0.0,0.0
+Luiz,Göztepe,FOR,37914990,0.0,0.0,0.0,0.0,0.0
+Şamil,Göztepe,KL,37631598,0.0,0.0,0.0,0.0,0.0
+Gökhan,Gençlerbirliği,KL,201680,0.0,0.0,0.0,0.0,0.0
+Dilhan,Amed Sportif Faaliyetler,OS,37703784,0.0,0.0,0.0,0.0,0.0
+Rodrigues,Gençlerbirliği,DEF,95672,0.0,0.0,0.0,0.0,0.0
+Göktuğ,Gençlerbirliği,OS,37563342,0.0,0.0,0.0,0.0,0.0
+Thalisson,Gençlerbirliği,DEF,222272,0.0,0.0,0.0,0.0,0.0
+Furkan,Gençlerbirliği,FOR,37926713,0.0,0.0,0.0,0.0,0.0
+Taha,Çaykur Rizespor,DEF,31226692,0.0,0.0,0.0,0.0,0.0
+Yakup,Çaykur Rizespor,DEF,37957081,0.0,0.0,0.0,0.0,0.0
+Zafer,Çaykur Rizespor,KL,14685552,0.0,0.0,0.0,0.0,0.0
+Bakayoko,Çaykur Rizespor,DEF,37655846,0.0,0.0,0.0,0.0,0.0
+Samet,Trabzonspor,DEF,390543,0.0,0.0,0.0,0.0,0.0
+Volkan,İstanbul Başakşehir,KL,200612,0.0,0.0,0.0,0.0,0.0
+Ahmet,Trabzonspor,KL,37718239,0.0,0.0,0.0,0.0,0.0
+Visca,İstanbul Başakşehir,OS,66180,0.0,0.0,0.0,0.0,0.0
+Berkay,İstanbul Başakşehir,OS,35265,0.0,0.0,0.0,0.0,0.0
+Mert,Corendon Alanyaspor,KL,37563248,0.0,0.0,0.0,0.0,0.0
+Cengizhan,Erzurumspor FK,DEF,31226497,0.0,0.0,0.0,0.0,0.0
+Fatih,Corendon Alanyaspor,DEF,202046,0.0,0.0,0.0,0.0,0.0
+Bilal,Samsunspor,KL,3187724,0.0,0.0,0.0,0.0,0.0
+Enes,Samsunspor,DEF,37664240,0.0,0.0,0.0,0.0,0.0
+Sadia,Eyüpspor,OS,38200157,0.0,0.0,0.0,0.0,0.0
+Can,Galatasaray,OS,37706078,0.0,0.0,0.0,0.0,0.0
+Cemilhan,Gaziantep FK,KL,37726211,0.0,0.0,0.0,0.0,0.0
+Kulasin,Gaziantep FK,OS,37575391,0.0,0.0,0.0,25.0,25.0
+Ali,Gaziantep FK,OS,37752676,0.0,0.0,0.0,0.0,0.0
+Ogün,Gaziantep FK,OS,37298037,0.0,0.0,0.0,0.0,0.0
+Mirza,Gaziantep FK,OS,3157061,0.0,0.0,0.0,0.0,0.0
+Khalil,Amed Sportif Faaliyetler,OS,20693760,0.0,0.0,0.0,0.0,0.0
+Soro,Corendon Alanyaspor,OS,38220661,0.0,0.0,0.0,0.0,0.0
+Umut,Çaykur Rizespor,DEF,37564541,0.0,0.0,0.0,0.0,0.0
+Emirhan,Çaykur Rizespor,OS,37602748,0.0,0.0,0.0,0.0,0.0
+Mücahit,TÜMOSAN Konyaspor,OS,37589291,0.0,0.0,0.0,0.0,0.0
+Umut,Trabzonspor,FOR,201712,0.0,0.0,0.0,0.0,0.0
+Erkan,Erzurumspor FK,KL,3187896,0.0,0.0,0.0,0.0,0.0
+Taylan,Kasımpaşa,DEF,37664089,0.0,0.0,0.0,0.0,0.0
+Niasse,Gençlerbirliği,OS,527534,0.0,0.0,0.0,29.0,29.0
+Cedric,Corendon Alanyaspor,FOR,37543844,0.0,0.0,0.0,0.0,0.0
+Sercan,Kasımpaşa,OS,37736141,0.0,0.0,0.0,0.0,0.0
+Fernandes,Corendon Alanyaspor,OS,537218,0.0,0.0,0.0,0.0,0.0
+Bardhi,TÜMOSAN Konyaspor,OS,114160,-1.0,-1.0,0.0,40.0,39.0
+Kharebashvili,İstanbul Başakşehir,DEF,37723699,-1.0,-1.0,0.0,27.0,27.0

@@ -1,0 +1,115 @@
+player_name,team_name,position,price_million_try,total_points,match_status,reason
+Miroshi,Göztepe,OS,4.5,13,unmatched,no usable Sportmonks id or fantasy position
+Show,Kocaelispor,OS,4.5,12,unmatched,no usable Sportmonks id or fantasy position
+Deniz,TÜMOSAN Konyaspor,OS,5.0,12,ambiguous,no usable Sportmonks id or fantasy position
+Deniz,TÜMOSAN Konyaspor,KL,4.0,10,ambiguous,no usable Sportmonks id or fantasy position
+Fredy,Arca Çorum FK,OS,4.5,9,unmatched,no usable Sportmonks id or fantasy position
+Mustafa,Erzurumspor FK,DEF,4.0,9,ambiguous,no usable Sportmonks id or fantasy position
+Talisca,Fenerbahçe,FOR,8.5,8,unmatched,no usable Sportmonks id or fantasy position
+Umut,İstanbul Başakşehir,FOR,5.5,7,ambiguous,no usable Sportmonks id or fantasy position
+Diabaté,Samsunspor,DEF,4.0,7,duplicate_sportmonks_id,no usable Sportmonks id or fantasy position
+Mustafa,Erzurumspor FK,OS,4.5,7,ambiguous,no usable Sportmonks id or fantasy position
+Rayan,Amed Sportif Faaliyetler,OS,4.5,6,ambiguous,no usable Sportmonks id or fantasy position
+Levent,Fenerbahçe,DEF,4.5,6,unmatched,no usable Sportmonks id or fantasy position
+Serdar,Arca Çorum FK,OS,5.0,4,ambiguous,no usable Sportmonks id or fantasy position
+Arda,Göztepe,DEF,5.0,4,duplicate_sportmonks_id,no usable Sportmonks id or fantasy position
+Umut,İstanbul Başakşehir,OS,4.5,4,ambiguous,no usable Sportmonks id or fantasy position
+Malinovskyi,Trabzonspor,OS,5.5,4,unmatched,no usable Sportmonks id or fantasy position
+Ensar,Gençlerbirliği,OS,4.0,3,duplicate_sportmonks_id,no usable Sportmonks id or fantasy position
+Enis,TÜMOSAN Konyaspor,FOR,5.0,3,ambiguous,no usable Sportmonks id or fantasy position
+Tóth,TÜMOSAN Konyaspor,OS,4.5,3,ambiguous,no usable Sportmonks id or fantasy position
+Emircan,Arca Çorum FK,OS,4.5,2,unmatched,no usable Sportmonks id or fantasy position
+Onur,İstanbul Başakşehir,OS,4.0,2,duplicate_sportmonks_id,no usable Sportmonks id or fantasy position
+Maestro,Corendon Alanyaspor,OS,4.5,2,unmatched,no usable Sportmonks id or fantasy position
+Ali,Kasımpaşa,OS,4.0,2,ambiguous,no usable Sportmonks id or fantasy position
+Emirhan,Kasımpaşa,OS,4.0,2,ambiguous,no usable Sportmonks id or fantasy position
+Fabinho,Trabzonspor,OS,5.5,1,unmatched,no usable Sportmonks id or fantasy position
+Mert,Fenerbahçe,DEF,4.5,1,duplicate_sportmonks_id,no usable Sportmonks id or fantasy position
+Halil,Gaziantep FK,FOR,5.0,1,duplicate_sportmonks_id,no usable Sportmonks id or fantasy position
+Frimpong,Kasımpaşa,DEF,4.0,0,unmatched,no usable Sportmonks id or fantasy position
+Jovanovic,Kocaelispor,KL,4.5,0,unmatched,no usable Sportmonks id or fantasy position
+Petkovic,Kocaelispor,FOR,5.0,0,unmatched,no usable Sportmonks id or fantasy position
+Keïta,Kocaelispor,OS,4.5,0,unmatched,no usable Sportmonks id or fantasy position
+Celal,Amed Sportif Faaliyetler,DEF,4.0,0,unmatched,no usable Sportmonks id or fantasy position
+Çekdar,Amed Sportif Faaliyetler,OS,4.0,0,unmatched,no usable Sportmonks id or fantasy position
+Moreno,Amed Sportif Faaliyetler,OS,4.0,0,unmatched,no usable Sportmonks id or fantasy position
+Abdulsamed,Amed Sportif Faaliyetler,KL,4.0,0,unmatched,no usable Sportmonks id or fantasy position
+Göktan,Trabzonspor,OS,4.0,0,unmatched,no usable Sportmonks id or fantasy position
+Chérif,Fenerbahçe,FOR,5.5,0,unmatched,no usable Sportmonks id or fantasy position
+Batahov,Trabzonspor,DEF,4.5,0,unmatched,no usable Sportmonks id or fantasy position
+Musaba,Fenerbahçe,OS,5.5,0,unmatched,no usable Sportmonks id or fantasy position
+Mert,Fenerbahçe,KL,4.5,0,duplicate_sportmonks_id,no usable Sportmonks id or fantasy position
+Oosterwolde,Fenerbahçe,DEF,5.0,0,unmatched,no usable Sportmonks id or fantasy position
+Becão,Fenerbahçe,DEF,4.0,0,unmatched,no usable Sportmonks id or fantasy position
+Fred,Fenerbahçe,OS,4.0,0,unmatched,no usable Sportmonks id or fantasy position
+Mert Hakan,Fenerbahçe,OS,4.5,0,ambiguous,no usable Sportmonks id or fantasy position
+Bjørlo,TÜMOSAN Konyaspor,OS,4.0,0,unmatched,no usable Sportmonks id or fantasy position
+Thierry,Trabzonspor,OS,4.0,0,unmatched,no usable Sportmonks id or fantasy position
+Atakan,Arca Çorum FK,OS,4.0,0,unmatched,no usable Sportmonks id or fantasy position
+Lundstram,Trabzonspor,OS,4.0,0,unmatched,no usable Sportmonks id or fantasy position
+Arif,Arca Çorum FK,KL,4.0,0,unmatched,no usable Sportmonks id or fantasy position
+Cemali,Arca Çorum FK,DEF,4.0,0,unmatched,no usable Sportmonks id or fantasy position
+Serdar,Arca Çorum FK,DEF,4.0,0,ambiguous,no usable Sportmonks id or fantasy position
+Hasan,Arca Çorum FK,OS,4.0,0,ambiguous,no usable Sportmonks id or fantasy position
+Salih,Trabzonspor,OS,4.0,0,superseded_lower_confidence,no usable Sportmonks id or fantasy position
+Sinan,Arca Çorum FK,DEF,4.0,0,unmatched,no usable Sportmonks id or fantasy position
+Burak,Arca Çorum FK,OS,4.5,0,unmatched,no usable Sportmonks id or fantasy position
+Ferhat,Arca Çorum FK,OS,4.0,0,unmatched,no usable Sportmonks id or fantasy position
+Drăguș,Trabzonspor,FOR,4.0,0,unmatched,no usable Sportmonks id or fantasy position
+Uduokhai,Beşiktaş,DEF,4.5,0,unmatched,no usable Sportmonks id or fantasy position
+Mustafa,Beşiktaş,FOR,5.0,0,unmatched,no usable Sportmonks id or fantasy position
+Yasin,Beşiktaş,DEF,4.0,0,unmatched,no usable Sportmonks id or fantasy position
+Mendy,Trabzonspor,OS,4.0,0,unmatched,no usable Sportmonks id or fantasy position
+Sabra,Göztepe,FOR,4.0,0,unmatched,no usable Sportmonks id or fantasy position
+Dennis,Göztepe,OS,4.5,0,unmatched,no usable Sportmonks id or fantasy position
+Folcarelli,Trabzonspor,OS,5.0,0,unmatched,no usable Sportmonks id or fantasy position
+Furkan,Göztepe,DEF,4.0,0,unmatched,no usable Sportmonks id or fantasy position
+Musah,Göztepe,OS,4.0,0,unmatched,no usable Sportmonks id or fantasy position
+Arda,Göztepe,KL,4.0,0,duplicate_sportmonks_id,no usable Sportmonks id or fantasy position
+Ensar,Gençlerbirliği,DEF,4.0,0,duplicate_sportmonks_id,no usable Sportmonks id or fantasy position
+Okay,Trabzonspor,OS,4.5,0,unmatched,no usable Sportmonks id or fantasy position
+Berk,Gençlerbirliği,KL,4.0,0,unmatched,no usable Sportmonks id or fantasy position
+Alikulov,Çaykur Rizespor,DEF,4.0,0,unmatched,no usable Sportmonks id or fantasy position
+Furkan,Çaykur Rizespor,DEF,4.0,0,unmatched,no usable Sportmonks id or fantasy position
+Efe,Çaykur Rizespor,KL,4.0,0,unmatched,no usable Sportmonks id or fantasy position
+Djaló,İstanbul Başakşehir,OS,4.0,0,unmatched,no usable Sportmonks id or fantasy position
+Yoro,İstanbul Başakşehir,OS,4.0,0,unmatched,no usable Sportmonks id or fantasy position
+Da Costa,İstanbul Başakşehir,FOR,4.0,0,unmatched,no usable Sportmonks id or fantasy position
+Fofana,İstanbul Başakşehir,OS,4.0,0,unmatched,no usable Sportmonks id or fantasy position
+Onur,İstanbul Başakşehir,DEF,4.0,0,duplicate_sportmonks_id,no usable Sportmonks id or fantasy position
+Batuhan,Corendon Alanyaspor,OS,4.0,0,unmatched,no usable Sportmonks id or fantasy position
+Ömer,Erzurumspor FK,DEF,4.0,0,unmatched,no usable Sportmonks id or fantasy position
+Ceesay,Samsunspor,FOR,4.5,0,unmatched,no usable Sportmonks id or fantasy position
+Assoumou,Samsunspor,OS,4.5,0,unmatched,no usable Sportmonks id or fantasy position
+Omorowa,Samsunspor,FOR,4.0,0,unmatched,no usable Sportmonks id or fantasy position
+Ndiaye,Samsunspor,FOR,5.5,0,unmatched,no usable Sportmonks id or fantasy position
+Coulibaly,Samsunspor,OS,4.5,0,unmatched,no usable Sportmonks id or fantasy position
+Ali,Erzurumspor FK,DEF,4.0,0,unmatched,no usable Sportmonks id or fantasy position
+Diabaté,Samsunspor,OS,4.0,0,duplicate_sportmonks_id,no usable Sportmonks id or fantasy position
+Muja,Samsunspor,OS,4.0,0,unmatched,no usable Sportmonks id or fantasy position
+Elayis,Samsunspor,OS,4.5,0,unmatched,no usable Sportmonks id or fantasy position
+Manga,Eyüpspor,OS,4.0,0,unmatched,no usable Sportmonks id or fantasy position
+Umut,Eyüpspor,KL,4.0,0,unmatched,no usable Sportmonks id or fantasy position
+Sy,Eyüpspor,FOR,4.0,0,unmatched,no usable Sportmonks id or fantasy position
+Mendy,Eyüpspor,DEF,4.0,0,unmatched,no usable Sportmonks id or fantasy position
+Cihan,Trabzonspor,OS,4.0,0,unmatched,no usable Sportmonks id or fantasy position
+Taşkın,Eyüpspor,OS,4.0,0,unmatched,no usable Sportmonks id or fantasy position
+Ndoye,Eyüpspor,DEF,4.0,0,unmatched,no usable Sportmonks id or fantasy position
+Jelert,Galatasaray,DEF,4.0,0,unmatched,no usable Sportmonks id or fantasy position
+Arda,Galatasaray,DEF,4.0,0,ambiguous,no usable Sportmonks id or fantasy position
+Günay,Galatasaray,KL,4.5,0,unmatched,no usable Sportmonks id or fantasy position
+Nelsson,Galatasaray,DEF,4.5,0,unmatched,no usable Sportmonks id or fantasy position
+İbrahim,Gaziantep FK,KL,4.0,0,duplicate_sportmonks_id,no usable Sportmonks id or fantasy position
+Sangaré,Gaziantep FK,DEF,4.0,0,unmatched,no usable Sportmonks id or fantasy position
+Gassama,Gaziantep FK,OS,4.0,0,unmatched,no usable Sportmonks id or fantasy position
+Muhammet,Gaziantep FK,FOR,4.0,0,unmatched,no usable Sportmonks id or fantasy position
+Amrabat,Fenerbahçe,OS,4.5,0,unmatched,no usable Sportmonks id or fantasy position
+Carlos,Fenerbahçe,DEF,4.0,0,unmatched,no usable Sportmonks id or fantasy position
+Livaković,Fenerbahçe,KL,4.5,0,unmatched,no usable Sportmonks id or fantasy position
+Enes,Erzurumspor FK,OS,4.0,0,unmatched,no usable Sportmonks id or fantasy position
+Kerem,Erzurumspor FK,FOR,4.0,0,unmatched,no usable Sportmonks id or fantasy position
+Konaté,TÜMOSAN Konyaspor,DEF,4.0,0,unmatched,no usable Sportmonks id or fantasy position
+Kubilay,Kasımpaşa,FOR,4.0,0,unmatched,no usable Sportmonks id or fantasy position
+Emirhan,Kasımpaşa,OS,4.0,0,ambiguous,no usable Sportmonks id or fantasy position
+Kamil,Kasımpaşa,DEF,4.0,0,unmatched,no usable Sportmonks id or fantasy position
+Fall,Kasımpaşa,OS,4.0,0,unmatched,no usable Sportmonks id or fantasy position

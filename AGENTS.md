@@ -9,3 +9,4 @@
 - Keep API credentials local and never print their values.
 - Keep lossless provider captures under `data/raw`, rebuildable caches and reports under `data/temp`, and website-ready CSVs under `data/final`.
 - Keep the unified SQLite database at `data/superlig.sqlite`. Preserve reviewed identity overrides under `config/`; they are not temporary data.
+- Fantasy scoring rules live in `config/tff_scoring_rules.csv`. They are transcribed from a supplied rules graphic, not from a provider feed, so treat them as reviewed reference data: change them only when the user supplies a new source, and keep the `needs_confirmation` flag honest.

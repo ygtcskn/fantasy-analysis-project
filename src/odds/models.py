@@ -175,15 +175,19 @@ class FittedModel:
     feature_state: Any = None
     feature_kickoff: datetime | None = None
     feature_names: tuple[str, ...] = ()
+    feature_season: str = ""
 
-    def predict(self, home_id: str, away_id: str, neutral: bool = False) -> Prediction:
+    def predict(self, home_id: str, away_id: str, neutral: bool = False,
+                season: str | None = None) -> Prediction:
         home_id, away_id = _team_id(home_id), _team_id(away_id)
         if home_id == away_id:
             raise ValueError("A team cannot play itself")
         if self.model in GBDT_MODELS:
             if self.classifier is None or self.feature_state is None or self.feature_kickoff is None:
                 raise ModelFitError("Gradient-boosted fit is missing its classifier or feature state")
-            vector = self.feature_state.features(home_id, away_id, self.feature_kickoff, neutral)
+            vector = self.feature_state.features(
+                home_id, away_id, self.feature_kickoff, neutral,
+                self.feature_season if season is None else str(season))
             raw = self.classifier.predict_proba([vector])[0]
             ordered = [0.0, 0.0, 0.0]
             for position, label in enumerate(self.classifier.classes_):
@@ -283,18 +287,21 @@ def _make_classifier(model: str, params: dict | None = None):
 
 
 def _fit_gbdt(eligible, as_of: datetime, *, model: str, half_life_days: float,
-              cutoff_hours: float, gbdt_params: dict | None = None) -> FittedModel:
+              cutoff_hours: float, gbdt_params: dict | None = None,
+              feature_config=None) -> FittedModel:
     """Replay features chronologically, then fit a three-class classifier.
 
     Training rows and the prediction state are both built by ``training_table``,
     which folds a source match in only once its result was available.
     """
     try:
-        from features import FEATURE_NAMES, training_table
+        from features import DEFAULT_CONFIG, training_table
     except ImportError as exc:  # pragma: no cover - import wiring
         raise ModelFitError(f"Feature module unavailable: {exc}") from None
+    config = feature_config or DEFAULT_CONFIG
     rows, labels, weights, state = training_table(
-        eligible, as_of, cutoff_hours=cutoff_hours, half_life_days=half_life_days)
+        eligible, as_of, cutoff_hours=cutoff_hours, half_life_days=half_life_days,
+        config=config)
     if len(rows) < 100:
         raise ModelFitError(
             f"Only {len(rows)} usable feature rows before the cutoff; a boosted model needs at least 100")
@@ -310,7 +317,7 @@ def _fit_gbdt(eligible, as_of: datetime, *, model: str, half_life_days: float,
         training_latest_available_at=state.latest_available_at,
         team_strengths=state.team_summary(), classifier=classifier,
         feature_state=state, feature_kickoff=as_of + timedelta(hours=cutoff_hours),
-        feature_names=tuple(FEATURE_NAMES))
+        feature_names=config.names, feature_season=state.latest_season)
 
 
 def fit_model(
@@ -323,6 +330,7 @@ def fit_model(
     window_days: float = 1095.0,
     cutoff_hours: float = 24.0,
     gbdt_params: dict | None = None,
+    feature_config=None,
 ) -> FittedModel:
     """Fit exclusively from eligible completed results before ``as_of``.
 
@@ -366,7 +374,8 @@ def fit_model(
         raise ModelFitError("No eligible completed matches before the prediction cutoff")
     if model in GBDT_MODELS:
         return _fit_gbdt(eligible, as_of, model=model, half_life_days=half_life_days,
-                         cutoff_hours=cutoff_hours, gbdt_params=gbdt_params)
+                         cutoff_hours=cutoff_hours, gbdt_params=gbdt_params,
+                         feature_config=feature_config)
     weights = np.array([r[4] for r in rows])
     if float(weights.sum()) <= 0.0:
         raise ModelFitError("All training weights underflowed; increase half_life_days")

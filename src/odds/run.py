@@ -18,10 +18,16 @@ from data_loader import load_seasons
 
 ROOT = Path(__file__).resolve().parents[2]
 INPUT = ROOT / "data" / "final" / "sportmonks"
+# The published product: one file, overwritten by each forecast.
 OUTPUT = ROOT / "data" / "final" / "odds"
-RUNS = OUTPUT / "runs"
 LATEST_PREDICTIONS = OUTPUT / "predictions.csv"
+# Per-run records are working files, kept out of the published folder.
+SCRATCH = ROOT / "temp" / "odds"
+RUNS = SCRATCH / "runs"
 DEFAULT_GBDT_PARAMS = Path(__file__).resolve().parent / "xgboost_params.json"
+# Half-lives compared on the validation season. Recent form is more relevant
+# but there is less of it, and that trade is a measurement, not a guess.
+DEFAULT_DECAY_CANDIDATES = (120.0, 180.0, 270.0, 365.0, 550.0)
 OUTCOMES = ("home", "draw", "away")
 PREDICTION_COLUMNS = [
     "fixture_id", "season", "kickoff_utc", "information_cutoff_utc",
@@ -199,6 +205,13 @@ def ensure_selection_precedes_test(matches, validation_season, test_season, cuto
         raise ValueError("Validation results overlap the first test cutoff (possibly a postponed fixture). Season labels alone cannot define this split.")
 
 
+def feature_config(args):
+    """One feature configuration for the whole run, from the command line."""
+    from features import FeatureConfig
+    return FeatureConfig.build(stats=args.stats, include_xg=not args.no_xg,
+                               season_boost=args.season_boost)
+
+
 def candidate_specs(args):
     candidates = [{"candidate": "frequency", "model": "frequency", "half_life_days": args.half_life_days}]
     for half_life in sorted(set(args.decay_candidates or [args.half_life_days])):
@@ -260,7 +273,7 @@ def evaluate_row(match, cutoff, fitted, prediction, candidate, phase, version, g
     return row
 
 
-def rolling_predictions(history, targets, specs, args, phase):
+def rolling_predictions(history, targets, specs, args, phase, config=None):
     try:
         from models import fit_model, MODEL_VERSION
     except ImportError as exc:
@@ -278,12 +291,14 @@ def rolling_predictions(history, targets, specs, args, phase):
             tuned = json.loads(spec["gbdt_params_json"]) if spec.get("gbdt_params_json") else None
             fitted = fit_model(training, cutoff, model=spec["model"], half_life_days=spec["half_life_days"],
                                ridge=spec["ridge"], window_days=spec["window_days"],
-                               cutoff_hours=args.cutoff_hours, gbdt_params=tuned)
+                               cutoff_hours=args.cutoff_hours, gbdt_params=tuned,
+                               feature_config=config)
             if not fitted.converged or fitted.training_latest_available_at >= cutoff:
                 raise ValueError("Model convergence or chronological cutoff check failed.")
             generated_at = datetime.now(timezone.utc)
             for match in games:
-                prediction = fitted.predict(match.home_team_id, match.away_team_id, neutral=match.neutral)
+                prediction = fitted.predict(match.home_team_id, match.away_team_id,
+                                            neutral=match.neutral, season=match.season)
                 rows.append(evaluate_row(match, cutoff, fitted, prediction, spec["candidate"], phase, MODEL_VERSION, generated_at))
         if index == 1 or index % 20 == 0 or index == len(grouped):
             print(f"{phase}: {index}/{len(grouped)} prediction cutoffs", flush=True)
@@ -382,7 +397,7 @@ def _suggest(trial):
     }
 
 
-def tune_xgboost(matches, as_of, args, folder):
+def tune_xgboost(matches, as_of, args, folder, config=None):
     """Search hyperparameters on chronological folds inside ``matches``.
 
     Called before forecasting, on results already available at the first cutoff,
@@ -392,17 +407,20 @@ def tune_xgboost(matches, as_of, args, folder):
     """
     import optuna
     import numpy as np
-    from features import replay
+    from features import coverage, replay
     from models import _make_classifier
 
+    config = config or feature_config(args)
     records, _ = replay(matches, cutoff_hours=args.cutoff_hours,
-                        half_life_days=args.half_life_days)
+                        half_life_days=args.half_life_days, config=config)
     records.sort(key=lambda record: record[0])
     x = np.asarray([record[1] for record in records], dtype=float)
     y = np.asarray([record[2] for record in records], dtype=int)
+    names = config.names
+    write_csv(folder / "feature_coverage.csv", coverage(x.tolist(), names))
     split = list(_folds(args.tune_folds, len(records), args.min_tune_rows))
-    print(f"Tuning on {len(records)} feature rows, {len(split)} folds, "
-          f"{args.trials} trials...", flush=True)
+    print(f"Tuning on {len(records)} feature rows, {len(names)} inputs "
+          f"({config.describe()}), {len(split)} folds, {args.trials} trials...", flush=True)
 
     def objective(trial):
         params = _suggest(trial)
@@ -427,11 +445,48 @@ def tune_xgboost(matches, as_of, args, folder):
               [{"number": t.number, "value": t.value, **t.params}
                for t in study.trials if t.value is not None])
     write_csv(folder / "tuned_params.csv", [{
-        "model": "xgboost", "feature_rows": len(records), "folds": len(split),
+        "model": "xgboost", "feature_rows": len(records), "features": len(names),
+        "stats": config.stats, "expected_goals": config.include_xg,
+        "season_boost": config.season_boost, "folds": len(split),
         "trials": len(study.trials), "best_fold_log_loss": study.best_value,
         "tuned_as_of_utc": stamp(as_of), **study.best_params}])
     print(f"Best mean fold log loss {study.best_value:.5f}", flush=True)
-    return dict(study.best_params)
+    return dict(study.best_params), {
+        "x": x, "y": y, "splits": split, "make_classifier": _make_classifier,
+        "numpy": np, "trials": [t.value for t in study.trials],
+        "best_value": study.best_value, "names": names, "config": config,
+    }
+
+
+def write_diagnostics(folder, search, tuned, completed, args):
+    """Overfitting report: fold gaps, a learning curve and a recent holdout."""
+    import diagnostics
+    from models import fit_model
+    params = tuned["xgboost"]
+    print("Measuring fold gaps, learning curve and recent holdout...", flush=True)
+    config = search.get("config")
+    fold = diagnostics.fold_report(search["x"], search["y"], params, search["splits"],
+                                   search["make_classifier"], search["numpy"])
+    importance = diagnostics.importance_report(
+        search["x"], search["y"], params, search.get("names", ()),
+        search["make_classifier"], search["numpy"])
+    holdout = diagnostics.holdout_report(completed, args, fit_model, tuned, config=config)
+    rows, curve, holdout_rows, importance_rows = diagnostics.render(
+        folder, fold=fold, holdout=holdout, trials=search["trials"],
+        best_value=search["best_value"], params=params, importance=importance,
+        inputs=config.describe() if config else "",
+        generated=stamp(datetime.now(timezone.utc)))
+    write_csv(folder / "fold_gaps.csv", rows)
+    write_csv(folder / "learning_curve.csv", curve)
+    if holdout_rows:
+        write_csv(folder / "holdout_scores.csv", holdout_rows)
+    if importance_rows:
+        write_csv(folder / "feature_importance.csv", importance_rows)
+    gap = sum(r["gap"] for r in rows) / len(rows)
+    print(f"Mean train/out-of-fold gap {gap:+.4f}; see diagnostics.html", flush=True)
+    if importance:
+        print(f"{importance['unused']} of {importance['features']} inputs were never "
+              f"split on; see feature_importance.csv", flush=True)
 
 
 def upcoming(dataset, args):
@@ -479,14 +534,19 @@ def forecast(dataset, args, folder):
     now = datetime.now(timezone.utc)
     first_cutoff = min(t.kickoff for t in targets) - timedelta(hours=args.cutoff_hours)
     all_tuned = load_gbdt_params(args.gbdt_params)
+    config = feature_config(args)
+    search = None
     if "xgboost" in args.model and not args.no_tune:
         # Tune on results already available at the first cutoff, so the search
         # sees nothing the forecast itself could not.
         history = [m for m in completed if m.available_at < first_cutoff]
-        all_tuned["xgboost"] = tune_xgboost(history, first_cutoff, args, folder)
+        all_tuned["xgboost"], search = tune_xgboost(history, first_cutoff, args, folder,
+                                                    config=config)
     specs = [{"candidate": f"{model}_hl{args.half_life_days:g}", "model": model,
               "half_life_days": args.half_life_days, "ridge": args.ridge,
-              "window_days": args.window_days,
+              "window_days": args.window_days, "stats": config.stats,
+              "expected_goals": config.include_xg, "season_boost": config.season_boost,
+              "features": len(config.names) if model in ("xgboost",) else 0,
               "gbdt_params_json": json.dumps(all_tuned[model]) if model in all_tuned else ""}
              for model in args.model]
     write_csv(folder / "candidates.csv", specs)
@@ -504,13 +564,13 @@ def forecast(dataset, args, folder):
             fitted = fit_model(training, cutoff, model=spec["model"],
                                half_life_days=spec["half_life_days"], ridge=spec["ridge"],
                                window_days=spec["window_days"], cutoff_hours=args.cutoff_hours,
-                               gbdt_params=tuned)
+                               gbdt_params=tuned, feature_config=config)
             if not fitted.converged or fitted.training_latest_available_at >= cutoff:
                 raise ValueError("Model convergence or chronological cutoff check failed.")
             generated_at = datetime.now(timezone.utc)
             for match in games:
                 prediction = fitted.predict(match.home_team_id, match.away_team_id,
-                                            neutral=match.neutral)
+                                            neutral=match.neutral, season=match.season)
                 row = evaluate_row(match, cutoff, fitted, prediction, spec["candidate"],
                                    "forecast", MODEL_VERSION, generated_at)
                 row["round"] = match.round_name
@@ -521,6 +581,8 @@ def forecast(dataset, args, folder):
     # Stable path for anything downstream; overwritten by each forecast.
     LATEST_PREDICTIONS.parent.mkdir(parents=True, exist_ok=True)
     write_csv(LATEST_PREDICTIONS, rows, columns)
+    if search and not args.no_diagnostics:
+        write_diagnostics(folder, search, all_tuned, completed, args)
     status(folder, "complete",
            "Forecast written for unplayed fixtures. Research only: these probabilities are not "
            "validated for betting and no market comparison was made.",
@@ -537,12 +599,14 @@ def backtest(dataset, args, folder):
     valid = [m for m in dataset.matches if m.outcome]
     validation_season, test_season = seasons[-2:]
     ensure_selection_precedes_test(valid, validation_season, test_season, args.cutoff_hours)
+    config = feature_config(args)
     specs = candidate_specs(args)
     write_csv(folder / "candidates.csv", specs)
     split_rows = [{"season": season, "role": "validation" if season == validation_season else
                   "test" if season == test_season else "initial_training"} for season in seasons]
     write_csv(folder / "season_roles.csv", split_rows)
-    validation = rolling_predictions(valid, [m for m in valid if m.season == validation_season], specs, args, "validation")
+    validation = rolling_predictions(valid, [m for m in valid if m.season == validation_season],
+                                     specs, args, "validation", config=config)
     if not validation:
         raise ValueError("No validation fixtures available.")
     write_csv(folder / "validation_predictions.csv", validation, PREDICTION_COLUMNS)
@@ -555,7 +619,8 @@ def backtest(dataset, args, folder):
                                                "selected_using": "validation log loss only"}])
     print(f"Selected on {validation_season}: {best}; now evaluating held-out {test_season}.", flush=True)
     test_specs = [chosen] if best == "frequency" else [specs[0], chosen]
-    test = rolling_predictions(valid, [m for m in valid if m.season == test_season], test_specs, args, "test")
+    test = rolling_predictions(valid, [m for m in valid if m.season == test_season],
+                               test_specs, args, "test", config=config)
     if not test:
         raise ValueError("No held-out fixtures available.")
     combined = validation + test
@@ -575,17 +640,36 @@ def main(argv=None):
                         help="Season folders; coverage discovers all if omitted. Backtest requires five or more consecutive finished seasons.")
     parser.add_argument("--input-root", type=Path, default=INPUT)
     parser.add_argument("--output-root", type=Path, default=RUNS,
-                        help="Run directories. Must stay under data/final/odds.")
+                        help="Run directories. Must stay under temp/odds.")
     parser.add_argument("--league-id", default="600")
     parser.add_argument("--cutoff-hours", type=positive, default=24.0)
     parser.add_argument("--window-days", type=positive, default=1095.0)
     parser.add_argument("--half-life-days", type=positive, default=365.0)
     parser.add_argument("--decay-candidates", nargs="+", type=positive,
-                        help="Optional validation grid, e.g. 180 365 730. Default: one 365-day setting.")
+                        default=list(DEFAULT_DECAY_CANDIDATES),
+                        help="backtest only: half-lives to compare on the validation season. "
+                             "A shorter half-life favours recent form but shrinks the "
+                             "effective sample; this grid lets the data choose.")
+    parser.add_argument("--stats", choices=("none", "core", "all"), default="all",
+                        help="Match statistics folded into the boosted model as decayed "
+                             "per-match rates: none reproduces the goals-only feature set, "
+                             "core keeps shots, shots on target, dangerous attacks and "
+                             "possession, all uses every reliably reported metric.")
+    parser.add_argument("--no-xg", action="store_true",
+                        help="Drop expected goals. Sportmonks began publishing it part way "
+                             "through 2023/24, so it is absent for the oldest rows in a "
+                             "three-season window; use this to check that the gap is not "
+                             "being read as a signal.")
+    parser.add_argument("--season-boost", type=positive, default=1.0,
+                        help="Extra weight on matches from the target fixture's own season, "
+                             "on top of the half-life decay. 1.0 leaves the smooth decay "
+                             "alone; 2.0 counts a current-season match twice.")
     parser.add_argument("--ridge", type=positive, default=5.0)
     parser.add_argument("--trials", type=positive_integer, default=100,
                         help="predict only: Optuna trials per run. XGBoost is re-tuned "
                              "before every forecast.")
+    parser.add_argument("--no-diagnostics", action="store_true",
+                        help="predict only: skip the overfitting report.")
     parser.add_argument("--no-tune", action="store_true",
                         help="predict only: skip the search and use xgboost_params.json.")
     parser.add_argument("--tune-folds", type=positive_integer, default=4)
@@ -613,8 +697,9 @@ def main(argv=None):
                         help="predict only: latest kickoff, YYYY-MM-DD.")
     args = parser.parse_args(argv)
     output_root = args.output_root.resolve()
-    if not output_root.is_relative_to(OUTPUT.resolve()):
-        parser.error("Output must be within data/final/odds; provider files cannot be destinations.")
+    if not output_root.is_relative_to(SCRATCH.resolve()):
+        parser.error("Run output must be within temp/odds; provider and published files "
+                     "cannot be destinations.")
     if args.seasons and len(args.seasons) != len(set(args.seasons)):
         parser.error("Each season must appear exactly once.")
     folder = output_root / f"{datetime.now(timezone.utc):%Y%m%dT%H%M%SZ}_{args.command}_{uuid.uuid4().hex[:8]}"

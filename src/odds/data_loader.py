@@ -19,6 +19,7 @@ from __future__ import annotations
 import csv
 import hashlib
 import io
+import math
 import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
@@ -29,7 +30,8 @@ from pathlib import Path
 UTC = timezone.utc
 RESULT_AVAILABILITY_BUFFER = timedelta(hours=3)
 REQUIRED_FILES = ("fixtures.csv", "fixture_scores.csv", "teams.csv")
-OPTIONAL_FILES = ("fixture_participants.csv", "fixture_periods.csv", "fixture_metadata.csv", "file_inventory.csv")
+OPTIONAL_FILES = ("fixture_participants.csv", "fixture_periods.csv", "fixture_metadata.csv",
+                  "team_metrics.csv", "file_inventory.csv")
 SEASON_PATTERN = re.compile(r"^\d{4}-\d{4}$")
 TERMINAL_STATES = {"FT", "AET", "FT_PEN", "CANCELLED", "WO", "AWARDED", "DELETED"}
 STATE_IDS = {"1": "NS", "5": "FT", "7": "AET", "8": "FT_PEN", "10": "POSTPONED",
@@ -69,6 +71,10 @@ class Match:
     venue_id: str = ""
     neutral: bool = False
     round_name: str = ""
+    # {team_id: {provider metric name: value}} from team_metrics.csv, for the
+    # match itself. Excluded from equality and hashing: it is bulk detail
+    # hanging off the fixture, not part of the fixture's identity.
+    team_stats: dict = field(default_factory=dict, compare=False, repr=False)
 
     @property
     def outcome(self) -> str:
@@ -107,6 +113,15 @@ def _id(value: str) -> bool:
 
 def _integer(value: str) -> int | None:
     return int(value) if re.fullmatch(r"\d+", value) else None
+
+
+def _number(value: str) -> float | None:
+    """Finite decimal, or None. Percentages arrive already stripped of '%'."""
+    try:
+        result = float(value)
+    except (TypeError, ValueError):
+        return None
+    return result if math.isfinite(result) else None
 
 
 def _bool(value: str) -> bool | None:
@@ -308,9 +323,12 @@ def _load_one(dataset: Dataset, season: str, contents: dict[str, bytes],
                    if "fixture_periods.csv" in contents else None)
     metadata_rows = (_csv_rows(contents["fixture_metadata.csv"], "fixture_metadata.csv", {"fixture_id"})
                      if "fixture_metadata.csv" in contents else None)
+    metric_rows = (_csv_rows(contents["team_metrics.csv"], "team_metrics.csv",
+                             {"fixture_id", "team_id", "name", "value"})
+                   if "team_metrics.csv" in contents else None)
     loaded_tables = {"fixtures.csv": fixtures, "fixture_scores.csv": score_rows, "teams.csv": team_rows,
                      "fixture_participants.csv": participants, "fixture_periods.csv": period_rows,
-                     "fixture_metadata.csv": metadata_rows}
+                     "fixture_metadata.csv": metadata_rows, "team_metrics.csv": metric_rows}
     if "file_inventory.csv" in contents:
         inventory = _csv_rows(contents["file_inventory.csv"], "file_inventory.csv", {"file", "rows"})
         entries = defaultdict(list)
@@ -347,6 +365,27 @@ def _load_one(dataset: Dataset, season: str, contents: dict[str, bytes],
             destination[row["fixture_id"]].append(row)
             if row["fixture_id"] not in fixture_counts:
                 _exclude(dataset, season, row["fixture_id"], filename, "orphan_related_record")
+    # Match statistics. One row per fixture, team and metric. A metric repeated
+    # for the same team with different values is contradictory, so it is dropped
+    # for that team rather than resolved by read order.
+    stats_by_fixture: dict[str, dict[str, dict[str, float | None]]] = defaultdict(dict)
+    orphan_metric_fixtures: set[str] = set()
+    for row in metric_rows or []:
+        fid = row["fixture_id"]
+        if fid not in fixture_counts:
+            if fid not in orphan_metric_fixtures:
+                orphan_metric_fixtures.add(fid)
+                _exclude(dataset, season, fid, "team_metrics.csv", "orphan_related_record")
+            continue
+        value = _number(row["value"])
+        if value is None:
+            continue
+        bucket = stats_by_fixture[fid].setdefault(row["team_id"], {})
+        name = row["name"]
+        if name not in bucket:
+            bucket[name] = value
+        elif bucket[name] != value:
+            bucket[name] = None
     for team in sorted(bad_teams):
         _exclude(dataset, season, "", "teams.csv", "duplicate_or_invalid_team_id", team)
     target_rows = [row for row in fixtures if row["league_id"] == league_id]
@@ -388,6 +427,8 @@ def _load_one(dataset: Dataset, season: str, contents: dict[str, bytes],
         notes.append("fixture_periods.csv absent; result availability uses kickoff plus 3 hours")
     if metadata_rows is None:
         notes.append("fixture_metadata.csv absent; unknown neutral venues default to home advantage")
+    if metric_rows is None:
+        notes.append("team_metrics.csv absent; match statistics features are unavailable")
     if "file_inventory.csv" not in contents:
         notes.append("file_inventory.csv absent; independent export row-count check unavailable")
     if provider_finished is True and not schedule_complete:
@@ -511,7 +552,10 @@ def _load_one(dataset: Dataset, season: str, contents: dict[str, bytes],
                                      teams[home], teams[away], home_goals, away_goals, state,
                                      available_at,
                                      row.get("venue_id") or row.get("venue.id", ""), neutral,
-                                     (row.get("round.name") or row.get("round_id") or "").strip()))
+                                     (row.get("round.name") or row.get("round_id") or "").strip(),
+                                     {team_id: {name: value for name, value in values.items()
+                                                if value is not None}
+                                      for team_id, values in stats_by_fixture.get(fid, {}).items()}))
     if kickoff_values:
         coverage["first_kickoff_utc"] = min(kickoff_values).isoformat()
         coverage["last_kickoff_utc"] = max(kickoff_values).isoformat()

@@ -38,10 +38,10 @@ python src/odds/run.py backtest --seasons 2021/2022 2022/2023 2023/2024 2024/202
 ```
 
 The default compares smoothed outcome frequencies, Poisson, and Dixon-Coles,
-each with a 365-day half-life and a 1,095-day training window. To compare decay
-settings on validation data, add `--decay-candidates 180 365 730`. Other explicit
-settings are `--window-days`, `--ridge` (default 5), `--cutoff-hours` (default 24),
-and `--min-train-matches` (default 200). Their values are saved for every run.
+each with a 1,095-day training window, over the half-lives
+`120 180 270 365 550` chosen on the validation season. Other explicit settings
+are `--window-days`, `--ridge` (default 5), `--cutoff-hours` (default 24), and
+`--min-train-matches` (default 200). Their values are saved for every run.
 These defaults are starting choices, not empirically established best settings.
 
 The backtest requires at least five consecutive, fully exported, finished seasons
@@ -110,8 +110,8 @@ Two candidates are kept, plus a baseline that exists only for comparison.
    against, and removing it would leave the comparison with no baseline.
 2. Independent Poisson attack/defence with home advantage and shrinkage toward
    league averages, including an explicit prior for promoted teams.
-3. XGBoost on the pre-match features in `features.py`, with settings tuned by
-   `tune.py` and stored in `xgboost_params.json`.
+3. XGBoost on the pre-match features in `features.py`, re-tuned before every
+   forecast, with a stored fallback in `xgboost_params.json`.
 
 Dixon-Coles, LightGBM and scikit-learn's HistGradientBoosting were compared and
 dropped. All three finished within 0.006 log loss of the two kept models on a
@@ -158,6 +158,63 @@ and made Brier worse. Of the three classes only the away bias replicated across
 seasons; the draw gap appeared in both Poisson and XGBoost on the same season
 and reflects that season's draw rate (29.1% against 23.5%), not a model defect.
 
+## Model inputs
+
+Poisson needs nothing but team identity, goals and kickoff time. XGBoost needs
+engineered inputs, and `features.py` builds them by replaying completed matches
+in `available_at` order, so a training row sees exactly what a live prediction
+would have seen at its own cutoff.
+
+Twelve of them describe the fixture: Elo (start 1500, K 20, +60 home, scaled by
+the square root of the goal margin), time-decayed points, goals for and goals
+against per match for each side, days of rest capped at 45, and a neutral-venue
+flag.
+
+The rest are match statistics from `team_metrics.csv`, folded in with the result
+of the match they belong to and turned into the same kind of time-decayed
+per-match rate, both for a team and against it. `--stats` selects how many:
+
+| Setting | Inputs | Contents |
+| --- | --- | --- |
+| `none` | 12 | The goals-and-schedule block above, as before this change |
+| `core` | 30 | Shots, shots on target, dangerous attacks, possession, expected goals |
+| `all` (default) | 126 | Every metric Sportmonks reports reliably from 2021/22 on |
+
+Possession is treated as zero-sum, so only the team's own share is kept. Metrics
+the provider stopped supplying (`CHALLENGES`, `HEADERS`, `COUNTER_ATTACKS`) or
+reports sporadically (`REDCARDS`, `PENALTIES`, `INJURIES`, `ASSISTS`) are
+excluded: a column present in one era and absent in the next teaches the model
+the calendar rather than the football.
+
+Expected goals is the one deliberate exception to that rule. Sportmonks began
+publishing it part way through 2023/24, so it covers about 81% of a current
+1,095-day window and is missing only from the oldest rows. XGBoost routes
+missing values natively, and xG is the strongest single statistic available, so
+it is on by default; `--no-xg` drops it, which is the check on whether the model
+is reading the gap itself as a signal.
+
+126 inputs against roughly 950 training rows is a wide feature set for the
+sample, and the feature importance and SHAP sections of the diagnostics report
+exist to show whether it is earning its place. Narrowing to `--stats core` is
+the intended response if it is not.
+
+## Recency
+
+Two controls, because a league year is a discrete break that a smooth curve
+cannot express on its own.
+
+`--half-life-days` (default 365) decays every past match, in the training
+weights and inside the form features alike. At 365 days last season carries
+about half the weight of this one; shortening it favours recent form but shrinks
+the effective sample, which is why `backtest` now compares a grid rather than
+assuming one value.
+
+`--season-boost` (default 1.0, off) multiplies matches played in the target
+fixture's own season on top of that decay. `--season-boost 2` counts a
+current-season match twice. It is deliberately off by default: it is a second
+recency knob, and turning both up at once without measuring is how a model ends
+up fitting six weeks of noise.
+
 ## Weekly forecast
 
 Two commands, in this order. The download matters: without it the model has no
@@ -188,14 +245,54 @@ exactly what was used.
 
 ```text
 data/final/odds/
-  predictions.csv                  latest forecast, overwritten every run
-  runs/<timestamp>_predict_<id>/   full record of one run, never overwritten
-    predictions.csv
-    tuned_params.csv, tuning_trials.csv
-    candidates.csv, run_status.csv
-    coverage_report.csv, excluded_fixtures.csv
-    input_manifest.csv, code_manifest.csv, run_settings.csv
+  predictions.csv                  the product: latest forecast, overwritten every run
+
+temp/odds/runs/<timestamp>_predict_<id>/    working record of one run, never overwritten
+  predictions.csv
+  tuned_params.csv, tuning_trials.csv
+  diagnostics.html
+  fold_gaps.csv, learning_curve.csv, holdout_scores.csv
+  feature_importance.csv, feature_coverage.csv
+  candidates.csv, run_status.csv
+  coverage_report.csv, excluded_fixtures.csv
+  input_manifest.csv, code_manifest.csv, run_settings.csv
 ```
+
+Only the single published file lives under `data/final`. Per-run records are
+working files and stay in `temp/odds/runs`, where they can be deleted at any
+time without touching the product.
+
+## Overfitting diagnostics
+
+Every forecast writes `diagnostics.html` into its run directory, with the numbers
+behind it in `fold_gaps.csv`, `learning_curve.csv`, `holdout_scores.csv`,
+`feature_importance.csv` and `feature_coverage.csv`. A forecast cannot be scored
+before kickoff, so these answer the question that can be answered: is the model
+learning the league, or its own training set?
+
+- **Search history.** Every Optuna trial with the running best. A winner far
+  below the rest of the cloud found a lucky fold split, not a better model.
+- **Train against out-of-fold loss, per fold.** The gap is the overfitting
+  measure and is printed at the end of each run.
+- **Learning curve** over tree count, with the out-of-fold minimum marked. Where
+  the line turns upward, extra trees are fitting noise.
+- **Gain importance.** How much loss each input removed when a tree split on it.
+  The count of inputs never split on is printed at the end of each run; a long
+  idle tail is the signal to narrow `--stats`.
+- **SHAP.** Gain says which inputs the trees used; SHAP says which way each one
+  pushed each prediction and by how much. The bar chart ranks mean absolute
+  contribution; the beeswarm puts one dot per match per input, positioned by
+  contribution to the home-win log odds and coloured by the input's own value,
+  so a consistent effect shows as a clean colour split either side of zero.
+- **Reliability on a recent holdout.** Both models refitted with the last 60
+  completed matches withheld, then scored on them. The only view here backed by
+  real outcomes, and it refreshes weekly.
+
+Charts are hand-written SVG and SHAP values come from XGBoost's own exact
+TreeSHAP (`pred_contribs`), so this adds no dependency. Both are descriptions of
+one fitted model, not evidence that an input generalises: an input can earn gain
+by fitting noise, which is why they sit next to the fold gaps rather than alone.
+`--no-diagnostics` skips the report.
 
 `predictions.csv` holds one row per fixture per model: three probabilities that
 sum to one, and fair odds as `1/probability` with no margin applied. These are
