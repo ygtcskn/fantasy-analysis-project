@@ -1,2 +1,0 @@
-﻿fixtures,matchweek,message,models,status,training_matches,updated_at_utc
-4,4,Forecast written for unplayed fixtures. Research only: these probabilities are not validated for betting and no market comparison was made.,poisson_hl365 xgboost_hl365,complete,1748,2026-09-06T17:42:38.851573+00:00

@@ -31,10 +31,10 @@ python -m pip install -r src/odds/requirements.txt
 python src/odds/run.py backtest --seasons 2021/2022 2022/2023 2023/2024 2024/2025 2025/2026
 ```
 
-To include the boosted candidates:
+To include the boosted candidate:
 
 ```powershell
-python src/odds/run.py backtest --seasons 2021/2022 2022/2023 2023/2024 2024/2025 2025/2026 --gbdt hist_gbdt
+python src/odds/run.py backtest --seasons 2021/2022 2022/2023 2023/2024 2024/2025 2025/2026 --gbdt xgboost
 ```
 
 The default compares smoothed outcome frequencies, Poisson, and Dixon-Coles,
@@ -247,7 +247,7 @@ exactly what was used.
 data/final/odds/
   predictions.csv                  the product: latest forecast, overwritten every run
 
-temp/odds/runs/<timestamp>_predict_<id>/    working record of one run, never overwritten
+data/temp/odds/runs/<timestamp>_predict_<id>/   working record of one run, never overwritten
   predictions.csv
   tuned_params.csv, tuning_trials.csv
   diagnostics.html
@@ -259,7 +259,7 @@ temp/odds/runs/<timestamp>_predict_<id>/    working record of one run, never ove
 ```
 
 Only the single published file lives under `data/final`. Per-run records are
-working files and stay in `temp/odds/runs`, where they can be deleted at any
+working files and stay in `data/temp/odds/runs`, where they can be deleted at any
 time without touching the product.
 
 ## Overfitting diagnostics

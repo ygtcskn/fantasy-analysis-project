@@ -34,17 +34,21 @@ If your normal Python command is unavailable, replace `python` in the commands b
 
 ## Match probability research
 
-The separate research area is documented in [temp/odds/README.md](temp/odds/README.md).
+The separate research area is documented in [src/odds/README.md](src/odds/README.md).
 It audits existing season CSVs and supports chronological comparisons of frequency,
 Poisson, and Dixon-Coles models. Research reports are saved in unique run folders
 under `data/temp/odds`; they do not feed the website automatically.
 
 ```powershell
-python temp/odds/run.py coverage
+python src/odds/run.py coverage
 ```
 
 Coverage uses the standard library. Backtests require the research dependencies
 and at least five complete historical seasons; see the research README for commands.
+
+For an orientation to the whole project - what the Python computes, what the
+JavaScript draws, and how to decide where new code belongs - see
+[explain.md](explain.md).
 
 ## Workflow
 
@@ -57,9 +61,20 @@ python src/fetch/download_season.py --season 2026/2027 --refresh
 # Capture the current TFF table and update final/tff_fantasy/tff_players.csv
 python src/fetch/export_tff_browser.py --season 2026/2027
 
-# Run this last to atomically rebuild the combined database
-python src/fetch/build_database.py --season 2026/2027
+# Rebuild fantasy points, projections, the website tables, then the database
+python src/run_pipeline.py --season 2026/2027
 ```
+
+That third command is the one to run after every match. It rebuilds everything
+the website reads, in order, and publishes nothing until every stage has
+succeeded:
+
+1. fantasy points from completed matches (`src/points`)
+2. next-matchweek player projections (`src/player_projections`)
+3. the website tables (`src/tables`)
+4. SQLite (`src/fetch/build_database.py`), unless you pass `--skip-database`
+
+Then reload the site, or click **Refresh saved data** on it.
 
 Files:
 
@@ -71,11 +86,18 @@ data/
       raw_resources/
     tff_fantasy/
       players_<timestamp>.csv
-  temp/                       # Rebuildable working files
+  temp/                       # Rebuildable working files; safe to delete at any time
     cache_csv/
     tff_fantasy/
       tff_player_match_report.csv
       tff_player_match_candidates.csv
+    odds/runs/                # One folder per odds run
+    points/runs/              # One folder per points ledger build
+    player_projections/
+      runs/                   # One folder per projection build
+      backtests/              # Projection accuracy and selection scoring
+    xi_optimizer/             # One folder per optimizer run, sweeps/ for full sweeps
+    fantasy_pipeline/
   final/                      # Clean tables consumed by the website and database
     sportmonks/2026-2027/
       fixtures.csv
@@ -88,12 +110,98 @@ data/
       ...
     tff_fantasy/
       tff_players.csv
+    points/
+      player_match_points.csv
+      player_season_summary.csv
+    player_projections/2026-2027/
+      player_projections.csv
+      team_fixture_projections.csv
+    tables/2026-2027/           # Everything the website renders; built by src/tables
+      standings.csv
+      team_results.csv
+      team_season.csv
+      team_leaders.csv
+      player_season.csv
+      player_leaders.csv
+      tables_status.csv
+    fantasy_pipeline/2026-2027/
+      pipeline_status.csv
+    odds/
+      predictions.csv
+    xi_optimizer/2026-2027/     # after src/xi_optimizer/sweep.py
+      player_opportunity_cost.csv
   superlig.sqlite             # Unified Sportmonks + TFF Fantasy database
-config/
-  tff_player_overrides.csv    # Permanent, manually reviewed identity decisions
+config/                       # Permanent, manually reviewed decisions
+  tff_player_overrides.csv    # Identity decisions
+  tff_scoring_rules.csv       # Fantasy scoring rules, transcribed and checked
+src/
+  fetch/                      # Provider downloads, exports and the database build
+  points/                     # Historical fantasy points ledger
+  player_projections/         # Next-matchweek forecasts, plus backtest.py
+  odds/                       # Match result probabilities
+  xi_optimizer/               # Squad selection under the fantasy rules
+  tables/                     # Every table the website shows, one module each
+  web/                        # Local website, organised by feature
+    core/                     # Shell: boot, navigation, sidebar, club kits
+    data/                     # Everything that reads a file: CSV parser, published analysis
+    lib/                      # Shared drawing libraries: radar, team charts
+    features/                 # One folder per page or panel
+    styles/                   # Global appearance
+    serve.py                  # Read-only local server
+  run_pipeline.py             # Points, projections, tables and SQLite in one publication
 ```
 
-Source code lives in `src/fetch/`. The scripts find `.env` and create `data/` at the project root regardless of the working directory. They also support module invocation from the project root, for example `python -m src.fetch.download_season --season 2026/2027`.
+Every module publishes to `data/final/` and writes its working records to
+`data/temp/`. Nothing writes anywhere else.
+
+Provider code lives in `src/fetch/`, historical fantasy scoring in `src/points/`, player forecasts in `src/player_projections/`, squad selection in `src/xi_optimizer/`, and the website's tables in `src/tables/` ([details](src/tables/README.md)) - season totals, league table, leader cards, ratings and tiers, computed in Python and published as CSV. The pages are being switched over to read them one at a time; until a page is switched it still computes its own figures in the browser, in `src/web/lib/` ([radar](src/web/lib/radar.md), [team charts](src/web/lib/team-analysis.md)) and `src/web/features/` ([distribution](src/web/features/statistics/distribution.md)). The website is organised by feature and is described in [src/web/README.md](src/web/README.md). `src/run_pipeline.py` connects the saved CSVs to every analysis and to SQLite. `src/player_projections/backtest.py` scores the forecasts against what actually happened and against model-free baselines; run it before trusting a selection. The provider scripts find `.env` and create `data/` at the project root regardless of the working directory. They also support module invocation from the project root, for example `python -m src.fetch.download_season --season 2026/2027`.
+
+## Fantasy analysis pipeline
+
+After downloading Sportmonks and refreshing the reviewed TFF player table, run:
+
+```powershell
+python src/run_pipeline.py --season 2026/2027
+```
+
+This command makes no provider calls. It rebuilds the ledger from completed
+Süper Lig matches in all downloaded seasons, then forecasts the next complete
+unstarted round using the new ledger and the current Sportmonks sidelined files.
+Current TFF positions are used only for the season supplied with `--season`;
+earlier seasons fall back to per-match Sportmonks positions. The TFF CSV has no
+season column, so select the season belonging to that snapshot.
+
+The pipeline stages the results and builds SQLite before publishing the website
+CSVs. Each output is replaced atomically and carries a shared `pipeline_run_id`.
+The completion marker is published last; the website rejects mixed generations
+if a refresh overlaps publication. Leave downloaders and CSV editors idle while
+the pipeline runs. Input fingerprints are checked again before publication.
+
+To select a particular round, add `--matchweek 5`. To publish CSVs while keeping
+SQLite unchanged, add `--skip-database`. If a database viewer has SQLite locked,
+disconnect it before running the default pipeline. A season with no upcoming
+complete round publishes an empty projection table instead of retaining old
+forecasts. Run reports and preserved experimental runs live under
+`data/temp/points`, `data/temp/player_projections`, and `data/temp/fantasy_pipeline`.
+The code no longer depends on the old top-level `temp` folders.
+
+Refresh or reload **Fantasy XI Builder** after the pipeline finishes. Expanding a
+player uses reconstructed historical fantasy points and the next-fixture
+projection, joined by Sportmonks player ID. These remain estimates: the historical
+bonus reconstruction has known residual differences and the forecast model has
+not undergone predictive backtesting. Old experimental forecasts are archived;
+they are not automatically promoted to current website data.
+
+`--reconcile-before YYYY-MM-DD` limits the comparison with the official TFF
+snapshot to fixtures before an explicit date. Without a supplied cutoff, the
+reconciliation report is marked provisional because source snapshots can differ
+in timing. It does not change the full history used by the projection model.
+
+See [points](src/points/README.md),
+[player projections](src/player_projections/README.md) and
+[XI optimizer](src/xi_optimizer/README.md) for model details and
+standalone commands. The assistant has not executed the integrated pipeline or
+its tests; run the command above to generate the first published generation.
 
 ## CSV conventions
 
@@ -106,6 +214,12 @@ Raw CSV files preserve nested source records as typed scalar rows: `node_id,pare
 ## SQLite build
 
 `build_database.py` imports the clean Sportmonks CSVs with a `sportmonks_` table prefix and imports `data/final/tff_fantasy/tff_players.csv` as `tff_players`. It excludes status and validation reports. It infers INTEGER, REAL, and TEXT columns, preserves codes with leading zeroes as text, maps blank cells to SQL NULL, and adds primary keys and indexes to the main tables. Column names containing dots are retained and can be referenced with double quotes in SQL.
+
+The fantasy pipeline also imports `points_player_match_points`,
+`points_player_season_summary`, and `player_projections`. A standalone database
+rebuild can include the already published fantasy generation with
+`python src/fetch/build_database.py --season 2026/2027 --include-fantasy`.
+Without that flag, the standalone command retains its provider-only behavior.
 
 The build requires a completed Sportmonks download and the final TFF player table. It checks row counts and duplicate assigned player IDs, then writes a temporary database before atomically replacing `data/superlig.sqlite`. Unresolved TFF rows remain in `tff_players` with a blank/SQL NULL Sportmonks ID and their review status. If the build fails, the previous database remains. On Windows, disconnect the `superlig` data source in the database viewer before rebuilding; closing only its SQL editor tab may leave the SQLite file locked. Reconnect and synchronize it after the build. `import_log` records imported filenames, row counts, and timestamps.
 

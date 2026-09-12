@@ -21,6 +21,7 @@ Thumbs.db
 # Downloaded, generated, and local data
 data/
 tmp/
+temp/
 *.sqlite
 *.sqlite-*
 *.sqlite3

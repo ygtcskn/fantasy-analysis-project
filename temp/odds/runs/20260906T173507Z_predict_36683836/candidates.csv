@@ -1,3 +1,0 @@
-﻿candidate,expected_goals,features,gbdt_params_json,half_life_days,model,ridge,season_boost,stats,window_days
-poisson_hl365,True,0,,365.0,poisson,5.0,1.0,all,1095.0
-xgboost_hl365,True,126,"{""max_depth"": 5, ""learning_rate"": 0.027610339491399124, ""n_estimators"": 350, ""min_child_weight"": 28.905785696694316, ""subsample"": 0.608251211810211, ""colsample_bytree"": 0.7001582707077779, ""reg_lambda"": 0.10731266897047326, ""reg_alpha"": 0.642167026470393, ""gamma"": 4.609690791711484}",365.0,xgboost,5.0,1.0,all,1095.0

@@ -1,0 +1,296 @@
+# Radar plots (`lib/radar.js`)
+
+The **İstatistikler** page (`index.html?view=statistics`) draws two
+spider plots for the player selected in its list: **Genel Nitelikler**, general
+attributes computed with principal components, and **Ayrıntılı Ölçütler**, one
+fixed wheel of individual statistics. **Takım İstatistikleri**
+(`index.html?view=team-statistics`) draws the same two plots for a team; see
+[Team plots](#team-plots). Everything that builds them lives here.
+
+| File | Role |
+| --- | --- |
+| `radar.js` | Pure modules: `RadarScoring` (season totals, per-90 rates, peer populations, percentiles), `RadarAttributes` (principal-component attributes), `RadarTeams` (the team catalogue and team-match rows) and `RadarChart` (the SVG). No DOM and no requests, so Node can test them directly. |
+| `radar-page.js` | Page wiring for players: the earlier-season loader, the shared reference, tooltips, detail tables and the render. |
+| `team-radar-page.js` | Page wiring for teams, reusing the tooltips, detail tables and feed-availability rule from `radar-page.js`. |
+| `radar.css` | Layout and styling of the two plots, on the site's theme variables so they follow light and dark mode. |
+| `build_reference.py` | Legacy pooled-percentile exporter, kept for existing local workflows. Not an input to the plots. |
+
+`src/web/index.html` loads them as `../spider/...`: `src/web/serve.py` serves
+`/spider/...` from this folder, and a page opened straight from disk resolves
+the same path to it. Leader cards, lists, season totals, timelines and rating
+bars stay with their pages: `src/web/statistics.js` for players and
+`src/web/team-statistics.js` for teams.
+
+## One option
+
+The plots have no settings. Every render uses the same definition:
+
+- the selected player's own season and competition;
+- his position group;
+- a minute bar that follows the season - half the minutes the most-used player
+  has managed, rounded to a third of a match and capped at 900 - because ten
+  full matches is unreachable in September and an unreachable bar leaves the
+  plots with no peers at all (after four rounds of 2026/2027 it is 180);
+- this season's peers plus every earlier Süper Lig season;
+- the mid-rank percentile, with the zero-heavy rule below.
+
+There is no comparison overlay. Search, club and list sorting filters never
+change the reference.
+
+## Who a player is compared with
+
+- **This season:** players of the same season, competition and position group
+  who reach the minute bar.
+- **Earlier seasons:** every earlier Süper Lig season in
+  `data/final/sportmonks`, one entry per player-season, under the same role and
+  bar. With the 2021/2022-2025/2026 folders that is 2,977 player-seasons; a
+  2026/2027 forward at 180 minutes is ranked among 22 current and 361 earlier
+  forwards. **Only the scale widens: every plotted value is the player's
+  current-season figure.** Seasons after the served one are never used, and
+  another competition never is. The browser reads the earlier seasons in the
+  background (a few seconds) through the read-only `/local-data/history/` route
+  in `serve.py`, reduces each player-season to its totals and releases the raw
+  rows. Until they arrive, or if the route is unavailable, both notes say the
+  comparison is current-season only.
+- **Position:** the supplied match position with the most recorded minutes in
+  the season and competition. An exact tie is unresolved. If match roles are
+  absent, a single unambiguous supplied squad role can be used. Fantasy
+  classifications do not change radar peers. The exports provide broad role
+  names, so Defender and Midfielder remain DEF and MID; the code does not guess
+  CB/FB/DM/CM from numeric detailed-position IDs. `positionGroups` supports
+  supplied GK/CB/FB/DM/CM/AM/W/FW names and custom alias groups; a new custom
+  group falls back to the outfield wheel and attribute groups unless it gets its
+  own entry in `RadarScoring.profiles` and `RadarAttributes.groups`.
+- **Scope first:** appearances are joined to fixtures before summing minutes or
+  metrics. Unknown fixture identities or missing season/league identities do not
+  enter a reference group. Transfers within the same competition remain one
+  Sportmonks player ID.
+
+## Reading the statistics
+
+- **Rates:** counting statistics are totals / minutes × 90. xG prefers the
+  dedicated feed on each match and falls back to `expected_goals` only when the
+  dedicated value is blank; the feeds are never added together, and a second
+  feed outranks the omitted-zero reading below. A combined axis such as goal
+  contribution sums its columns per match and needs every part of that match to
+  be known. Minutes and provider ratings remain season facts, not radar axes.
+- **Missingness:** the provider encodes a zero counting statistic by omitting
+  it. Not one row of the 2025/2026 export writes a literal `0` in `goals`,
+  `shots_total`, `tackles`, `aerials` or `redcards`, and 92% of played rows
+  leave `goals` blank. A blank counting column is therefore read as none of
+  that event - but only on a match the statistics feed covered, judged by
+  whether any of touches, passes, duels, shots, fouls or possession lost is
+  present. 53 of 9,438 played rows in 2025/2026 carry no statistics at all;
+  those stay unknown, because reading them as ninety minutes of nothing would
+  understate every rate the player has. A column absent from the export, or a
+  nonfinite or negative count, remains unavailable. An incomplete season metric
+  keeps its observed subtotal and match coverage in the details, but gets no
+  rate or score.
+- **Bench rows:** rows explicitly showing zero minutes are excluded, and so are
+  blank-minute rows that record nothing else: of 19,270 blank-minute rows across
+  2021-2027, all but 36 are unused substitutes - not started, no statistic, no
+  rating. Left in, one benched match made a whole season's minutes unknown and
+  removed the player from every reference; in 2026/2027 that had excluded 120
+  players. A blank-minute row that does record play still makes the season's
+  minutes uncertain and excludes the player.
+- **Feed availability:** providers added columns over time. For example,
+  touches, possession lost, ball recoveries, final-third passes, errors leading
+  to a shot, high claims and punches are blank on every row before 2024/2025;
+  xG fills 13.5% of rows in 2023/2024 against about 46% later; long balls and
+  blocked shots are partial before 2023/2024. In an earlier season a column
+  counts as supplied only when its fill rate on covered rows is at least 80% of
+  the served season's or within sampling noise of it (z ≥ -4). Otherwise it is
+  removed from that season's rows, so every axis built on it is unknown there -
+  those player-seasons simply do not enter that axis - rather than read as zero.
+- **Percentages:** ratios are formed from matching season numerator and attempt
+  totals, never averaged from match percentages. Complete coverage is required
+  for both components; success counts exceeding attempts are rejected per match.
+  A below-threshold or zero-attempt ratio is unavailable, not zero. An omitted
+  denominator counts as zero attempts only when the numerator is also omitted:
+  Sportmonks blanks `aerials` on 1,828 covered rows that do record aerials won,
+  and reading those as no attempts would credit duels the player never
+  contested. That same gap is why aerial win rate is not an axis; aerial duels
+  appear as won-per-90 instead.
+
+  Each requirement below states a ten-match sample. It is scaled down with the
+  minute bar and never falls below twenty attempts, so a striker who reaches 58
+  passes in four rounds is still ranked on pass completion while a one-of-one
+  ratio is not.
+
+| Percentage metric | Minimum attempts (ten matches) |
+| --- | ---: |
+| Pass completion | 100 |
+| All duels, long-pass completion | 30 |
+
+## Scores
+
+**Mid-rank percentiles:** (peers below + half of those tied) / N × 100. Ties
+share a score; `[1, 1, 2, 4]` scores `[25, 25, 62.5, 87.5]`. The unique leader
+of 20 scores 97.5 and the last 2.5, because being best of a finite group is
+evidence of being very good, not of being unbeatable; a larger group earns a
+score closer to the edge (99.9 among 400). A target outside the reference
+population, such as a short sample, is placed where it would fall as one more
+observation, (below + 0.5) / (N + 1), and is never inserted into the reference
+to score it; the two forms interleave monotonically. At least two eligible
+nonmissing observations are required for each metric. Full precision is kept
+for plotting. Displayed scores show 0 or 100 only where a rule puts them there
+(an observed zero on a zero-heavy axis); a rank inside a group reads 1-99, so
+99.8 among 383 does not round to 100.
+
+**Zero-heavy metrics:** where at least 70% of the eligible peers recorded none
+of an event (metric metadata can force this on or off), an observed zero scores
+0 and positive values are ranked among the positive peers only. Negative events
+are reversed after this, so zero errors score 100. All-zero valid populations
+remain 0 for positive metrics and 100 for negative ones. A positive target with
+no positive peers is unavailable; a single positive contributor sits in the
+middle of the positive group, at 50. These scores are labelled in the details
+because they are not literal percentiles of all peers.
+
+**Direction and context:** negative events such as possession losses, fouls,
+cards and errors use `100 - score`, with positive display labels and the
+original event label in the details. Context axes, such as touches, passes and
+defensive action volumes, indicate greater activity rather than better quality;
+they are set in italics on the chart and labelled in words in the tooltip and
+details. No overall rating or average polygon score is calculated.
+
+Configuration lives in `RadarScoring.defaults` (minute bar, minimum peers,
+zero-share threshold) and `RadarScoring.metrics` (source and fallback columns,
+transforms, direction, zero policy, attempt thresholds, category, display
+labels and position relevance).
+
+## Genel Nitelikler
+
+The left plot answers "what is this player good at" one quality at a time
+rather than one column at a time. Each axis is the first principal component of
+a group of related per-90 rates, so measures that repeat each other count once:
+shots, shots on target and xG say much the same thing about a striker, and
+averaging their percentiles would treat one piece of evidence as three. The
+groups are Hücum, Üretim, Top kullanımı, Savunma, Hava ve mücadele and Disiplin
+for outfielders, and Kurtarış, Ceza sahası, Az gol yeme, Ayakla oyun and
+Disiplin for goalkeepers. "Tactic" and "positioning" have no Sportmonks column
+and are not invented.
+
+- The component is fitted on the same peer population the right-hand wheel
+  ranks against, so both plots share a season, competition, role and minute bar.
+- Only peers with every member present enter the fit: a principal component
+  cannot be taken over ragged rows without inventing the missing values. When a
+  member is missing from earlier seasons, it stays unless requiring it would cut
+  the fittable peers to under a third of what the other members allow; then the
+  member leaves the axis instead. Chances created is the usual case: keeping it
+  would fit Üretim on this season's 22 forwards, dropping it fits it on 259.
+- Members are direction-adjusted first, so fewer fouls is more discipline, and
+  each is standardised against the peer group. Power iteration on the resulting
+  correlation matrix gives PC1; a member the whole group scores identically is
+  dropped rather than dividing by zero.
+- **Agreement:** PC1 only reads as "more of this quality" when its members
+  agree. Where one moves against the rest - dribbling against shot volume, or
+  possession lost against touches - it is measuring something else, and an axis
+  labelled Hücum that fell when a player dribbled more would mislead. Members
+  that load negatively leave the axis, most negative first, and the component
+  is refitted until the survivors agree. Every member that left - for missing
+  coverage, for being constant, or for moving against the axis - is named with
+  its reason in the tooltip and the details table.
+- The component is oriented so higher is always better, then the player's
+  projection is ranked against the peers' projections with the same mid-rank
+  percentile. The share of the surviving members' variance it explains is
+  reported beside the plot.
+
+A one-member group, such as a keeper's goals conceded, is that member's
+standardised value and explains all of its own variance by construction.
+
+## Ayrıntılı Ölçütler
+
+The right-hand plot draws one fixed set of variables per role - sixteen for
+outfielders, ten for goalkeepers - in the order they sit on the circle:
+finishing, then creation and passing, then defending and duels, the way
+published player pizza charts present it. Three variables from those charts
+have no Sportmonks equivalent and are not substituted silently: opposition
+penalty-area touches, passes received and any positioning composite. A player
+below the minute bar is still drawn, with an explicit small-sample note, but
+does not enter the reference.
+
+## Team plots
+
+The team plots run the same code: `RadarScoring` for totals, rates, the
+reference and mid-rank percentiles, `RadarAttributes` for the principal
+components, `RadarChart` for the wheel. A team-season is treated like a
+player-season whose every match lasts 90 minutes, so a per-90 rate is a
+per-match rate (shown as `/maç`), and every team is one group, `TEAM`.
+
+- **Data:** `team_metrics.csv`, one record per team, match and statistic.
+  `RadarTeams.rows` turns it into one row per team-match with Sportmonks names
+  lower-cased (`SHOTS_TOTAL` becomes `shots_total`), so the coverage and
+  omitted-zero rules read it exactly as they read player rows. What a team
+  conceded - goals, shots, shots on target - comes from the opponent's row in
+  the same fixture; with only one side saved it stays unknown. xG conceded is the
+  provider's own figure, or the opponent's xG when that is blank.
+- **Omitted records:** in this long format an omitted statistic has no record at
+  all, so every row first receives every statistic its file supplies anywhere,
+  left blank. Without that, a match with no goal recorded had no goals column,
+  the shared rules read it as unknown rather than none, and one goalless match
+  removed a whole team-season from every attack axis (Hücum fitted on 19 teams
+  instead of 55).
+- **Blank as zero, per statistic:** event counts where zero is ordinary - goals,
+  goals conceded, shots on target, big chances, accurate crosses, corners and
+  cards - read a blank on a covered match as none; from 2024-25 Sportmonks
+  stops writing zero goals and red cards at all. Volume statistics a team never
+  records as zero - passes, possession, shots, tackles - and xG keep a blank
+  unknown. So do key passes and duels won, which have genuine gaps: three
+  2026-27 fixtures have no key-pass value for either side despite 9-19 shots,
+  so six teams currently have no Kilit pas score and no Üretim attribute.
+- **Reference:** the served season's teams that have played at least half as
+  many matches as the busiest (after four rounds, two), plus every earlier
+  season's team-seasons of the same competition - 18 current and 96 earlier
+  team-seasons in 2026-27. The feed-availability rule is the players' rule: xG,
+  xG conceded and big chances are unknown before 2024-25, key passes before
+  2023-24, and duels won in 2025-26, where they fill 79% of matches.
+- **Wheel:** sixteen axes - goals, xG, shots, shots on target, big chances,
+  dangerous attacks, possession (a per-match average, never summed), passes,
+  pass completion, key passes, accurate crosses, fewer goals conceded, less xG
+  conceded, fewer shots conceded, tackles and interceptions.
+- **Attributes:** Hücum, Üretim, Top hakimiyeti, Savunma, Mücadele and Disiplin,
+  with the same coverage, constant-member and agreement rules as the player
+  attributes. Duels won currently leaves Mücadele for coverage.
+
+## Drawing
+
+Both plots have fixed rings at 0, 20, 40, 60, 80 and 100. Missing scores have no
+point; neighbouring segments are not connected across missing axes, and an
+incomplete polygon is not filled. An observed zero is plotted at the actual
+centre. Keyboard-focusable tooltips and expandable tables show the observed
+total, rate or percentage, score rule, reference definition, metric-specific N,
+positive-only N when applicable, attempts, minutes, coverage and any
+unavailable reason. When no metric can be scored, the plot says whether the
+minute bar leaves too few peers or the observations are unavailable.
+
+The plots sit side by side whenever the profile panel is at least 740px wide -
+from a 1366px window up - and stack below that, where each would drop under
+~330px. The chart is proportioned for that half-width: labels render at 9-11px,
+blocks that would collide just off the vertical axis are pushed outward, and the
+viewBox is cropped to what was drawn, so a six-axis wheel is not padded to a
+sixteen-axis one's height.
+
+## Limitations
+
+Small current samples are not shrunk. Early in a season that matters: four-match
+per-90 rates spread wider than full-season ones, so current players are
+over-represented at both ends of the pooled scale - 14 of the top 37 defender
+shot rates, against their 8% share of the population.
+
+The legacy `player_reference/reference_*.csv` exports from `build_reference.py`
+are not read; earlier seasons are aggregated in the browser from the saved match
+rows with exactly the same scoping, missingness and position rules as the
+current season, so no reference build or new downloader is required.
+
+## Running
+
+Restart `src/web/serve.py` after installing this layout, so it serves
+`/spider/...` and `/local-data/history/`, then reload the page. Automated checks
+are in `tests/test_radar.cjs`; they use only synthetic observations and Node's
+built-in test runner. Run them yourself when desired:
+
+```powershell
+node --test tests/test_radar.cjs
+```
+
+These checks were written but not run, following `AGENTS.md`.

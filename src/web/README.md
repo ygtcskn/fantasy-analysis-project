@@ -10,7 +10,7 @@ Open **http://127.0.0.1:8000** in your browser and keep the terminal open. The w
 
 This only updates the website from your saved CSVs. It does not download new Sportmonks data or run your Python analysis. Finish downloading/exporting before refreshing; files are validated together before replacing the displayed dataset. Missing files or validation errors keep the previous loaded data. All seven supported CSVs must exist for automatic loading.
 
-The server binds only to this computer and serves an explicit list of website assets, seven core CSVs, and optional `fixture_formations.csv` for team pages. It does not expose `.env`, source Python files, databases, raw exports, or directory listings. It creates no files and makes no provider calls. Stop it with Ctrl+C when finished.
+The server binds only to this computer and serves an explicit list of website assets, seven core CSVs, optional `fixture_formations.csv` for team pages, and the tables `src/tables` publishes under `data/final/tables/<season>/` (as `/local-data/tables/<name>.csv`). Those tables hold the season totals, league table, leader cards, ratings and tiers; the pages are being switched over to read them instead of computing their own, one page at a time. Run `python src/run_pipeline.py --season 2026/2027` to build them - see [src/tables/README.md](../tables/README.md). It does not expose `.env`, source Python files, databases, raw exports, or directory listings. It creates no files and makes no provider calls. Stop it with Ctrl+C when finished.
 
 You can still double-click `index.html` for manual file selection instead of starting the server. Browsers cannot automatically read arbitrary local folders from a directly opened HTML file:
 
@@ -64,15 +64,175 @@ The game's best players are the top three eligible Sportmonks ratings across bot
 
 ## Fantasy XI Builder
 
-**Fantasy XI Builder** appears in the shared sidebar after **Fixture Page**. Direct URL: `http://127.0.0.1:8000/index.html?view=builder`. It uses a two-column layout: an editable pitch on the left and the full player pool on the right. The player list has exactly the requested data columns: local club logo, player name, and average rating. One row represents one player ID; a player associated with multiple clubs displays every recorded club logo. Search matches player and club names, and the club selector filters the pool.
+Player details now use the permanent fantasy pipeline. After downloading and
+updating the TFF snapshot, run `python src/run_pipeline.py --season 2026/2027`,
+restart the local server to load its new routes, then refresh the browser.
+The panel reads `data/final/points/player_season_summary.csv`,
+`data/final/points/player_match_points.csv`, and
+`data/final/player_projections/<season>/player_projections.csv`.
+The completion marker at `data/final/fantasy_pipeline/<season>/pipeline_status.csv`
+and matching generation IDs prevent mixed builds. Missing analysis does not
+prevent the core player pool from loading. Manual provider CSV imports do not
+infer a fantasy season; use the local server for fantasy outputs.
 
-Choose among 4-4-2, 4-3-3, 4-2-3-1, 3-4-3, 3-5-2, and 5-3-2. Click a player to place them in the first compatible empty position. To choose an exact position, click that pitch position first and then click a player. You can drag a player from the list to a position, or drag a selected player between positions to move or swap. Selecting a filled position allows replacement; its × button removes the player. **Clear team** restores an empty 4-3-3.
+Expanded rows show expected points, starting/scoring
+probabilities, price, opponent, expected minutes and injury availability.
+The points per match column comes from the current season's reconstructed points summary
+and remains visible when a next-match projection is unavailable. Uncertain availability has blank
+forecast numbers; fixture-confirmed absences show zero. The panel suppresses
+projections after the round deadline or when fixture details no longer match.
+The original rating column remains a descriptive Sportmonks rating.
+
+**Fantasy XI Builder** appears in the shared sidebar. Direct URL: `http://127.0.0.1:8000/index.html?view=builder`. The editable pitch sits beside the player pool. Clicking a name expands fantasy statistics beneath that row; Match history opens the existing provider-statistics dialog. Players join by Sportmonks ID, never name. Search matches player and club names and the club selector filters the pool.
+
+The player pool includes points per match beside Rating. Sort by either metric, always descending with missing values last. Opponents appear as club logos with a home/away marker; healthy-status and kickoff notes are hidden.
+
+**Maç Haftası** appears under Fantezi, above Fantasy XI Builder, at `index.html?view=matchweek`. It shows saved fixtures in the current Tuesday–Monday calendar window, using Europe/Istanbul dates and kickoff times. The window updates while the page is open and when the tab becomes visible again. Empty weeks remain empty rather than jumping to a future round.
+
+Fixtures appear on the left as Gün, Saat, Ev, Odds, Deplasman. The central odds cell contains labelled 1/X/2 probabilities: green for home win, yellow for draw, red for away win; unavailable values stay neutral. The full provider standings appear on the right without an internal scrolling area. On narrower screens, standings move below the fixtures.
+
+Click a fixture row or activate its odds button with the keyboard to select it. The Maç Analizi panel beneath the fixtures shows the selected teams, kickoff, saved score when available, model probabilities and expected goals. Changing the model updates the selected analysis. Selection clears when the fixture leaves the displayed week; missing predictions have an explicit empty state.
+
+The analysis shows each team's last starting XI on two mini pitches, then a team comparison. Last XI uses the latest FT fixture before the selected kickoff and the current time, conservatively allowing three hours for completion. It uses saved starter flags and formation coordinates, falling back to labelled role groups when coordinates are incomplete. It never substitutes a predicted XI or fills missing starters. The comparison includes model win/draw probabilities and expected goals, plus form, goals scored/conceded per match and clean sheets from up to five preceding completed fixtures in the loaded season. Missing scores remain unavailable; history is shown even without a forecast.
+
+The fantasy comparison sums baseline_expected_points for the selected fixture by team and fantasy position (KL, DEF, OS, FOR), before injury and other availability adjustments. The table labels this assumption. These are totals across exported players, not the historical last XI or a claim of complete squad coverage. Each value shows available/exported player counts; partial totals are labelled and missing baselines are never zero-filled. The XI Builder's season, fixture and deadline checks still apply; individual player forecasts retain their availability adjustments. Player-point totals are independent of the match-odds model selector.
+
+Selected-match analysis also compares the teams' current-season league ranks for goals scored, goals conceded, clean sheets, recorded yellow cards and recorded dismissals. Rankings use descending totals with shared ranks for ties, and show totals and per-match averages. This is current saved season context, not a historical pre-match snapshot. Goal rankings require complete scores for each included club. Card rankings cover observed player records only, show match coverage and the number of ranked teams, and divide by matches with card data. Missing card fields are not assumed to be zero; direct red and second-yellow dismissal count at most once per player and fixture.
+
+The fantasy team's headline value uses at most three players with the highest positive baseline expected points for that single fixture, respecting the three-per-club cap. It lists their names and contributions. This is a club comparison without budget or formation optimization; injuries remain ignored. Position rows still show all exported players in each group, not the selected trio's breakdown. Missing forecasts leave an explicitly partial candidate pool.
+
+The page reads `data/final/odds/predictions.csv` through the local server, separately from player projections. Choose a model to view its home-win, draw and away-win probabilities as percentages. Predictions must match the saved season, fixture ID, team orientation and kickoff, have been generated before kickoff, and contain valid probabilities summing to one. Missing or ambiguous predictions display —. Completed matches can retain their saved pre-match forecast. Weekly rollover does not run models or download data; rerun the odds analysis yourself and click Refresh saved data to load fresh outputs. Restart the local server after installing these route changes.
+
+Dragging a player from the pool or between pitch positions shows only their club shirt with its jersey number (when available), on a transparent background with no name beneath it.
+
+Click an empty pitch position and the recommendation table ranks every candidate for it, not just the members of one optimal XI. Each candidate is forced into the team in turn and the remaining places re-optimized, so the order is by the strength of the completed XI and "Costs N vs best XI" is the real price of preferring that player. Without a position selected the table falls back to listing the optimal remaining XI, which is useful once but does not change as you fill it: adding a player already in that XI cannot change the XI, so the list only shrinks. The 40 strongest candidates per position are evaluated; a player projected near zero cannot complete a competitive team.
+
+After the first XI selection, the player list shrinks and a recommendation table appears beneath it. The local server lazily loads `src/xi_optimizer` and solves the remaining XI with selected players locked, the current formation, ₺100M budget, and maximum three players per club. Suggestions are members of one optimal completed XI, ordered by their individual expected points; they are not exhaustive forced-candidate alternative rankings. Empty-slot selection filters visible suggestions by position. Add buttons fill compatible empty slots without replacing locked players. Placement uses TFF fantasy roles when available.
+
+## Themes
+
+`styles.css` defines the light palette on bare `:root` and overrides it under
+`:root[data-theme="dark"]`. Older rules write a literal `white` and pair it with
+a `:root[data-theme="dark"] .thing { background: var(--surface); }` override
+further down; newer ones use `var(--surface)` directly, which carries both
+themes in a single declaration and cannot drift apart.
+
+Prefer the variables — `--surface`, `--surface-raised`, `--surface-soft`,
+`--field`, `--ink`, `--muted`, `--line`. Only accent colours need an explicit
+dark variant, because a deep colour vanishes against a dark panel. Check any
+change in both themes: a hardcoded white panel keeps light-theme text colour
+rules working while the dark theme paints near-white text onto it.
+
+## İstatistikler
+
+`index.html?view=statistics`, below Fantasy XI Builder in the sidebar. Three
+season leader cards across the top - most goals, most assists, and most fantasy
+points - then a searchable player list beside the player profile.
+
+Fantasy points earn the third card because they are the currency this project is
+built around and appear nowhere else on the site; a third attacking metric would
+mostly repeat the first two. That card reads the published points ledger, so it
+asks you to refresh the fantasy analysis when it has not been built, while the
+other two work from `player_match_stats.csv` alone.
+
+Every figure comes from the same aggregation the tier list uses, so a player's
+totals cannot disagree between the two pages. Equal values share a rank. The
+list shows at most 200 rows and says so; narrow the search or the club filter to
+see past that.
+
+### Oyuncu Profili
+
+Clicking a name in the list fills the right-hand panel with three views of that
+player. A name in a leader card still opens the per-match dialog, which is what
+a leaderboard click should do; the list drives the profile.
+
+### Spider plots
+
+The two plots at the top of the profile - **Genel Nitelikler** and **Ayrıntılı
+Ölçütler** - are built in `lib/radar.js`, which holds their code, styles and
+methodology: see [lib/radar.md](lib/radar.md). They have no
+settings; every render uses one definition of the reference, the minute bar and
+the score.
+
+**Season totals,** full width between the radars and the timeline. Appearances,
+minutes, goals, assists, shots, key passes, match rating, and the fantasy
+figures where the analysis is loaded.
+
+**Fantasy points over time.** One point per match in kickoff order, with a zero
+line drawn when a player has been sent off or scored an own goal into a negative
+week. Dates thin out to about eight labels so they never collide over a season.
+
+**Sportmonks rating per match,** under the timeline. One vertical bar per
+rated match, in kickoff order from left to right like the timeline, labelled
+with the matchweek and the opponent with (İ)/(D) for home or away; labels thin
+to about twelve and bar values hide once bars get narrow, both staying in each
+bar's tooltip. Bars start at zero on the provider's 0-10 scale, so their heights
+compare honestly. The
+dashed line is the player's own average - the same unweighted mean of valid
+ratings (1-10, not a zero-minute record) as "Maç puanı" in the season totals
+and the tier list - and matches below it are drawn paler. The note gives the
+highest and lowest rating and counts records without a valid rating.
+
+**Dağılım · Emsallere Göre,** at the bottom of the profile. For each metric of
+the Ayrıntılı Ölçütler wheel, the spread of the comparison players as a smooth
+curve, the player's value marked on it, the peers he outperforms coloured by
+percentile, and his percentile on the right - the same peers and the same
+numbers as the wheel. It lives in `features/statistics/distribution.js`; see
+[features/statistics/distribution.md](features/statistics/distribution.md).
+
+All of these charts are inline SVG with no charting library, and their colours
+are CSS variables so they follow the theme like everything else.
+
+Each recommendation shows the player's decayed match rating beside its fixture difficulty and opportunity cost. Rating orders candidates that are otherwise equal but never overrides the projection, because it predicts next-match points less well than prior points do and is largely redundant with them.
+
+A **Risk** selector sits beside the refresh button. Balanced is the pure expected-points optimum; low spreads the defence across clubs; high deliberately stacks it. Correlation cannot change a team's expected total, only the spread around it, so both figures are shown: the note reports expected points, the spread, and how many same-club goalkeeper/defender pairs produced it. Only the three named settings are accepted from the browser.
+
+Restart `src/web/serve.py` after this update. Its Python environment needs `src/xi_optimizer/requirements.txt`. The same-origin `/local-recommendations.csv` endpoint performs on-demand, read-only optimization and returns CSV; it does not write reports or call providers. Solves are serialized with a five-second solver limit. Stale browser responses are discarded. Missing dependencies, ineligible locks, expired forecasts and infeasible teams show a status message, with a retry button. Recommendations use injury-adjusted projections even though the team comparison ignores injuries. Clearing the XI restores the full player list.
+
+Choose among 4-4-2, 4-3-3, 4-2-3-1, 3-4-3, 3-5-2, and 5-3-2. Use **+** beside a player to place them in the first compatible empty position. To choose an exact position, click that pitch position first and then add a player. You can drag a player from the list to a position, or drag a selected player between positions to move or swap. Selecting a filled position allows replacement; its × button removes the player. **Clear team** restores an empty 4-3-3 and closes expanded player statistics.
 
 The builder uses the broad playing positions supplied in the loaded CSVs: goalkeeper, defender, midfielder, and forward/attacker. Multi-position players can use any matching slot. Players without a supplied position can use any slot, because the site has no evidence for a stricter rule. A formation change retains compatible selections deterministically and returns selections that no longer fit to the pool. Player IDs remain unique, so the same player cannot occupy two positions.
 
 Ratings use the same calculation as the tier list: the unweighted arithmetic mean of eligible Sportmonks match ratings, excluding ratings outside 1–10 and records explicitly showing zero minutes. Missing ratings display as a dash and do not prevent selection. The crafted XI remains only in browser memory and resets on page reload, clearing loaded data, or loading a different season. It does not modify CSVs, run analysis, calculate fantasy points, or make provider calls.
 
 Put logos in `assets/team-logos/`, using the Sportmonks team ID as the filename: for example `2811.svg` or `2811.png` for Samsunspor. Find IDs in `teams.csv`. SVG is tried first, then PNG. Missing logos show club abbreviations. For players associated with multiple clubs, each recorded club is shown. Logos are local website assets and do not require provider API calls.
+
+## Takım İstatistikleri
+
+`index.html?view=team-statistics`, directly below İstatistikler in the sidebar.
+The team counterpart of the player page, laid out the same way: three leader
+cards, a searchable team list, and a profile of the team clicked in the list or
+a card (the league leader until then).
+
+- **Leader cards:** most goals scored, fewest conceded, and most clean sheets.
+  Clean sheets carry fantasy points for goalkeepers and defenders, which is why
+  they earn the third card. Goals come from the provider's standings totals,
+  falling back to saved results the way Puan Durumu does; clean sheets come only
+  from saved CURRENT scores, and a match whose score is missing is not counted.
+- **Team list:** played, goals for and against, and points, sortable by points,
+  goals scored, goals conceded (fewest first), goal difference or clean sheets.
+- **Spider plots:** Genel Nitelikler and Ayrıntılı Ölçütler for teams, built in
+  `lib/radar.js` with the same scoring and reference rules as the player plots,
+  per match instead of per 90 - see [lib/radar.md](lib/radar.md).
+- **Season totals:** position, points, played, W-D-L, goal difference, goals for
+  and against, clean sheets, xG, xG conceded, average possession and shots. The
+  match-statistic totals are shown only when every match supplies them.
+- **Match by match, for the open team:** xG against xGA, xG form, goal minutes
+  and pressure balance, each drawn for that team alone but on the league's
+  scale, so the panel reads as it would beside every other team's. They come
+  from `lib/team-analysis.js`; see
+  [lib/team-analysis.md](lib/team-analysis.md).
+
+- **Takım Analizi:** below the profile, charts comparing every team this season:
+  fantasy points by position, luck, and ten one-point-per-team comparisons
+  (attack against defence, points against expected points, goals against xG and
+  more). They live in `lib/team-analysis.js` and redraw on every data refresh.
+
+Match statistics come from `team_metrics.csv`, which the page reads on demand
+through `serve.py` because older exports do not include it; without it the
+cards, list and totals from standings still work, and the spider plots and the
+match-by-match charts say what is missing. **Refresh saved data** re-reads it. Restart
+`serve.py` once after installing this page so it serves the new files.
 
 ## Tier rules
 
@@ -94,7 +254,45 @@ Rank compares eligible players across the entire loaded season, ordered by unrou
 
 Season summaries sum supplied count metrics only. Missing numeric values remain missing: an entirely unavailable metric displays a dash, and partial coverage displays an asterisk with a coverage tooltip. Percentages and provider ratings are not summed. xG totals prefer `xg_expected_goals` per match when present, otherwise `expected_goals`; they never sum the two feeds. Match history preserves the original fields and separate feed columns. Kickoff text retains the export's timezone convention.
 
-Source files: `index.html` (main page), `styles.css` (shared appearance), `app.js` (main-page loading and navigation), `sidebar.js` (shared sidebar), `csv.js` (shared CSV parser), `home.js` (home standings and fixtures), `standings.js` (detailed Puan Durumu), `builder.js` and `builder.css` (Fantasy XI Builder), `tier-list.js` (tiers and match history), `team.html`, `team-page.js`, and `team-page.css` (team dashboard), and `serve.py` (local website and CSV server). The assistant prepared the code but did not execute the server, page, or tests, following the project's code-only preference.
+## How the folder is laid out
+
+The website is organised by feature rather than by file type, so everything one
+page needs sits together and a page can be read, changed or removed without
+hunting through a flat folder.
+
+```text
+src/web/
+  index.html                  Main page; team.html is the club dashboard
+  serve.py                    Read-only local server
+  core/                       The shell every page shares
+    app.js                      Loading, navigation, shared helpers
+    sidebar.js                  Sidebar and theme
+    kits.js                     Club colours and crests
+  data/                       Everything that reads a file
+    csv.js                      CSV parsing
+    fantasy.js                  Published points, projections and pipeline status
+  lib/                        Drawing libraries shared by more than one feature
+    radar.js / radar.css        The two spider plots, players and teams
+    team-analysis.js / .css     The match-by-match team charts
+  features/                   One folder per page or panel
+    home/  standings/  matchweek/  tier-list/  builder/
+    statistics/                 Player page: list, profile, radar page, distribution
+    team-statistics/            Team page: list, profile, radar page, charts page
+    team-page/                  team.html
+  styles/
+    styles.css                  Global appearance and theme variables
+    panels.css                  Shared panel, table and profile styles
+  assets/                     Club logos, role icons, player portraits
+```
+
+The server serves this whole folder by file suffix - `.html`, `.js`, `.css`,
+`.svg`, `.png` - so a page that gains a script needs no new route, and anything
+without one of those suffixes (`serve.py`, these notes) stays unreachable.
+
+Two rules keep it that way. A feature never reaches into another feature: what
+two of them share moves to `core/`, `lib/` or `data/`. And nothing outside
+`data/` fetches a file, so there is one place to look when a page shows the
+wrong season.
 
 ## Domain later
 

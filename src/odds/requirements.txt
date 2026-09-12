@@ -5,5 +5,5 @@ scipy>=1.10,<2
 # The boosted candidate.
 xgboost>=2,<4
 
-# Hyperparameter search (tune.py). Only needed when re-tuning.
+# Hyperparameter search. Only needed when re-tuning, which predict does by default.
 optuna>=3,<5

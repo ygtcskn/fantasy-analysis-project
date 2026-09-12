@@ -27,7 +27,9 @@ from __future__ import annotations
 import argparse
 import csv
 import io
+import hashlib
 import math
+import re
 import statistics
 import sqlite3
 import sys
@@ -36,21 +38,24 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from rules import COMPONENTS, FROM_SPORTMONKS, POSITIONS, RulesError, ScoringRules
+if __package__:
+    from .rules import COMPONENTS, FROM_SPORTMONKS, POSITIONS, RulesError, ScoringRules
+else:
+    from rules import COMPONENTS, FROM_SPORTMONKS, POSITIONS, RulesError, ScoringRules
 
 ROOT = Path(__file__).resolve().parents[2]
 INPUT = ROOT / "data" / "final" / "sportmonks"
 RULES = ROOT / "config" / "tff_scoring_rules.csv"
 DATABASE = ROOT / "data" / "superlig.sqlite"
+TFF_PLAYERS = ROOT / "data" / "final" / "tff_fantasy" / "tff_players.csv"
 OUTPUT = ROOT / "data" / "final" / "points"
-RUNS = ROOT / "temp" / "points" / "runs"
+RUNS = ROOT / "data" / "temp" / "points" / "runs"
 
 LEDGER_COLUMNS = (
     "season", "fixture_id", "kickoff_utc", "round", "player_id", "player_name",
     "team_id", "team_name", "opponent_id", "opponent_name", "venue",
     "fantasy_position", "position_source", "sportmonks_position",
-    "started", "minutes_played", "goals", "assists", "clean_sheet",
+    "started", "minutes_played", "rating", "goals", "assists", "clean_sheet",
     "goals_conceded", "saves", "penalties_saved", "penalties_missed",
     "yellow_cards", "dismissals", "own_goals",
     *(f"points_{name}" for name in COMPONENTS),
@@ -75,15 +80,16 @@ def read_csv(path: Path) -> list[dict]:
 
 def write_csv(path: Path, rows: list[dict], columns=None) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    if not rows:
-        path.write_text("", encoding="utf-8")
-        return
-    names = list(columns) if columns else list(rows[0])
-    with path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=names, extrasaction="ignore")
-        writer.writeheader()
-        for row in rows:
-            writer.writerow({name: row.get(name, "") for name in names})
+    names = list(columns) if columns else list(rows[0]) if rows else ["message"]
+    temporary = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+    try:
+        with temporary.open("w", encoding="utf-8-sig", newline="") as handle:
+            writer = csv.DictWriter(handle, fieldnames=names, extrasaction="raise")
+            writer.writeheader()
+            writer.writerows(rows)
+        temporary.replace(path)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def number(value) -> float:
@@ -99,33 +105,48 @@ def stamp(moment: datetime) -> str:
 
 
 def season_folder(name: str) -> str:
-    return name.replace("/", "-")
+    name = name.replace("/", "-")
+    if not re.fullmatch(r"\d{4}-\d{4}", name):
+        raise ValueError("Season must look like 2026/2027")
+    first, last = map(int, name.split("-"))
+    if last != first + 1:
+        raise ValueError("Season years must be consecutive")
+    return name
 
 
 # ------------------------------------------------------------- fantasy positions
 
-def tff_positions(database: Path) -> tuple[dict, list[dict]]:
+def load_tff_players(source: Path) -> list[dict]:
+    if source.suffix.lower() == ".csv":
+        if not source.is_file():
+            raise ValueError(f"TFF player CSV is missing: {source}")
+        return read_csv(source)
+    # Explicit legacy --database input only; normal builds consume the current CSV.
+    if not source.is_file():
+        raise ValueError(f"TFF database is missing: {source}")
+    connection = sqlite3.connect(source.resolve().as_uri() + "?mode=ro", uri=True)
+    connection.row_factory = sqlite3.Row
+    try:
+        return [dict(r) for r in connection.execute("select * from tff_players")]
+    finally:
+        connection.close()
+
+
+def tff_positions(source: Path) -> tuple[dict, list[dict]]:
     """Fantasy position per Sportmonks player id, plus the unmatched pool.
 
     The game's own classification decides how a player scores, so it wins where
     it exists. It only covers the current player pool, which is why the
     Sportmonks per-match position remains the fallback for earlier seasons.
     """
-    if not database.exists():
-        return {}, []
-    connection = sqlite3.connect(database)
-    connection.row_factory = sqlite3.Row
-    try:
-        rows = [dict(r) for r in connection.execute("select * from tff_players")]
-    except sqlite3.Error:
-        return {}, []
-    finally:
-        connection.close()
+    rows = load_tff_players(source)
     mapped, unmatched = {}, []
     for row in rows:
         position = (row.get("position") or "").strip().upper()
         player_id = str(row.get("sportmonks_player_id") or "").strip()
-        if row.get("match_status") == "matched" and player_id and position in POSITIONS:
+        if row.get("match_status") == "matched" and player_id.isdigit() and position in POSITIONS:
+            if player_id in mapped:
+                raise ValueError(f"Duplicate matched Sportmonks player ID: {player_id}")
             mapped[player_id] = position
         else:
             unmatched.append({
@@ -148,14 +169,23 @@ def build_season(season: str, rules: ScoringRules, positions: dict,
     stats = read_csv(folder / "player_match_stats.csv")
     if not stats:
         return [], [{"season": season, "issue": "no player_match_stats.csv", "count": 1}]
-    fixtures = {r["fixture_id"]: r for r in read_csv(folder / "fixtures.csv")}
+    fixture_rows = read_csv(folder / "fixtures.csv")
+    fixtures = {r["fixture_id"]: r for r in fixture_rows}
+    if len(fixtures) != len(fixture_rows) or "" in fixtures:
+        raise ValueError(f"{season}: duplicate or blank fixture IDs")
     teams = {r["id"]: r["name"] or r["id"] for r in read_csv(folder / "teams.csv")}
 
     # Team goals conceded from the scoreline, used only to catch provider gaps.
     goals_for: dict = defaultdict(dict)
     for row in read_csv(folder / "fixture_scores.csv"):
-        if row.get("description") == "CURRENT":
-            goals_for[row["fixture_id"]][row["participant_id"]] = int(number(row["score.goals"]))
+        if row.get("description") == "CURRENT" and row.get("score.goals", "").strip():
+            value = float(row["score.goals"])
+            if not math.isfinite(value) or value < 0 or not value.is_integer():
+                raise ValueError(f"{season}: invalid score for fixture {row['fixture_id']}")
+            scores = goals_for[row["fixture_id"]]
+            if row["participant_id"] in scores:
+                raise ValueError(f"{season}: duplicate CURRENT score for fixture {row['fixture_id']}")
+            scores[row["participant_id"]] = int(value)
     team_conceded = {}
     for fixture_id, sides in goals_for.items():
         if len(sides) == 2:
@@ -165,10 +195,25 @@ def build_season(season: str, rules: ScoringRules, positions: dict,
 
     issues: dict = defaultdict(int)
     scored: list[dict] = []
+    seen = set()
     for row in stats:
+        key = (row.get("fixture_id", ""), row.get("player_id", ""))
+        if not all(str(value).isdigit() for value in key):
+            # Historical exports can include anonymous participant records.
+            # Keep them out of the ledger without inventing a player identity.
+            missing = ", ".join(name for name, value in zip(("fixture_id", "player_id"), key)
+                                if not str(value).isdigit())
+            issues[f"excluded row with missing or invalid {missing} (fixture {key[0] or 'unknown'})"] += 1
+            continue
+        if key in seen:
+            raise ValueError(f"{season}: duplicate fixture/player ID {key}")
+        seen.add(key)
         fixture = fixtures.get(row["fixture_id"])
         if fixture is None:
             issues["player row with no matching fixture"] += 1
+            continue
+        if fixture.get("state") != "FT" or fixture.get("league_id") != "600":
+            issues["excluded unfinished or non-league fixture row"] += 1
             continue
         sportmonks_position = (row.get("position") or "").strip()
         player_id = str(row.get("player_id") or "")
@@ -183,13 +228,15 @@ def build_season(season: str, rules: ScoringRules, positions: dict,
 
         team_id = row["team_id"]
         home, away = fixture.get("home_team_id", ""), fixture.get("away_team_id", "")
+        if not home or not away or team_id not in {home, away}:
+            raise ValueError(f"{season}: player {player_id} team does not match fixture {row['fixture_id']}")
         opponent = away if team_id == home else home
         minutes = number(row.get("minutes_played"))
         conceded = number(row.get("goals_conceded"))
-        if not row.get("goals_conceded") and minutes >= rules.clean_sheet_minutes:
+        if not row.get("goals_conceded") and minutes >= 90 and number(row.get("started")) == 1:
             # Blank normally means none conceded while on the pitch. Where the
-            # scoreline says otherwise for a player who was on for most of the
-            # match, trust the scoreline rather than award a clean sheet.
+            # final score can only replace that value for a full-match starter.
+            # Substituted players may have left before the goal was conceded.
             from_score = team_conceded.get((row["fixture_id"], team_id))
             if from_score:
                 conceded = float(from_score)
@@ -219,6 +266,9 @@ def build_season(season: str, rules: ScoringRules, positions: dict,
             "fantasy_position": position, "position_source": source,
             "sportmonks_position": sportmonks_position,
             "started": int(number(row.get("started"))), "minutes_played": minutes,
+            # Provider match rating. Carried for context only: it scores no
+            # points and takes no part in any total on this row.
+            "rating": number(row.get("rating")) or "",
             "goals": int(number(row.get("goals"))), "assists": int(number(row.get("assists"))),
             "clean_sheet": int(parts["clean_sheet"] != 0),
             "goals_conceded": int(conceded), "saves": int(number(row.get("saves"))),
@@ -293,7 +343,60 @@ def components_report(ledger: list[dict]) -> list[dict]:
     return rows
 
 
-def reconcile(ledger: list[dict], season: str, database: Path,
+def published_generation(path) -> str:
+    """The pipeline generation stamped on a file this run is about to replace.
+
+    ``run_pipeline.py`` tags every published file with one ``pipeline_run_id``,
+    and the website refuses to display a set whose stamps disagree. A standalone
+    rebuild writes the same path without that column, which silently invalidates
+    the whole published set: the browser reports that the analysis is being
+    updated and every projection vanishes, with nothing pointing at the cause.
+    Reading the stamp before overwriting it turns that into one line of output.
+    """
+    path = Path(path)
+    if not path.is_file():
+        return ""
+    try:
+        with path.open(encoding="utf-8-sig", newline="") as stream:
+            reader = csv.DictReader(stream)
+            if "pipeline_run_id" not in (reader.fieldnames or []):
+                return ""
+            for row in reader:
+                return row.get("pipeline_run_id", "") or ""
+    except (OSError, UnicodeError, csv.Error):
+        return ""
+    return ""
+
+
+def warn_if_unpublishing(generations, season: str = "<season>") -> None:
+    live = sorted({value for value in generations if value})
+    if not live:
+        return
+    print(f"\nWARNING: this replaced published files carrying pipeline generation "
+          f"{', '.join(live)} with untagged output.")
+    print("         The website will now reject the whole fantasy dataset and show "
+          "'Fantasy analysis is being updated'.")
+    print(f"         Run: python src/run_pipeline.py --season {season}")
+    print("         to republish points, projections and the marker together.")
+
+
+def unfinished_clubs(season: str, input_root: Path = INPUT) -> set[str]:
+    """Clubs with a saved fixture that had not finished when the data was captured.
+
+    Their players are missing that match from the ledger while the fantasy
+    export already counts it, so they cannot be compared fairly.
+    """
+    path = input_root / season / "fixtures.csv"
+    clubs: set[str] = set()
+    for row in read_csv(path):
+        if row.get("league_id") != "600":
+            continue
+        if row.get("state") not in {"FT", "NS", "TBA", "POSTPONED", "CANCELLED"}:
+            clubs.update({row.get("home_team_id", ""), row.get("away_team_id", "")})
+    return {club for club in clubs if club}
+
+
+def reconcile(ledger: list[dict], season: str, source: Path,
               before: str = "") -> list[dict]:
     """Season totals against the game's own `tp`, for matched players.
 
@@ -301,20 +404,18 @@ def reconcile(ledger: list[dict], season: str, database: Path,
     after that date. The fantasy export is a snapshot: any matchweek that
     finished after it was taken is in the ledger and not in ``tp``, and
     without the cut those players read as scoring errors.
+
+    The reverse gap matters just as much and is easier to miss. When a fixture
+    was still being played as the provider data was captured, its players are
+    short a match in the ledger while the fantasy export already counts it.
+    Those players are marked ``club_fixture_unfinished`` so a stale download
+    cannot be mistaken for a scoring mistake - the difference between the two
+    groups is the difference between "rebuild after downloading" and "the rules
+    are wrong".
     """
-    if not database.exists():
-        return []
-    connection = sqlite3.connect(database)
-    connection.row_factory = sqlite3.Row
-    try:
-        players = [dict(r) for r in connection.execute(
-            "select player_name, team_name, position, sportmonks_player_id, tp, od "
-            "from tff_players where match_status = 'matched' "
-            "and sportmonks_player_id != ''")]
-    except sqlite3.Error:
-        return []
-    finally:
-        connection.close()
+    players = [row for row in load_tff_players(source)
+               if row.get("match_status") == "matched" and row.get("sportmonks_player_id")]
+    unfinished = unfinished_clubs(season)
     totals: dict = defaultdict(float)
     minutes: dict = defaultdict(float)
     for row in ledger:
@@ -336,6 +437,10 @@ def reconcile(ledger: list[dict], season: str, database: Path,
             "difference": computed - official,
             "official_minutes": number(player["od"]),
             "computed_minutes": minutes.get(key, 0.0),
+            "minutes_difference": minutes.get(key, 0.0) - number(player.get("od")),
+            "snapshot_file": player.get("snapshot_file", ""),
+            "club_fixture_unfinished": str(player.get("sportmonks_team_id", "")) in unfinished,
+            "comparison_status": "explicit_fixture_cutoff" if before else "provisional_snapshot_alignment",
         })
     rows.sort(key=lambda row: -abs(row["difference"]))
     return rows
@@ -350,7 +455,11 @@ def main(argv=None) -> int:
                         help="Season folders, e.g. 2025/2026. Defaults to all available.")
     parser.add_argument("--input-root", type=Path, default=INPUT)
     parser.add_argument("--rules", type=Path, default=RULES)
-    parser.add_argument("--database", type=Path, default=DATABASE)
+    parser.add_argument("--tff-players", type=Path, default=TFF_PLAYERS,
+                        help="Current reviewed TFF CSV (normal pipeline input).")
+    parser.add_argument("--database", type=Path,
+                        help="Explicit legacy alternative to --tff-players; read only.")
+    parser.add_argument("--tff-season", help="Season to which current TFF positions apply; defaults to newest built.")
     parser.add_argument("--output-root", type=Path, default=OUTPUT)
     parser.add_argument("--runs-root", type=Path, default=RUNS)
     parser.add_argument("--reconcile-season",
@@ -374,15 +483,31 @@ def main(argv=None) -> int:
     if rules.unconfirmed:
         print(f"  unconfirmed rules: {', '.join(rules.unconfirmed)}")
 
-    seasons = ([season_folder(name) for name in args.seasons] if args.seasons
-               else sorted(p.name for p in args.input_root.iterdir() if p.is_dir()))
-    positions, unmatched = tff_positions(args.database)
+    seasons = (sorted({season_folder(name) for name in args.seasons}) if args.seasons
+               else sorted(p.name for p in args.input_root.iterdir()
+                           if p.is_dir() and re.fullmatch(r"\d{4}-\d{4}", p.name)))
+    if not seasons:
+        raise ValueError("No downloaded seasons found")
+    tff_season = season_folder(args.tff_season) if args.tff_season else seasons[-1]
+    source = args.database or args.tff_players
+    positions, unmatched = tff_positions(source)
+    if args.reconcile_before:
+        datetime.strptime(args.reconcile_before, "%Y-%m-%d")
     print(f"{len(positions)} players carry a fantasy position; {len(unmatched)} unmatched")
 
     ledger: list[dict] = []
     issues: list[dict] = []
+    input_paths = [source, args.rules]
     for season in seasons:
-        rows, season_issues = build_season(season, rules, positions, args.input_root)
+        folder = args.input_root / season
+        statuses = read_csv(folder / "download_status.csv")
+        if len(statuses) != 1 or statuses[0].get("status") != "complete":
+            raise ValueError(f"{season}: finish the Sportmonks download before building points")
+        paths = [folder / name for name in ("download_status.csv", "fixtures.csv", "player_match_stats.csv", "teams.csv", "fixture_scores.csv")]
+        if any(not path.is_file() for path in paths):
+            raise ValueError(f"{season}: required input CSV is missing")
+        input_paths.extend(paths)
+        rows, season_issues = build_season(season, rules, positions if season == tff_season else {}, args.input_root)
         ledger.extend(rows)
         issues.extend(season_issues)
         points = sum(r["points_total"] for r in rows)
@@ -394,13 +519,13 @@ def main(argv=None) -> int:
 
     summary = summarise(ledger)
     components = components_report(ledger)
-    target = season_folder(args.reconcile_season) if args.reconcile_season else seasons[-1]
-    checks = reconcile(ledger, target, args.database, args.reconcile_before or "")
+    target = season_folder(args.reconcile_season) if args.reconcile_season else tff_season
+    if target != tff_season:
+        raise ValueError("Reconciliation season must match the current TFF snapshot season")
+    checks = reconcile(ledger, target, source, args.reconcile_before or "")
 
     run = args.runs_root / (datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
                             + "_ledger_" + uuid.uuid4().hex[:8])
-    write_csv(args.output_root / "player_match_points.csv", ledger, LEDGER_COLUMNS)
-    write_csv(args.output_root / "player_season_summary.csv", summary, SUMMARY_COLUMNS)
     write_csv(run / "player_match_points.csv", ledger, LEDGER_COLUMNS)
     write_csv(run / "player_season_summary.csv", summary, SUMMARY_COLUMNS)
     write_csv(run / "component_summary.csv", components)
@@ -415,8 +540,20 @@ def main(argv=None) -> int:
         {"setting": "unconfirmed_rules", "value": " ".join(rules.unconfirmed)},
         {"setting": "reconcile_season", "value": target},
         {"setting": "reconcile_before", "value": args.reconcile_before or ""},
+        {"setting": "tff_source", "value": str(source)},
+        {"setting": "tff_season", "value": tff_season},
+        {"setting": "points_kind", "value": "reconstructed; bonus allocation remains approximate"},
         {"setting": "python", "value": sys.version.split()[0]},
     ], ["setting", "value"])
+    write_csv(run / "input_manifest.csv", [
+        {"path": str(path.resolve()), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
+        for path in input_paths
+    ])
+    # Read the stamps before they are overwritten, not after.
+    replaced = [published_generation(args.output_root / name) for name in
+                ("player_match_points.csv", "player_season_summary.csv")]
+    write_csv(args.output_root / "player_match_points.csv", ledger, LEDGER_COLUMNS)
+    write_csv(args.output_root / "player_season_summary.csv", summary, SUMMARY_COLUMNS)
 
     overall = next((row for row in components if row["scope"] == "all"), None)
     if overall:
@@ -425,14 +562,27 @@ def main(argv=None) -> int:
         print("\nWhere the points come from: "
               + ", ".join(f"{name} {share * 100:.0f}%" for name, share in ordered))
     if checks:
-        exact = sum(1 for row in checks if abs(row["difference"]) < 0.5)
-        close = sum(1 for row in checks if abs(row["difference"]) <= 2)
-        error = sum(abs(row["difference"]) for row in checks) / len(checks)
-        bias = sum(row["difference"] for row in checks) / len(checks)
         window = f" before {args.reconcile_before}" if args.reconcile_before else ""
-        print(f"Reconciliation on {target}{window}: {exact}/{len(checks)} exact, "
-              f"{close}/{len(checks)} within 2, mean absolute error {error:.2f}, "
-              f"bias {bias:+.2f}")
+        comparable = [row for row in checks if not row["club_fixture_unfinished"]]
+        stale = [row for row in checks if row["club_fixture_unfinished"]]
+
+        def accuracy(rows):
+            exact = sum(1 for row in rows if abs(row["difference"]) < 0.5)
+            close = sum(1 for row in rows if abs(row["difference"]) <= 2)
+            error = sum(abs(row["difference"]) for row in rows) / len(rows)
+            bias = sum(row["difference"] for row in rows) / len(rows)
+            return (f"{exact}/{len(rows)} exact, {close}/{len(rows)} within 2, "
+                    f"mean absolute error {error:.2f}, bias {bias:+.2f}")
+
+        print(f"Reconciliation on {target}{window}: {accuracy(checks)}")
+        if stale:
+            print(f"  of which {len(stale)} play for a club whose fixture had not finished "
+                  f"when this data was captured, so they are short a match:")
+            print(f"    comparable players: {accuracy(comparable)}")
+            print(f"    stale-fixture players: {accuracy(stale)}")
+            print("  Re-download the season and rebuild before reading the stale group "
+                  "as a scoring error.")
+    warn_if_unpublishing(replaced, target)
     print(f"\nLedger: {args.output_root / 'player_match_points.csv'}")
     print(f"Run record: {run}")
     return 0

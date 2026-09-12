@@ -1,9 +1,0 @@
-setting,value
-generated_at_utc,2026-09-06T19:51:37Z
-seasons,2021-2022 2022-2023 2023-2024 2024-2025 2025-2026 2026-2027
-rules_file,C:\Users\ygtcs\Desktop\superlig\analysis\config\tff_scoring_rules.csv
-rules_source,"FFA ""Puan Sistemi"" graphic supplied 2026-09-06"
-unconfirmed_rules,
-reconcile_season,2026-2027
-reconcile_before,2026-09-05
-python,3.12.0

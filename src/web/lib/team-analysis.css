@@ -1,0 +1,62 @@
+/* Takım Analizi on the Takım İstatistikleri page. Loaded after panels.css,
+   whose theme variables (--surface, --surface-raised, --surface-soft, --line,
+   --ink, --muted, --statistics-plot-line) these rules use. Every colour defined
+   here has a dark-theme value below. */
+:root {
+  --ta-W: #1d9a68; --ta-D: #c99a06; --ta-L: #d45a2c;
+  --ta-kl: #7d5bd0; --ta-def: #2f7fc1; --ta-os: #2a9a66; --ta-for: #d45a2c;
+  --ta-over: #5c71bb; --ta-under: #c9822a;
+  --ta-shade: rgba(40, 30, 60, 0.06);
+}
+:root[data-theme="dark"] {
+  --ta-W: #3fd89a; --ta-D: #f2cb4c; --ta-L: #ff8a5c;
+  --ta-kl: #b49cff; --ta-def: #72b4ff; --ta-os: #5fd6a0; --ta-for: #ff8a5c;
+  --ta-over: #9c8bf0; --ta-under: #f0aa55;
+  --ta-shade: rgba(0, 0, 0, 0.28);
+}
+
+.team-analysis { margin-top: 20px; border: 1px solid var(--line); border-top: 3px solid #b0a8dd; border-radius: 10px; background: var(--surface); color: var(--ink); overflow: hidden; }
+:root[data-theme="dark"] .team-analysis { border-top-color: #c9c4e6; }
+.team-analysis .builder-pool-heading { padding: 14px 16px 8px; }
+.team-analysis h3 { font-size: 16px; }
+.team-analysis > .builder-rating-note { padding: 0 16px 10px; margin: 0; color: var(--muted); }
+.ta-block { margin: 0 16px 16px; border: 1px solid var(--line); border-radius: 8px; padding: 12px; background: var(--surface-raised); min-width: 0; }
+.ta-block h4 { margin: 0 0 8px; font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: .3px; }
+.ta-block .builder-rating-note { margin: 8px 0 0; padding: 0; color: var(--muted); font-size: 11px; line-height: 1.55; }
+.ta-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin: 0 16px 16px; }
+.ta-pair > .ta-block { margin: 0; }
+@media (max-width: 1100px) { .ta-pair { grid-template-columns: minmax(0, 1fr); } }
+.ta-chart { min-width: 0; overflow-x: auto; }
+.ta-chart > svg { display: block; max-width: 900px; margin-inline: auto; }
+
+/* Small multiples: one panel per team, as many per row as fit. Inside Takım
+   Profili the same grid holds a single panel - the open team - which is not a
+   link to itself, so it is drawn plain and kept to a readable width. */
+.ta-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+.ta-solo { grid-template-columns: minmax(0, 1fr); }
+.ta-solo .ta-panel { max-width: 460px; margin-inline: auto; width: 100%; }
+.ta-panel { min-width: 0; border: 1px solid var(--line); border-radius: 8px; padding: 6px 6px 2px; background: var(--surface); cursor: pointer; }
+.ta-panel:hover { border-color: var(--muted); }
+.ta-panel-static, .ta-panel-static:hover { cursor: default; border-color: var(--line); }
+.ta-panel:focus-visible { outline: 2px solid var(--statistics-plot-line); outline-offset: 1px; }
+.ta-panel.ta-selected { border-color: var(--statistics-plot-line); box-shadow: 0 0 0 1px var(--statistics-plot-line); }
+.ta-panel-heading { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; padding: 0 2px 2px; font-size: 12px; font-weight: 600; }
+.ta-panel-heading span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ta-panel-heading small { flex: none; color: var(--muted); font-size: 10px; font-weight: 400; }
+.ta-panel svg { display: block; }
+.ta-link { cursor: pointer; }
+.ta-link:hover { text-decoration: underline; }
+
+/* The comparison scatters: two per row where they fit, one below that. */
+.ta-compare-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 10px; }
+@media (max-width: 1100px) { .ta-compare-grid { grid-template-columns: minmax(0, 1fr); } }
+.ta-compare-card { margin: 0; min-width: 0; border: 1px solid var(--line); border-radius: 8px; padding: 10px; background: var(--surface); }
+.ta-compare-card figcaption { margin: 0 0 6px; font-size: 12px; font-weight: 600; color: var(--ink); }
+.ta-compare-card svg { display: block; max-width: 100%; }
+.ta-compare-card .builder-rating-note { margin: 6px 0 0; }
+#ta-compare-note { margin: 0; }
+
+.ta-legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; font-size: 11px; color: var(--muted); }
+.ta-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.ta-legend i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.ta-legend i.ta-square { border-radius: 2px; }

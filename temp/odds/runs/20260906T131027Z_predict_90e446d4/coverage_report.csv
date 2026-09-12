@@ -1,7 +1,0 @@
-﻿capture_completed_at_utc,duplicate_home_away_pairs,excluded_fixture_count,expected_fixtures_double_round_robin,export_complete,export_status,first_kickoff_utc,fixture_rows,fixture_team_count,last_kickoff_utc,missing_home_away_pairs,notes,provider_stage_finished,schedule_complete,season,season_finished,snapshot_stable,target_fixture_rows,team_count,unique_fixture_ids,valid_completed_matches,valid_scheduled_matches
-2026-09-06T10:23:54.560959+00:00,0,0,380,True,complete,2021-08-13T17:30:00+00:00,380,20,2022-05-22T17:00:00+00:00,0,,True,True,2021-2022,True,True,380,20,380,380,0
-2026-09-06T10:29:40.021457+00:00,0,29,342,True,complete,2022-08-05T18:00:00+00:00,342,19,2023-06-07T17:00:00+00:00,0,,True,True,2022-2023,True,True,342,19,342,313,0
-2026-09-06T10:37:59.418864+00:00,0,1,380,True,complete,2023-08-11T18:00:00+00:00,380,20,2024-05-26T16:00:00+00:00,0,,True,True,2023-2024,True,True,380,20,380,379,0
-2026-09-06T10:44:23.964817+00:00,0,2,342,True,complete,2024-08-09T18:00:00+00:00,342,19,2025-06-01T16:00:00+00:00,0,,True,True,2024-2025,True,True,342,19,342,340,0
-2026-09-06T10:53:40.731068+00:00,0,0,306,True,complete,2025-08-08T18:30:00+00:00,306,18,2026-05-17T17:00:00+00:00,0,,True,True,2025-2026,True,True,306,18,306,306,0
-2026-09-05T18:59:54.162061+00:00,0,0,306,True,complete,2026-08-14T18:30:00+00:00,306,18,2027-05-23T00:00:00+00:00,0,,False,True,2026-2027,False,True,306,18,306,30,276

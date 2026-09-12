@@ -21,8 +21,9 @@ INPUT = ROOT / "data" / "final" / "sportmonks"
 # The published product: one file, overwritten by each forecast.
 OUTPUT = ROOT / "data" / "final" / "odds"
 LATEST_PREDICTIONS = OUTPUT / "predictions.csv"
-# Per-run records are working files, kept out of the published folder.
-SCRATCH = ROOT / "temp" / "odds"
+# Per-run records are working files, kept out of the published folder and
+# alongside every other module's rebuildable output under data/temp.
+SCRATCH = ROOT / "data" / "temp" / "odds"
 RUNS = SCRATCH / "runs"
 DEFAULT_GBDT_PARAMS = Path(__file__).resolve().parent / "xgboost_params.json"
 # Half-lives compared on the validation season. Recent form is more relevant
@@ -224,7 +225,7 @@ def candidate_specs(args):
 
 
 def load_gbdt_params(paths):
-    """Tuned settings from tune.py, keyed by the model each file was tuned for.
+    """Tuned settings from a previous search, keyed by the model each file was tuned for.
 
     Several files may be given so more than one boosted candidate can carry its
     own tuned settings in the same comparison.
@@ -640,7 +641,7 @@ def main(argv=None):
                         help="Season folders; coverage discovers all if omitted. Backtest requires five or more consecutive finished seasons.")
     parser.add_argument("--input-root", type=Path, default=INPUT)
     parser.add_argument("--output-root", type=Path, default=RUNS,
-                        help="Run directories. Must stay under temp/odds.")
+                        help="Run directories. Must stay under data/temp/odds.")
     parser.add_argument("--league-id", default="600")
     parser.add_argument("--cutoff-hours", type=positive, default=24.0)
     parser.add_argument("--window-days", type=positive, default=1095.0)
@@ -685,7 +686,7 @@ def main(argv=None):
                         help="predict only: models to forecast with. Both by default, so the two "
                              "can be compared side by side each week.")
     parser.add_argument("--gbdt-params", dest="gbdt_params", nargs="+",
-                        help="One or more best_params.json files from tune.py. Each is applied "
+                        help="One or more saved parameter files. Each is applied "
                              "to the model it was tuned for, so several tuned candidates can "
                              "compete in the same run.")
     parser.add_argument("--round", default="next",
@@ -698,7 +699,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
     output_root = args.output_root.resolve()
     if not output_root.is_relative_to(SCRATCH.resolve()):
-        parser.error("Run output must be within temp/odds; provider and published files "
+        parser.error("Run output must be within data/temp/odds; provider and published files "
                      "cannot be destinations.")
     if args.seasons and len(args.seasons) != len(set(args.seasons)):
         parser.error("Each season must appear exactly once.")

@@ -1,2 +1,0 @@
-﻿best_fold_log_loss,colsample_bytree,expected_goals,feature_rows,features,folds,gamma,learning_rate,max_depth,min_child_weight,model,n_estimators,reg_alpha,reg_lambda,season_boost,stats,subsample,trials,tuned_as_of_utc
-0.9929998294821173,0.7001582707077779,True,1645,126,4,4.609690791711484,0.027610339491399124,5,28.905785696694316,xgboost,350,0.642167026470393,0.10731266897047326,1.0,all,0.608251211810211,100,2026-09-06T17:00:00+00:00

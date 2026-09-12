@@ -268,7 +268,7 @@ def _safe_rho(theta: np.ndarray, n: int) -> tuple[float, np.ndarray]:
 
 
 def _make_classifier(model: str, params: dict | None = None):
-    """Defaults are conservative; tuned settings from tune.py override them.
+    """Defaults are conservative; the tuned settings found by run.py override them.
 
     The eligible pool is around a thousand matches, so shallow trees, few leaves
     and a large minimum leaf size matter more than capacity.
