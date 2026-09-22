@@ -15,6 +15,8 @@ player projected near zero cannot complete a competitive team and each candidate
 costs a solve.
 """
 import importlib.util
+from collections import Counter
+from decimal import InvalidOperation
 from pathlib import Path
 import sys
 from datetime import datetime, timezone
@@ -54,11 +56,15 @@ def recommendations(season, query):
     try:
         model, source = modules()
         locked = [value for value in query.get("locked", [""])[0].split(",") if value]
+        bench = [value for value in query.get("bench", [""])[0].split(",") if value]
         formation = query.get("formation", [""])[0]
         risk = query.get("risk", ["balanced"])[0] or "balanced"
         position = query.get("position", [""])[0]
         if len(locked) > 11 or len(set(locked)) != len(locked) or any(not p.isdigit() for p in locked):
             raise ValueError("Invalid selected player IDs.")
+        if (len(bench) > 4 or len(set(bench)) != len(bench)
+                or any(not p.isdigit() for p in bench) or set(bench) & set(locked)):
+            raise ValueError("Invalid substitute player IDs.")
         if formation not in model.FORMATIONS:
             raise ValueError("Choose a supported formation.")
         # Only the named presets, never an arbitrary weight from a query string.
@@ -73,11 +79,31 @@ def recommendations(season, query):
         if missing:
             names = [r["player_name"] for r in excluded if r["player_id"] in missing]
             raise ValueError("Selected players have no eligible projection: " + ", ".join(names or sorted(missing)))
-        settings = dict(budget=100_000_000, time_limit=5, formation=formation, risk=risk)
+        bench_cost, reserved_clubs = 0, Counter()
+        if bench:
+            # Price and club come from reviewed TFF data, never browser amounts.
+            # A substitute need not have an eligible starting-XI projection.
+            records = source.read(source.FINAL / "tff_fantasy" / "tff_players.csv")
+            for pid in bench:
+                matches = [row for row in records if row.get("match_status") == "matched"
+                           and row.get("sportmonks_player_id") == pid]
+                if len(matches) != 1 or not matches[0].get("sportmonks_team_id", "").isdigit():
+                    raise ValueError("Substitute has no unique reviewed TFF identity: " + pid)
+                row = matches[0]
+                bench_cost += source.money(row["price_million_try"])
+                reserved_clubs[row["sportmonks_team_id"]] += 1
+            if max(reserved_clubs.values()) > 3:
+                raise ValueError("Substitutes exceed the three-per-club limit.")
+            if bench_cost >= 100_000_000:
+                raise ValueError("Substitutes leave no budget for the starting XI.")
+            pool = [player for player in pool if player.id not in bench]
+        settings = dict(budget=100_000_000 - bench_cost, time_limit=5, formation=formation, risk=risk)
+        if bench:
+            settings["reserved_clubs"] = reserved_clubs
         result = model.optimize(pool, locked=locked, **settings)
         if result is None:
             raise ValueError("No legal XI fits these selections. Check positions, the ₺100M budget and three-per-club limit.")
-        remaining = (100_000_000 - sum(p.price for p in pool if p.id in locked)) / 1_000_000
+        remaining = (100_000_000 - bench_cost - sum(p.price for p in pool if p.id in locked)) / 1_000_000
         message = "Players from the optimal remaining XI"
         candidates = []
         if position:
@@ -108,7 +134,7 @@ def recommendations(season, query):
                 for p in sorted(result.players, key=lambda p: (-p.points, p.id)) if p.id not in locked] or [base]
     except ImportError:
         return [{"status": "unavailable", "message": "Optimizer dependencies missing. Install src/xi_optimizer/requirements.txt in the website server environment."}]
-    except (ValueError, OSError, KeyError, RuntimeError) as error:
+    except (ValueError, OSError, KeyError, RuntimeError, InvalidOperation) as error:
         return [{"status": "unavailable", "message": str(error)}]
     finally:
         SOLVER_LOCK.release()

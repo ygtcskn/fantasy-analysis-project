@@ -6,7 +6,7 @@
 // Season leaders and a searchable player list, built from the same aggregation
 // the tier list uses so a player's totals never disagree between two pages.
 
-const statisticsState = { search: "", team: "", sort: "goals", limit: 10, selected: null };
+const statisticsState = { search: "", team: "", sort: "rating", limit: 10, selected: null };
 
 const STATISTICS_SORTS = [
   ["goals", "Gol", (player) => player.totals.goals.value],
@@ -20,6 +20,29 @@ const STATISTICS_SORTS = [
 function statisticsFantasyPoints(playerId) {
   if (!fantasyState.season || fantasyState.season !== state.seasonSlug) return null;
   return number(fantasyState.summaries.get(playerId)?.points_total);
+}
+
+function statisticsShortName(name) {
+  const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
+  return parts.length < 2 ? (parts[0] || "—") : `${parts[0][0].toLocaleUpperCase("tr-TR")}. ${parts.at(-1)}`;
+}
+
+function statisticsListLayout() {
+  const workspace = $("statistics-workspace");
+  if (workspace.hidden) return;
+  const panel = workspace.querySelector(".statistics-players");
+  const ratings = $("statistics-ratings-chart").closest(".statistics-ratings");
+  if (window.matchMedia("(min-width: 1101px)").matches) {
+    const height = ratings.getBoundingClientRect().bottom - panel.getBoundingClientRect().top;
+    if (height > 0 && panel.style.height !== `${Math.ceil(height)}px`) panel.style.height = `${Math.ceil(height)}px`;
+  } else if (panel.style.height) panel.style.height = "";
+  // Shrink only unusually long abbreviated names; keep every row on one line.
+  for (const button of panel.querySelectorAll(".statistics-player-list-table .statistics-player-button")) {
+    button.style.fontSize = "";
+    for (let size = 12; size >= 8 && button.scrollWidth > button.clientWidth; size--) {
+      button.style.fontSize = `${size}px`;
+    }
+  }
 }
 
 function statisticsLeaders(players, accessor, limit) {
@@ -50,7 +73,6 @@ function renderStatisticsCard(bodyId, noteId, players, teams, accessor, format, 
     open.addEventListener("click", () => openTierPlayer(entry.player.id));
     club.append(open);
     identity.append(club);
-    identity.append(element("span", "statistics-club-name", entry.player.teamNames[0] || "—"));
     row.append(identity, element("td", "numeric statistics-value", format(entry.value)));
     body.append(row);
   });
@@ -79,15 +101,15 @@ function renderStatisticsList(players, teams) {
       && (!query || `${player.name} ${player.teamNames.join(" ")}`.toLocaleLowerCase("tr").includes(query)))
     .sort((a, b) => (accessor(b) ?? -Infinity) - (accessor(a) ?? -Infinity)
       || a.name.localeCompare(b.name, "tr"));
-  $("statistics-list-count").textContent = `${visible.length} oyuncu`;
   const body = document.createDocumentFragment();
-  for (const player of visible.slice(0, 200)) {
+  for (const player of visible) {
     const row = element("tr");
     const identity = element("td");
     const club = element("div", "statistics-club");
     club.append(createTeamLogo([...player.teams][0] || "unknown", teams, false));
-    const open = element("button", "statistics-player-button", player.name);
+    const open = element("button", "statistics-player-button", statisticsShortName(player.name));
     open.type = "button";
+    open.title = player.name;
     open.setAttribute("aria-label", `${player.name} profilini göster`);
     open.addEventListener("click", () => {
       statisticsState.selected = player.id;
@@ -98,20 +120,16 @@ function renderStatisticsList(players, teams) {
     if (player.id === statisticsState.selected) row.classList.add("statistics-row-selected");
     row.append(identity);
     row.append(element("td", "numeric", displayNumber(player.totals.minutes_played.value)));
-    row.append(element("td", "numeric", displayNumber(player.totals.goals.value)));
-    row.append(element("td", "numeric", displayNumber(player.totals.assists.value)));
     row.append(element("td", "numeric", ratingText(player.average)));
+    row.append(element("td", "numeric", displayNumber(statisticsFantasyPoints(player.id))));
     body.append(row);
   }
   if (!visible.length) {
     const row = element("tr"), cell = element("td", "no-results", "Bu filtrelerle oyuncu bulunamadı.");
-    cell.colSpan = 5;
+    cell.colSpan = 4;
     row.append(cell);
     body.append(row);
   }
-  $("statistics-list-note").textContent = visible.length > 200
-    ? `İlk 200 satır gösteriliyor. Aramayı daraltın.`
-    : "";
   $("statistics-list-body").replaceChildren(body);
 }
 
@@ -130,15 +148,22 @@ function renderStatistics() {
   renderStatisticsCard("statistics-fantasy-body", "statistics-fantasy-note", players, teams,
     (player) => statisticsFantasyPoints(player.id), (value) => displayNumber(value),
     fantasyReady ? "Fantezi puanı bulunamadı."
-      : "Fantezi analizi yüklenmedi. Kaydedilen veriyi yenileyin.");
+      : "Fantezi analizi yüklenmedi. Sayfayı yenileyin.");
   renderStatisticsList(players, teams);
   renderStatisticsProfile(players);
+  requestAnimationFrame(statisticsListLayout);
 }
 
 function setupStatistics() {
   $("statistics-search").addEventListener("input", renderStatistics);
   $("statistics-team").addEventListener("change", renderStatistics);
   $("statistics-sort").addEventListener("change", renderStatistics);
+  if (typeof ResizeObserver !== "undefined") {
+    const observer = new ResizeObserver(() => requestAnimationFrame(statisticsListLayout));
+    observer.observe($("statistics-ratings-chart").closest(".statistics-ratings"));
+    observer.observe($("statistics-workspace").querySelector(".statistics-players"));
+  }
+  window.addEventListener("resize", () => requestAnimationFrame(statisticsListLayout));
 }
 
 // ---------------------------------------------------------------- player profile
@@ -208,7 +233,7 @@ function statisticsTimelineSvg(rows) {
 function renderStatisticsTimeline(player) {
   if (fantasyState.season !== state.seasonSlug) {
     $("statistics-timeline-chart").replaceChildren();
-    $("statistics-timeline-note").textContent = "Fantezi analizi yüklenmedi. Kaydedilen veriyi yenileyin.";
+    $("statistics-timeline-note").textContent = "Fantezi analizi yüklenmedi. Sayfayı yenileyin.";
     return;
   }
   // fantasyState keeps matches newest first; a timeline reads the other way.

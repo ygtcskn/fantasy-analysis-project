@@ -65,10 +65,8 @@ main {
 .detailed-standings-scroll table { min-width: 830px; }
 .detailed-standings-scroll th { position: sticky; top: 0; z-index: 1; }
 .detailed-standings-scroll th, .detailed-standings-scroll td { padding: 13px 15px; }
-.detailed-standings-scroll td:nth-child(3) { min-width: 190px; }
+.detailed-standings-scroll td:nth-child(2) { min-width: 190px; }
 .detailed-points { font-size: 16px; font-weight: 750; background: transparent; }
-.detailed-standings-scroll .qualification-heading,
-.detailed-standings-scroll .qualification-spot { width: 6px; min-width: 6px; padding: 0; }
 .qualification-spot { position: relative; }
 .qualification-marker { position: absolute; inset: 0 auto 0 0; width: 4px; background: var(--qualification-color); }
 .qualification-ucl { --qualification-color: #45d39a; }
@@ -140,21 +138,6 @@ a.team-link:hover { color: #507624; text-decoration: underline; text-underline-o
 
 /* Home: a wide overview above standings on the left and fixtures on the right. */
 .home-view main { width: min(1040px, calc(100% - 160px)); }
-.home-view .page-heading {
-  margin: 38px 0 48px;
-  padding: 34px 36px;
-  min-height: 180px;
-  border-radius: 10px;
-  background: var(--rail);
-  color: #f8fbf2;
-}
-.home-view .page-heading .eyebrow { color: var(--accent); }
-.home-view .page-heading p:not(.eyebrow) { color: #c2d6c9; }
-.home-view .page-heading h1 { font-size: clamp(28px, 3vw, 40px); }
-.home-view .page-heading .primary { background: var(--accent); color: var(--ink); }
-.home-view .page-heading .primary span { color: var(--ink); }
-.home-view .page-heading .text-button { color: #dce8df; }
-.home-view .page-heading .home-season-note { font-size: 11px; margin-top: 16px; max-width: 460px; }
 .home-grid { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: 36px; align-items: start; }
 .home-panel { min-width: 0; border: 1px solid var(--line); border-radius: 9px; background: white; overflow: hidden; }
 .standings-panel { border-top: 3px solid #c86158; }
@@ -197,7 +180,6 @@ a.team-link:hover { color: #507624; text-decoration: underline; text-underline-o
 }
 @media (max-width: 760px) {
   .home-view main { width: calc(100% - 40px); }
-  .home-view .page-heading { margin: 22px 0 28px; padding: 26px 22px; }
   .home-grid { grid-template-columns: minmax(0, 1fr); gap: 26px; }
   .home-panel-heading { padding: 22px 20px 12px; }
   .home-panel-note { padding: 0 20px; }
@@ -205,19 +187,12 @@ a.team-link:hover { color: #507624; text-decoration: underline; text-underline-o
   .matchweek-controls { padding-left: 20px; padding-right: 20px; }
 }
 
-/* Puan durumu: the page starts at the standings panel itself, so the shared
-   topbar, page heading and status line are hidden on this view only. */
-.standings-view .topbar,
-.standings-view .page-heading,
+/* View-specific status visibility; every view keeps the shared page header. */
 .standings-view #message { display: none; }
-.standings-view .detailed-standings { margin-top: 26px; }
 
 /* Fixture page: full season grouped by matchweek. */
-.fixtures-view .topbar,
-.fixtures-view .page-heading,
 .fixtures-view #message { display: none; }
 .fixtures-view #workspace {
-  margin-top: 26px;
   border: 1px solid var(--line);
   border-top: 3px solid #5c71bb;
   border-radius: 9px;
@@ -266,10 +241,6 @@ a.team-link:hover { color: #507624; text-decoration: underline; text-underline-o
 .fixture-game-row:hover,
 #detailed-standings-body > tr:hover { background: var(--zebra-hover); }
 
-:root[data-theme="dark"] .fixtures-view #workspace { background: var(--surface); }
-:root[data-theme="dark"] .fixture-matchweek-row td,
-:root[data-theme="dark"] .fixture-matchweek-row:hover td { border-color: var(--matchweek-border); background: var(--matchweek-bg); color: var(--matchweek-text); }
-
 @media (max-width: 760px) {
   .fixtures-view #workspace { margin-top: 20px; }
   .fixtures-view #workspace > .panel-heading { padding: 20px 16px; }
@@ -291,132 +262,9 @@ a.team-link:hover { color: #507624; text-decoration: underline; text-underline-o
   --matchweek-border: #c49de4;
   --matchweek-text: #4b2369;
 }
-:root[data-theme="dark"] {
-  color-scheme: dark;
-  --ink: #f5f1f8;
-  --muted: #a99cb3;
-  --paper: #0d0914;
-  --line: #3a2c49;
-  --accent: #b785f5;
-  --white: #171020;
-  --rail: #120a1d;
-  --surface: #171020;
-  --surface-raised: #21172d;
-  --surface-soft: #21172d;
-  --surface-hover: #281c35;
-  --field: #130d1b;
-  --focus: #cba7fa;
-  --zebra-purple: #281a35;
-  --zebra-light: #1d1427;
-  --zebra-hover: #342246;
-  --matchweek-bg: #3a2450;
-  --matchweek-border: #563770;
-  --matchweek-text: #dbc1f3;
-}
-
-.theme-control { margin-top: auto; padding-top: 28px; }
-.theme-control-label { display: block; margin-bottom: 8px; color: #9bb6a6; font-size: 9px; letter-spacing: 1.4px; }
-.theme-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border: 1px solid #ffffff21; border-radius: 8px; background: #071f172e; }
-.theme-switch button { min-width: 0; padding: 8px 5px; border: 0; border-radius: 5px; background: transparent; color: #bdd0c4; font-size: 11px; }
-.theme-switch button span { margin-right: 3px; }
-.theme-switch button:hover { background: #ffffff12; color: #fff; }
-.theme-switch button[aria-pressed="true"] { background: var(--accent); color: #17291f; font-weight: 700; box-shadow: 0 1px 4px #0003; }
-.rail .rail-note { margin-top: 18px; }
-
-:root[data-theme="dark"] .theme-control-label { color: #a99cb3; }
-:root[data-theme="dark"] .theme-switch { border-color: #4a385e; background: #0d0715; }
-:root[data-theme="dark"] .theme-switch button { color: #c7bbd0; }
-:root[data-theme="dark"] .theme-switch button:hover { background: #2a1d38; color: #fff; }
-:root[data-theme="dark"] .theme-switch button[aria-pressed="true"] { background: var(--accent); color: #160d20; }
-
-:root[data-theme="dark"] button:focus-visible,
-:root[data-theme="dark"] a:focus-visible,
-:root[data-theme="dark"] input:focus-visible,
-:root[data-theme="dark"] select:focus-visible,
-:root[data-theme="dark"] [tabindex]:focus-visible { outline-color: var(--focus); }
-:root[data-theme="dark"] .badge,
-:root[data-theme="dark"] .stats,
-:root[data-theme="dark"] .tier-method,
-:root[data-theme="dark"] .detail-summary > div,
-:root[data-theme="dark"] .home-panel,
-:root[data-theme="dark"] .detailed-standings,
-:root[data-theme="dark"] .tier-lane,
-:root[data-theme="dark"] .team-panel,
-:root[data-theme="dark"] .builder-pitch-panel,
-:root[data-theme="dark"] .builder-pool { background: var(--surface); }
-:root[data-theme="dark"] .filters,
-:root[data-theme="dark"] .builder-toolbar { background: var(--surface-soft); }
-:root[data-theme="dark"] input,
-:root[data-theme="dark"] select { border-color: var(--line); background: var(--field); color: var(--ink); }
-:root[data-theme="dark"] .table-container,
-:root[data-theme="dark"] .table-container table,
-:root[data-theme="dark"] .history-table,
-:root[data-theme="dark"] .builder-table-wrap { background: var(--surface); }
-:root[data-theme="dark"] th,
-:root[data-theme="dark"] .tier-columns,
-:root[data-theme="dark"] .tier-lane-heading { background: var(--surface-raised); }
-:root[data-theme="dark"] td,
-:root[data-theme="dark"] .player-row,
-:root[data-theme="dark"] .team-game-row,
-:root[data-theme="dark"] .team-best-player { border-bottom-color: var(--line); }
-:root[data-theme="dark"] tbody tr:hover,
-:root[data-theme="dark"] .player-row:hover,
-:root[data-theme="dark"] .player-row:focus-visible,
-:root[data-theme="dark"] .team-game-row:hover,
-:root[data-theme="dark"] .team-logo-link:hover { background: var(--surface-hover); }
-:root[data-theme="dark"] .player-row,
-:root[data-theme="dark"] .builder-player-button,
-:root[data-theme="dark"] .player-name-button { color: var(--ink); }
-:root[data-theme="dark"] .player-row { background: var(--surface); }
-:root[data-theme="dark"] .eyebrow { color: #c29af4; }
-:root[data-theme="dark"] a.team-link:hover { color: #cba7fa; }
-:root[data-theme="dark"] .secondary,
-:root[data-theme="dark"] .sidebar-toggle { border-color: var(--line); background: var(--surface-raised); color: var(--ink); }
-:root[data-theme="dark"] .secondary:hover,
-:root[data-theme="dark"] .sidebar-toggle:hover { background: #30213f; }
-:root[data-theme="dark"] .primary { background: var(--accent); color: #160d20; }
-:root[data-theme="dark"] .primary:hover { background: #cba7fa; }
-:root[data-theme="dark"] .primary span { color: #160d20; }
-:root[data-theme="dark"] .page-number[aria-current="page"] { border-color: var(--accent); background: var(--accent); color: #160d20; }
-:root[data-theme="dark"] .empty-state { border-color: #524160; background: var(--surface); }
-:root[data-theme="dark"] .empty-state .file-symbol,
-:root[data-theme="dark"] .file-list code,
-:root[data-theme="dark"] .context-note { border-color: var(--line); background: var(--surface-raised); }
-:root[data-theme="dark"] .club-logo-fallback { background: var(--surface-raised); }
-:root[data-theme="dark"] dialog { box-shadow: 0 30px 90px #0009; }
-:root[data-theme="dark"] dialog::backdrop { background: #08040bcf; }
-:root[data-theme="dark"] .rail.is-open { box-shadow: 12px 0 40px #0008; }
-:root[data-theme="dark"] .rail.is-pinned { box-shadow: 12px 0 40px #000a; }
-:root[data-theme="dark"] .rail-label,
-:root[data-theme="dark"] .rail-note p { color: #a99cb3; }
-:root[data-theme="dark"] .rail-note { color: #e7deed; }
-:root[data-theme="dark"] .nav-button { color: #c7bbd0; }
-:root[data-theme="dark"] .nav-button.active { background: #352348; color: #d9baff; }
-:root[data-theme="dark"] .brand-mark { border-color: #70538a; }
-:root[data-theme="dark"] .home-view .page-heading { background: linear-gradient(135deg, #120a1d, #2a1640); }
-:root[data-theme="dark"] .home-view .page-heading p:not(.eyebrow) { color: #c7bbd0; }
-:root[data-theme="dark"] .home-view .page-heading .primary { color: #160d20; }
-:root[data-theme="dark"] .home-view .page-heading .primary span { color: #160d20; }
-:root[data-theme="dark"] .home-view .page-heading .text-button { color: #e4d9ec; }
-:root[data-theme="dark"] .matchweek-controls select,
-:root[data-theme="dark"] .fixture-status { background: var(--surface-raised); }
-:root[data-theme="dark"] .home-match { background: #130d1b; }
-:root[data-theme="dark"] .detailed-points { background: transparent; }
-:root[data-theme="dark"] .form-win { background: #183526; color: #9ad5ac; }
-:root[data-theme="dark"] .form-loss { background: #3b2027; color: #ffaaa1; }
-:root[data-theme="dark"] .form-draw { background: #383126; color: #d8c685; }
-:root[data-theme="dark"] .form-unknown { background: #2b2431; color: var(--muted); }
-
-@media (max-width: 760px) {
-  .theme-control { margin-top: 24px; padding-top: 0; }
-  .theme-switch { max-width: 210px; }
-}
 
 /* Player Tier List: compact role, team and expanding player-search controls. */
-.tiers-view .topbar,
-.tiers-view .page-heading,
 .tiers-view #message { display: none; }
-.tiers-view #tier-workspace { margin-top: 26px; }
 .tier-toolbar {
   display: flex;
   align-items: center;
@@ -525,10 +373,6 @@ a.team-link:hover { color: #507624; text-decoration: underline; text-underline-o
 .tier-page-number[aria-current="page"] { border-color: #7752a3; background: #7752a3; color: #fff; font-weight: 700; }
 .tier-page-ellipsis { display: inline-grid; place-items: center; width: 22px; color: var(--muted); }
 
-:root[data-theme="dark"] .tier-toolbar { background: var(--surface-soft); }
-:root[data-theme="dark"] .tier-search-control { border-color: var(--line); background: var(--field); }
-:root[data-theme="dark"] .tier-page-number[aria-current="page"] { border-color: var(--accent); background: var(--accent); color: #160d20; }
-
 @media (max-width: 760px) {
   .tiers-view #tier-workspace { margin-top: 20px; }
   .tier-toolbar { align-items: stretch; }
@@ -565,3 +409,13 @@ a.team-link:hover { color: #507624; text-decoration: underline; text-underline-o
   .home-view main { width: min(1040px, calc(100% - 320px)); }
   .team-page main { width: min(1040px, calc(100% - 300px)); }
 }
+/* The sidebar is open by default from tablet width up, so it reserves its
+   width there too instead of covering the page. */
+@media (min-width: 761px) and (max-width: 1100px) {
+  main,
+  .home-view main,
+  .team-page main { width: calc(100% - 280px); margin-left: 256px; margin-right: 24px; }
+}
+
+/* CANLI beside Maç Haftası: the live centre's own badge (live-centre.css), placed. */
+.nav-live { margin-left: 8px; vertical-align: 1px; }

@@ -1,8 +1,5 @@
 /* The team dashboard follows the supplied two-column sketch. */
 .team-page main { width: min(1220px, calc(100% - 100px)); padding: 0; margin: 0 auto; }
-.team-page .topbar { padding-left: 48px; min-height: 76px; }
-.team-page .team-page-heading { padding: 20px 0 10px; margin: 8px 0 0; flex-wrap: wrap; }
-.team-page-heading h1 { font-size: clamp(28px, 4vw, 44px); }
 .team-data-actions { margin-left: auto; display: grid; justify-items: end; gap: 7px; }
 .team-muted { color: var(--muted); font-size: 11px; line-height: 1.6; }
 .team-dashboard { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); align-items: stretch; gap: 28px; }
@@ -53,14 +50,3 @@
 .team-empty { color: var(--muted); font-size: 12px; padding: 12px; line-height: 1.6; }.overall-players > .team-empty { grid-column: 1 / -1; }
 @media (max-width: 1000px) { .team-page main { width: calc(100% - 60px); }.team-dashboard { gap: 18px; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); }.team-panel-title { padding-left: 16px; padding-right: 16px; }.team-panel-title h2 { font-size: 18px; }.team-pitch { margin-left: 12px; margin-right: 12px; }.overall-players { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 760px) { .team-page main { width: calc(100% - 32px); }.team-dashboard { grid-template-columns: minmax(0, 1fr); }.team-data-actions { margin-left: 0; display: flex; width: 100%; justify-content: space-between; align-items: center; }.team-matchday { margin: 16px 12px 0; }.team-pitch, .pitch-players { min-height: 580px; }.overall-players { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 0 16px 20px; gap: 10px; }.overall-panel .team-panel-title { align-items: start; flex-wrap: wrap; }.lineup-panel .team-panel-title { flex-wrap: wrap; }.pitch-player-name { font-size: 9px; } }
-
-:root[data-theme="dark"] .team-matchday { border-color: #3c3154; background: #21172d; }
-:root[data-theme="dark"] .team-matchday label { color: #b9a4d0; }
-:root[data-theme="dark"] .team-game-row.selected { background: #312041; box-shadow: inset 3px 0 var(--accent); }
-:root[data-theme="dark"] .team-score { border-color: #4a334f; background: #25182c; }
-:root[data-theme="dark"] .match-best { border-color: #4a334f; }
-:root[data-theme="dark"] .overall-players .team-best-player { border-color: var(--line); background: #1c1326; }
-:root[data-theme="dark"] .team-rating { background: #342348; color: #d6b8fa; }
-:root[data-theme="dark"] .result-w { background: #183526; color: #9ad5ac; }
-:root[data-theme="dark"] .result-l { background: #3b2027; color: #ffaaa1; }
-:root[data-theme="dark"] .result-d { background: #383126; color: #d8c685; }

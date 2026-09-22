@@ -13,6 +13,47 @@ const STATISTICS_RADAR_STATUS = {
   incompatible_group: "Sezon, lig veya mevki grubu uyuşmuyor", available: "Kullanılabilir",
 };
 
+// Both wheels read the same prepared season CSV. Player and team metric names
+// are prefixed in that file so a column absent from one feed stays absent here.
+const spiderStatsState = { key: null, state: "idle", players: [], teams: [], message: "" };
+
+function spiderRows(records, kind) {
+  const prefix = kind === "player" ? "p_" : "t_";
+  return records.filter((record) => record.entity_type === kind).map((record) => {
+    const row = { fixture_id: record.fixture_id, player_id: record.player_id,
+      team_id: record.team_id, name: record.name, position: record.position,
+      started: record.started, minutes_played: record.minutes_played, rating: record.rating };
+    for (const [key, value] of Object.entries(record)) {
+      if (key.startsWith(prefix)) row[key.slice(prefix.length)] = value;
+    }
+    if (kind === "team" && row.opponent_present !== "1") {
+      for (const key of ["goals_conceded", "shots_conceded", "shots_on_target_conceded"]) delete row[key];
+    }
+    return row;
+  });
+}
+
+async function loadSpiderStats() {
+  const key = state.seasonSlug;
+  if (!key || spiderStatsState.key === key) return;
+  Object.assign(spiderStatsState, { key, state: "loading", players: [], teams: [], message: "" });
+  try {
+    const records = await readFantasyCSV("spider/spider_stats.csv",
+      ["entity_type", "fixture_id", "player_id", "team_id"], key);
+    if (spiderStatsState.key !== key) return;
+    Object.assign(spiderStatsState, { state: "ready", players: spiderRows(records, "player"),
+      teams: spiderRows(records, "team") });
+  } catch (error) {
+    if (spiderStatsState.key !== key) return;
+    Object.assign(spiderStatsState, { state: "unavailable",
+      message: error.message === "missing"
+        ? "spider_stats.csv bulunamadı; kaydedilmiş verilerden radar hazırlığını çalıştırın."
+        : "spider_stats.csv okunamadı; radar verilerini yeniden hazırlayın." });
+  }
+  if (state.seasonSlug === key && state.view === "statistics") renderStatistics();
+  if (state.seasonSlug === key && state.view === "team-statistics") renderTeamStatistics();
+}
+
 // Earlier seasons widen the population a score is ranked against; the plotted
 // player is always measured on the served season alone. They load once per
 // served season, in the background, one season at a time, and each player
@@ -100,15 +141,15 @@ async function loadStatisticsHistory() {
   try {
     const seasons = (await statisticsHistoryCSV("seasons.csv")).map((row) => row.season)
       .filter((season) => /^\d{4}-\d{4}$/.test(season) && season < key);
-    const reference = statisticsFillRates(state.tables["player_match_stats.csv"] || [], statisticsRadarColumns());
+    const reference = statisticsFillRates(spiderStatsState.players, statisticsRadarColumns());
     const players = [], unsupplied = {};
     for (const season of seasons) {
-      const [fixtures, rows, squads] = await Promise.all([
+      const [fixtures, records, squads] = await Promise.all([
         statisticsHistoryCSV(`${season}/fixtures.csv`),
-        statisticsHistoryCSV(`${season}/player_match_stats.csv`),
+        statisticsHistoryCSV(`${season}/spider_stats.csv`),
         statisticsHistoryCSV(`${season}/squads.csv`).catch(() => [])]);
       if (statisticsHistory.key !== key) return;
-      const loaded = statisticsHistorySeason(season, fixtures, rows, squads, reference);
+      const loaded = statisticsHistorySeason(season, fixtures, spiderRows(records, "player"), squads, reference);
       players.push(...loaded.players);
       if (loaded.unsupplied.length) unsupplied[season] = loaded.unsupplied;
     }
@@ -175,7 +216,7 @@ function statisticsScoreLabel(result) {
 function statisticsLoadingText(result) {
   if (!result.loadings?.length) return "";
   return result.loadings.slice().sort((a, b) => Math.abs(b.weight) - Math.abs(a.weight))
-    .map(({ metric, weight }) => `${metric.rawLabel || metric.label} ${weight.toFixed(2)}`).join(" · ");
+    .map(({ metric, weight }) => `${metric.rawLabel || metric.label} ${displayNumber(weight.toFixed(2))}`).join(" · ");
 }
 
 // Why a member left its attribute: missing from earlier seasons, identical for
@@ -285,10 +326,20 @@ function renderStatisticsRadarDetails(containerId, axes, series, reference) {
 // bar and - once they have loaded - every earlier season. List searches and
 // club filters never touch it.
 function renderStatisticsRadars(selected, players) {
+  if (spiderStatsState.key !== state.seasonSlug) loadSpiderStats();
+  if (spiderStatsState.state !== "ready") {
+    for (const id of ["statistics-radar-chart", "statistics-detailed-chart",
+      "statistics-radar-details", "statistics-detailed-details"]) $(id).replaceChildren();
+    const note = spiderStatsState.state === "unavailable" ? spiderStatsState.message : "Radar verileri yükleniyor…";
+    $("statistics-radar-note").textContent = note;
+    $("statistics-detailed-note").textContent = note;
+    return { note, reference: null };
+  }
   const fixtures = state.tables["fixtures.csv"] || [], scopes = RadarScoring.scopes(fixtures);
   // The player's own season and competition: the scope of his first scoped
   // appearance, else the served season's first.
-  const fixtureIds = new Set(selected.matches.map((row) => row.fixture_id));
+  const fixtureIds = new Set(spiderStatsState.players.filter((row) => row.player_id === selected.id)
+    .map((row) => row.fixture_id));
   const scope = RadarScoring.fixtureScope(fixtures.find((fixture) =>
     fixtureIds.has(fixture.fixture_id) && RadarScoring.fixtureScope(fixture))) || scopes[0];
   const squadPositions = new Map();
@@ -297,11 +348,17 @@ function renderStatisticsRadars(selected, players) {
     if (!squadPositions.has(row.player_id)) squadPositions.set(row.player_id, new Set());
     squadPositions.get(row.player_id).add(row["position.name"] || row.position);
   }
+  const matches = new Map();
+  for (const row of spiderStatsState.players) {
+    if (!matches.has(row.player_id)) matches.set(row.player_id, []);
+    matches.get(row.player_id).push(row);
+  }
   const prepared = RadarScoring.preparePlayers(players.map((other) => ({ ...other,
+    matches: matches.get(other.id) || [],
     squadPositions: squadPositions.get(other.id) || [] })), fixtures, scope);
   const config = { minimumMinutes: statisticsSuggestedMinutes(prepared) };
   const player = prepared.find((other) => other.id === selected.id);
-  if (!scope || !player.position) {
+  if (!scope || !player?.position) {
     for (const id of ["statistics-radar-chart", "statistics-detailed-chart",
       "statistics-radar-details", "statistics-detailed-details"]) $(id).replaceChildren();
     const note = !scope ? "Radar için fikstürlerde sezon ve lig kimliği gerekli."

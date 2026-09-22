@@ -4,6 +4,9 @@ const matchweekOdds = { request: 0, season: "", rows: [], note: "" };
 const matchweekZone = "Europe/Istanbul";
 const matchweekDayMs = 86400000;
 let selectedMatchweekFixture = null;
+// The analysis opens as a row of the odds table under the chosen match, and
+// waits in a hidden holder whenever no match is open.
+const matchweekAnalysisSection = document.getElementById("matchweek-analysis");
 
 function resetMatchweekOdds() {
   matchweekOdds.request++;
@@ -59,12 +62,13 @@ function renderMatchweek() {
   renderStandings(teams, "matchweek-standings");
   let missing = 0;
   let selectedAnalysis = null;
-  for (const fixture of fixtures) {
+  for (const savedFixture of fixtures) {
+    const fixture = matchweekEffectiveFixture(savedFixture), finished = matchweekFinished(fixture);
     const kickoff = fantasyKickoff(fixture), tr = element("tr");
     tr.className = "matchweek-selectable";
     tr.classList.toggle("matchweek-selected", fixture.fixture_id === selectedMatchweekFixture);
     tr.addEventListener("click", () => {
-      selectedMatchweekFixture = fixture.fixture_id;
+      selectedMatchweekFixture = selectedMatchweekFixture === fixture.fixture_id ? null : fixture.fixture_id;
       renderMatchweek();
       document.getElementById(`matchweek-select-${fixture.fixture_id}`)?.focus({ preventScroll: true });
     });
@@ -83,15 +87,16 @@ function renderMatchweek() {
     const probabilities = ["home_probability", "draw_probability", "away_probability"].map((field) => number(prediction?.[field]));
     const valid = prediction && probabilities.every((value) => value !== null && value >= 0 && value <= 1)
       && Math.abs(probabilities.reduce((sum, value) => sum + value, 0) - 1) < 0.001;
-    if (!valid) missing++;
+    if (!valid && !finished) missing++;
     if (fixture.fixture_id === selectedMatchweekFixture) selectedAnalysis = { fixture, prediction: valid ? prediction : null };
     const oddsCell = element("td"), odds = element("button", "matchweek-odds matchweek-select");
     odds.type = "button";
     odds.id = `matchweek-select-${fixture.fixture_id}`;
-    odds.setAttribute("aria-label", `${teamName(fixture.home_team_id, teams)} – ${teamName(fixture.away_team_id, teams)} maç analizini göster`);
+    odds.setAttribute("aria-label", `${teamName(fixture.home_team_id, teams)} – ${teamName(fixture.away_team_id, teams)} ${finished ? "maç sonucunu ve istatistiklerini" : "maç analizini"} göster`);
     odds.setAttribute("aria-controls", "matchweek-analysis");
-    odds.setAttribute("aria-pressed", String(fixture.fixture_id === selectedMatchweekFixture));
-    probabilities.forEach((probability, index) => {
+    odds.setAttribute("aria-expanded", String(fixture.fixture_id === selectedMatchweekFixture));
+    if (finished) odds.append(matchweekResultBadge(fixture));
+    else probabilities.forEach((probability, index) => {
       const label = ["1", "X", "2"][index];
       const badge = element("span", `matchweek-odd${valid ? ` matchweek-odd-${index}` : ""}`);
       badge.append(element("span", "", label), element("strong", "", valid
@@ -101,7 +106,15 @@ function renderMatchweek() {
     oddsCell.append(odds);
     tr.append(clubCells[0], oddsCell, clubCells[1]);
     body.append(tr);
+    if (fixture.fixture_id === selectedMatchweekFixture) {
+      const details = element("tr", "matchweek-details-row"), cell = element("td", "matchweek-details-cell");
+      cell.colSpan = 5;
+      cell.append(matchweekAnalysisSection);
+      details.append(cell);
+      body.append(details);
+    }
   }
+  if (!selectedAnalysis) $("matchweek-analysis-home").append(matchweekAnalysisSection);
   if (!fixtures.length) {
     const row = element("tr"), cell = element("td", "no-results", state.tables["fixtures.csv"]
       ? "Bu hafta için kaydedilmiş maç bulunmuyor." : "Haftanın maçları için sezon verilerini yükleyin.");
@@ -109,18 +122,23 @@ function renderMatchweek() {
   }
   $("matchweek-matches").replaceChildren(body);
   renderMatchweekAnalysis(selectedAnalysis, teams);
-  $("matchweek-note").textContent = `${fixtures.length} maç · Saatler Türkiye saatidir. Hafta her salı 00.00'da yenilenir. `
-    + ((matchweekOdds.season === state.seasonSlug && matchweekOdds.note) || (missing ? "— Bu maç için eşleşen tahmin yok; analiz çıktısını yenileyin." : ""));
+  $("matchweek-note").textContent = missing
+    ? (matchweekOdds.season === state.seasonSlug && matchweekOdds.note) || "— Bu maç için eşleşen tahmin yok; analiz çıktısını yenileyin." : "";
 }
 
 function renderMatchweekAnalysis(selection, teams) {
   const content = $("matchweek-analysis-content");
+  $("matchweek-analysis-title").textContent = selection && matchweekFinished(selection.fixture) ? "Maç Sonucu ve İstatistikleri" : "Maç Analizi";
   content.replaceChildren();
   if (!selection) {
     content.append(element("p", "message", "Analizi görmek için yukarıdan bir maç seçin."));
     return;
   }
   const { fixture, prediction } = selection;
+  if (matchweekFinished(fixture)) {
+    renderMatchweekResult(fixture, teams, content);
+    return;
+  }
   const scores = currentFixtureScores();
   const homeScore = scores.get(`${fixture.fixture_id}:${fixture.home_team_id}`);
   const awayScore = scores.get(`${fixture.fixture_id}:${fixture.away_team_id}`);
@@ -129,28 +147,12 @@ function renderMatchweekAnalysis(selection, teams) {
     content.append(element("p", "", `Kaydedilmiş skor: ${homeScore} – ${awayScore}`));
   }
   const sides = [fixture.home_team_id, fixture.away_team_id];
-  const matchup = element("div", "matchweek-matchup");
-  const clubs = sides.map((id) => {
-    const club = element("div", "matchweek-club");
-    club.append(createTeamLogo(id, teams, false), element("strong", "", teamName(id, teams)));
-    return club;
-  });
-  const odds = element("div", "matchweek-odds");
-  ["home_probability", "draw_probability", "away_probability"].forEach((field, index) => {
-    const badge = element("span", `matchweek-odd${prediction ? ` matchweek-odd-${index}` : ""}`);
-    badge.append(element("span", "", ["1", "X", "2"][index]), element("strong", "", prediction
-      ? `${(Number(prediction[field]) * 100).toLocaleString("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%` : "—"));
-    odds.append(badge);
-  });
-  matchup.append(clubs[0], odds, clubs[1]);
-  content.append(matchup);
   const histories = sides.map((id) => matchweekTeamHistory(id, fixture));
   const lineups = element("div", "matchweek-lineups");
   sides.forEach((id, index) => {
     if (index) lineups.append(element("span", "matchweek-versus", "VS"));
     lineups.append(matchweekLastXI(id, histories[index][0], teams));
   });
-  content.append(lineups);
   const table = element("table", "matchweek-comparison");
   table.append(element("caption", "", "Takım karşılaştırması"));
   const head = element("thead"), titles = element("tr"), body = element("tbody");
@@ -187,15 +189,20 @@ function renderMatchweekAnalysis(selection, teams) {
     const row = element("tr"), name = element("th", "", label); name.scope = "row";
     row.append(element("td", "", home), name, element("td", "", away)); body.append(row);
   }
-  table.append(head, body); content.append(table);
-  content.append(element("p", "message", "Güç: 1× lig ortalaması, yüksek değer daha güçlüdür. Fikstür zorluğu: 1 kolay, 5 zor; rakip ve iç/dış saha etkisini gösteren deneysel aralıklardır. Beklenen oyuncu puanları bu eşleşmeyi zaten içerir; ek çarpan uygulanmaz."));
-  if (contexts.some((row) => row?.strength_context_status === "league_average_fallback")) content.append(element("p", "message", "Bazı takım geçmişleri eksik; lig ortalaması kullanılıyor."));
-  content.append(matchweekFantasyComparison(fixture, teams));
-  content.append(matchweekLeagueComparison(fixture, teams));
-  content.append(element("p", "message", "Form, gol ortalamaları ve gol yenmeyen maç sayıları, seçilen maç öncesindeki son 5 tamamlanmış sezon maçına dayanır. G: galibiyet, B: beraberlik, M: mağlubiyet. Eksik skorlar — olarak kalır. Son 11, geçmiş maçın kadrosudur; tahmini kadro değildir."));
-  content.append(element("p", "message", prediction
-    ? `Tahmin modeli: ${$("matchweek-model").selectedOptions[0].textContent}.`
-    : "Seçili modelde bu maç için geçerli bir tahmin bulunmuyor."));
+  table.append(head, body);
+  const overview = element("div", "matchweek-analysis-grid");
+  overview.append(table, lineups);
+  const extra = element("div", "matchweek-analysis-extra");
+  extra.append(matchweekFantasyComparison(fixture, teams), matchweekLeagueComparison(fixture, teams));
+  const notes = element("details", "matchweek-notes");
+  notes.append(element("summary", "", "Açıklamalar"),
+    element("p", "", "Güç: 1× lig ortalaması, yüksek değer daha güçlüdür. Fikstür zorluğu: 1 kolay, 5 zor; rakip ve iç/dış saha etkisini gösteren deneysel aralıklardır. Beklenen oyuncu puanları bu eşleşmeyi zaten içerir; ek çarpan uygulanmaz."),
+    element("p", "", "Form, gol ortalamaları ve gol yenmeyen maç sayıları, seçilen maç öncesindeki son 5 tamamlanmış sezon maçına dayanır. G: galibiyet, B: beraberlik, M: mağlubiyet. Eksik skorlar — olarak kalır. Son 11, geçmiş maçın kadrosudur; tahmini kadro değildir."),
+    element("p", "", prediction
+      ? `Tahmin modeli: ${$("matchweek-model").selectedOptions[0].textContent}.`
+      : "Seçili modelde bu maç için geçerli bir tahmin bulunmuyor."));
+  if (contexts.some((row) => row?.strength_context_status === "league_average_fallback")) notes.append(element("p", "", "Bazı takım geçmişleri eksik; lig ortalaması kullanılıyor."));
+  content.append(overview, extra, notes);
 }
 
 function matchweekFantasyComparison(fixture, teams) {
@@ -316,22 +323,28 @@ function matchweekTeamHistory(teamId, selected) {
     .sort((a, b) => fantasyKickoff(b) - fantasyKickoff(a));
 }
 
-function matchweekLastXI(teamId, game, teams) {
+function matchweekLastXI(teamId, game, teams, { players: matchPlayers = state.tables["player_match_stats.csv"] || [], title = "Son 11" } = {}) {
   const panel = element("section", "matchweek-last-xi");
-  panel.setAttribute("aria-label", `${teamName(teamId, teams)} son 11`);
-  panel.append(element("p", "message", "Son 11"));
+  panel.setAttribute("aria-label", `${teamName(teamId, teams)} ${title}`);
+  panel.append(element("h3", "", `${teamName(teamId, teams)} · ${title}`));
   if (!game) {
     panel.append(element("p", "message", "Önceki tamamlanmış maç bulunmuyor.")); return panel;
   }
   const opponent = game.home_team_id === teamId ? game.away_team_id : game.home_team_id;
   panel.append(element("p", "message", `${new Intl.DateTimeFormat("tr-TR", { timeZone: matchweekZone, day: "numeric", month: "short" }).format(fantasyKickoff(game))} · ${teamName(opponent, teams)}`));
-  const players = (state.tables["player_match_stats.csv"] || []).filter((row) => row.fixture_id === game.fixture_id
+  const players = matchPlayers.filter((row) => row.fixture_id === game.fixture_id
     && row.team_id === teamId && ["1", "true"].includes(String(row.started).toLowerCase()));
   const ids = new Set(players.map((row) => row.player_id));
   if (!players.length || ids.size !== players.length || ids.has("") || ids.has(undefined)) {
     panel.append(element("p", "message", "Başlangıç kadrosu verisi eksik veya belirsiz.")); return panel;
   }
   const pitch = element("div", "matchweek-mini-pitch");
+  // Half-pitch markings behind the players: halfway line and centre circle at
+  // the top, this side's penalty area and goal at the bottom.
+  const markings = element("div", "mini-pitch-markings");
+  markings.setAttribute("aria-hidden", "true");
+  for (const part of ["centre-circle", "centre-spot", "penalty-box", "goal-box", "penalty-arc", "penalty-spot"]) markings.append(element("span", `mini-pitch-${part}`));
+  pitch.append(markings);
   const groups = new Map();
   const exact = players.length === 11 && players.every((row) => /^[1-6]:[1-6]$/.test(row.formation_field || ""))
     && new Set(players.map((row) => row.formation_field)).size === 11;
@@ -345,7 +358,9 @@ function matchweekLastXI(teamId, game, teams) {
     const line = element("div", "matchweek-mini-line");
     for (const player of groups.get(group).sort((a, b) => exact ? Number(a.formation_field.split(":")[1]) - Number(b.formation_field.split(":")[1]) : String(a.name).localeCompare(String(b.name)))) {
       const person = element("div", "matchweek-mini-player"), shirt = element("span", "builder-shirt");
-      shirt.innerHTML = shirtSVG(teamId, { size: 64, number: player.jersey_number, showName: false });
+      // The keeper is the formation's first line, or the recorded goalkeeper.
+      const goalkeeper = exact ? group === 1 : role(player.position) === 1;
+      shirt.innerHTML = shirtSVG(teamId, { size: 64, number: player.jersey_number, showName: false, goalkeeper });
       person.append(shirt, element("span", "", player.name || `Oyuncu ${player.player_id}`)); line.append(person);
     }
     pitch.append(line);

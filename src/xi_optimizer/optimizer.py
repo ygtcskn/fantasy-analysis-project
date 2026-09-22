@@ -142,9 +142,13 @@ class _Problem:
     """
 
     __slots__ = ("players", "matrix", "lower", "upper", "objective", "budget",
-                 "first_position", "width")
+                 "first_position", "width", "reserved_clubs")
 
-    def __init__(self, players, budget, risk_weight=0.0):
+    def __init__(self, players, budget, risk_weight=0.0, reserved_clubs=None):
+        self.reserved_clubs = dict(reserved_clubs or {})
+        if any(not isinstance(count, int) or count < 0 or count > CLUB_LIMIT
+               for count in self.reserved_clubs.values()):
+            raise ValueError("Invalid reserved club count.")
         count = len(players)
         clubs = sorted({player.team for player in players})
         self.players = players
@@ -169,7 +173,7 @@ class _Problem:
         for club in clubs:
             rows.append(row([player.team == club for player in players]))
             lower.append(0.0)
-            upper.append(float(CLUB_LIMIT))
+            upper.append(float(CLUB_LIMIT - self.reserved_clubs.get(club, 0)))
         objective = np.zeros(self.width)
         objective[:count] = [-player.points for player in players]
         for index, club in enumerate(clubs):
@@ -218,7 +222,8 @@ class _Problem:
         solution = Solution(formation, selected)
         if (len(selected) != SQUAD_SIZE or solution.cost > self.budget
                 or Counter(p.position for p in selected) != Counter(dict(zip(POSITIONS, counts)))
-                or max(Counter(p.team for p in selected).values()) > CLUB_LIMIT
+                or any(count + self.reserved_clubs.get(club, 0) > CLUB_LIMIT
+                       for club, count in Counter(p.team for p in selected).items())
                 or not set(locked) <= {p.id for p in selected}
                 or set(excluded) & {p.id for p in selected}):
             raise RuntimeError("Solver result failed independent constraint validation.")
@@ -273,7 +278,7 @@ def _best(problem, choices, locked, excluded, time_limit, risk_weight=0.0):
 
 
 def optimize(players, budget=100_000_000, locked=(), excluded=(), formation="auto",
-             time_limit=30, risk="balanced"):
+             time_limit=30, risk="balanced", reserved_clubs=None):
     """Return a proven optimum or None for infeasibility; never publish a timeout as optimal.
 
     ``risk`` is a preset name or an explicit charge per same-club defensive
@@ -287,13 +292,13 @@ def optimize(players, budget=100_000_000, locked=(), excluded=(), formation="aut
     if len(players) < SQUAD_SIZE:
         return None
     choices = FORMATIONS if formation == "auto" else {formation: FORMATIONS[formation]}
-    problem = _Problem(players, budget, risk_weight)
+    problem = _Problem(players, budget, risk_weight, reserved_clubs)
     return _best(problem, choices, locked, excluded, time_limit, risk_weight)
 
 
 def recommend(players, *, locked=(), excluded=(), position=None, candidates=None,
               budget=100_000_000, formation="auto", time_limit=30, risk="balanced",
-              rating_weight=0.0):
+              rating_weight=0.0, reserved_clubs=None):
     """Rank next picks by the optimal completed XI when each candidate is locked.
 
     Ranking on the completed XI rather than the candidate's own projection is
@@ -325,7 +330,7 @@ def recommend(players, *, locked=(), excluded=(), position=None, candidates=None
     if len(players) < SQUAD_SIZE:
         return []
     choices = FORMATIONS if formation == "auto" else {formation: FORMATIONS[formation]}
-    problem = _Problem(players, budget, risk_weight)
+    problem = _Problem(players, budget, risk_weight, reserved_clubs)
     baseline = _best(problem, choices, locked, excluded, time_limit, risk_weight)
     if baseline is None:
         return []

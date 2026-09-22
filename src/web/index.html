@@ -1,17 +1,22 @@
 <!doctype html>
-<html lang="en">
+<html lang="tr" data-theme="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="A personal Süper Lig workspace. Explore player appearances and fixtures from your own Sportmonks CSV files.">
-  <title>Süper Lig Lab — Your football workspace</title>
-  <script>try{document.documentElement.dataset.theme=localStorage.getItem("superlig-theme")==="dark"?"dark":"light"}catch{document.documentElement.dataset.theme="light"}</script>
+  <meta name="description" content="Kişisel Süper Lig çalışma alanı. Kendi Sportmonks CSV dosyalarınızdan puan durumu, fikstür, istatistik ve fantezi kadro analizi.">
+  <title>Süper Lig Lab — Futbol çalışma alanın</title>
   <link rel="stylesheet" href="styles/styles.css">
   <link rel="stylesheet" href="styles/panels.css">
   <link rel="stylesheet" href="lib/radar.css">
   <link rel="stylesheet" href="lib/team-analysis.css">
   <link rel="stylesheet" href="features/statistics/distribution.css">
+  <link rel="stylesheet" href="features/matchweek/live-centre.css">
+  <link rel="stylesheet" href="styles/theme-dark.css">
+  <link rel="stylesheet" href="styles/page-header.css">
+  <link rel="stylesheet" href="features/social/social.css">
+  <link rel="stylesheet" href="features/builder/bench.css">
   <script src="data/csv.js" defer></script>
+  <script src="core/locale.js" defer></script>
   <script src="core/sidebar.js" defer></script>
   <script src="features/tier-list/tier-list.js" defer></script>
   <script src="features/home/home.js" defer></script>
@@ -19,6 +24,8 @@
   <script src="core/kits.js" defer></script>
   <script src="data/fantasy.js" defer></script>
   <script src="features/matchweek/matchweek.js" defer></script>
+  <script src="features/matchweek/live-centre.js" defer></script>
+  <script src="features/matchweek/results.js" defer></script>
   <script src="features/builder/builder.js" defer></script>
   <script src="features/builder/recommendations.js" defer></script>
   <script src="lib/radar.js" defer></script>
@@ -29,50 +36,78 @@
   <script src="lib/team-analysis.js" defer></script>
   <script src="features/team-statistics/team-charts-page.js" defer></script>
   <script src="features/team-statistics/team-statistics.js" defer></script>
+  <script src="features/social/social.js" defer></script>
   <script src="core/app.js" defer></script>
 </head>
 <body>
   <main>
-    <header class="topbar"><span>FOOTBALL / DATA EXPLORER</span><span class="badge">Local workspace</span></header>
-    <section class="page-heading"><div><p class="eyebrow">SÜPER LİG / YOUR SEASON</p><h1 id="view-title">League overview</h1><p id="view-description">League standings and fixtures, together in one place.</p><p id="home-season-note" class="home-season-note"></p></div><div class="file-actions"><button id="open-files" class="primary">Open season CSVs <span>↗</span></button><button id="clear-files" class="text-button" hidden>Clear loaded files</button><input id="files" type="file" accept=".csv,text/csv" multiple hidden></div></section>
-    <button id="refresh-data" class="secondary" hidden>Refresh saved data ↻</button>
+    <header class="page-header" aria-labelledby="view-title">
+      <div class="topbar"><span>FUTBOL / VERİ GEZGİNİ</span></div>
+      <div class="page-heading"><div><p id="view-eyebrow" class="eyebrow">SÜPER LİG</p><h1 id="view-title">Lig Özeti</h1><p id="view-description">Puan durumu ve fikstür bir arada.</p><p id="home-season-note" class="home-season-note"></p></div></div>
+    </header>
     <p id="message" class="message" role="status" aria-live="polite"></p>
-    <section id="dataset-stats" class="stats" aria-label="Loaded data"><div><span>PLAYER APPEARANCES</span><strong id="appearance-count">—</strong></div><div><span>FIXTURES</span><strong id="fixture-count">—</strong></div><div><span>TEAMS IN FILE</span><strong id="team-count">—</strong></div><div><span>SEASON IN FILE</span><strong id="season-label" class="season-value">—</strong></div></section>
-    <section id="home-workspace" class="home-grid" aria-label="League overview">
+    <section id="dataset-stats" class="stats" aria-label="Yüklenen veriler"><div><span>OYUNCU KATILIMI</span><strong id="appearance-count">—</strong></div><div><span>MAÇ</span><strong id="fixture-count">—</strong></div><div><span>TAKIM</span><strong id="team-count">—</strong></div><div><span>SEZON</span><strong id="season-label" class="season-value">—</strong></div></section>
+    <section id="social-workspace" aria-label="Maç Tribünü" hidden>
+      <div class="social-toolbar">
+        <div><p class="eyebrow">HAFTANIN SOHBETİ</p><h2>Maçlar biter, sohbet devam eder.</h2></div>
+        <label>Maç haftası<select id="social-round"></select></label>
+      </div>
+      <p class="social-session-note">Yerel önizleme · Konular ve yanıtlar bu sekmede kalır; sayfa yenilenince silinir. Diğer kullanıcılara gönderilmez.</p>
+      <div id="social-matches"></div>
+      <p id="social-status" role="status" aria-live="polite"></p>
+    </section>
+    <section id="home-workspace" class="home-grid" aria-label="Lig özeti">
       <section class="home-panel standings-panel" aria-labelledby="standings-title">
-        <div class="home-panel-heading"><div><p class="eyebrow">THE LEAGUE</p><h2 id="standings-title">Points table</h2></div><span id="standings-count" class="badge">—</span></div>
-        <label id="standings-group-control" class="standings-group-control" hidden>Competition group<select id="standings-group"></select></label>
+        <div class="home-panel-heading"><div><p class="eyebrow">LİG</p><h2 id="standings-title">Puan Durumu</h2></div><span id="standings-count" class="badge">—</span></div>
+        <label id="standings-group-control" class="standings-group-control" hidden>Grup<select id="standings-group"></select></label>
         <p id="standings-note" class="home-panel-note" role="status"></p>
-        <div class="standings-scroll" tabindex="0" aria-label="Scrollable league points table"><table class="standings-table"><thead><tr><th scope="col">Pos</th><th scope="col">Club</th><th scope="col" class="numeric">Pts</th></tr></thead><tbody id="standings-body"></tbody></table></div>
+        <div class="standings-scroll" tabindex="0" aria-label="Kaydırılabilir puan tablosu"><table class="standings-table"><thead><tr><th scope="col">Sıra</th><th scope="col">Takım</th><th scope="col" class="numeric">Puan</th></tr></thead><tbody id="standings-body"></tbody></table></div>
       </section>
       <section class="home-panel fixtures-panel" aria-labelledby="home-fixtures-title">
-        <div class="home-panel-heading"><div><p class="eyebrow">THE MATCHES</p><h2 id="home-fixtures-title">Fixtures</h2></div><span id="home-fixture-count" class="badge">—</span></div>
-        <div class="matchweek-controls"><button id="home-round-prev" class="secondary" aria-label="Previous matchweek">←</button><label class="sr-only" for="home-round">Matchweek</label><select id="home-round"></select><button id="home-round-next" class="secondary" aria-label="Next matchweek">→</button></div>
+        <div class="home-panel-heading"><div><p class="eyebrow">MAÇLAR</p><h2 id="home-fixtures-title">Fikstür</h2></div><span id="home-fixture-count" class="badge">—</span></div>
+        <div class="matchweek-controls"><button id="home-round-prev" class="secondary" aria-label="Önceki hafta">←</button><label class="sr-only" for="home-round">Maç haftası</label><select id="home-round"></select><button id="home-round-next" class="secondary" aria-label="Sonraki hafta">→</button></div>
         <p id="home-fixtures-note" class="home-panel-note" role="status"></p>
         <div id="home-fixtures-list" class="home-fixtures-list"></div>
       </section>
     </section>
-    <section id="empty-state" class="empty-state"><div class="file-symbol" aria-hidden="true">CSV <span>↗</span></div><p class="eyebrow">START WITH YOUR OWN DATA</p><h2>Bring your season into view.</h2><p>Click <strong>Open season CSVs</strong>, go to your season’s <code>csv</code> folder, and select these files together:</p><div class="file-list"><code>player_match_stats.csv</code><code>fixtures.csv</code><code>teams.csv</code><code>players.csv</code><code>squads.csv</code></div><p class="muted">The last two files include players with no match records.<br>Your browser reads the files locally. No upload, API calls, or account required.</p></section>
-    <section id="standings-workspace" class="detailed-standings" hidden lang="tr" aria-label="Detaylı puan durumu">
+    <section id="empty-state" class="empty-state"><div class="file-symbol" aria-hidden="true">CSV <span>↗</span></div><p class="eyebrow">KENDİ VERİNLE BAŞLA</p><h2>Sezonunu görünür kıl.</h2><p>Siteyi <code>python src/web/serve.py --season 2026/2027</code> ile başlatın; sezon klasöründeki şu dosyalar otomatik yüklenir:</p><div class="file-list"><code>player_match_stats.csv</code><code>fixtures.csv</code><code>teams.csv</code><code>players.csv</code><code>squads.csv</code></div><p class="muted">Son iki dosya, maç kaydı olmayan oyuncuları da içerir.<br>Dosyalar bu bilgisayarda okunur; yükleme, API çağrısı veya hesap gerekmez.</p></section>
+    <section id="standings-workspace" class="detailed-standings" hidden aria-label="Detaylı puan durumu">
       <div class="panel-heading"><h2>Süper Lig puan durumu</h2></div>
-      <div class="table-container detailed-standings-scroll" tabindex="0" aria-label="Kaydırılabilir puan tablosu"><table><thead><tr><th class="qualification-heading" scope="col"><span class="sr-only">Avrupa kupası hakkı</span></th><th scope="col">Sıra</th><th scope="col">Takım</th><th scope="col" class="numeric" title="Oynanan maç">O</th><th scope="col" class="numeric" title="Galibiyet">G</th><th scope="col" class="numeric" title="Beraberlik">B</th><th scope="col" class="numeric" title="Mağlubiyet">M</th><th scope="col" class="numeric" title="Atılan gol">A</th><th scope="col" class="numeric" title="Yenilen gol">Y</th><th scope="col" class="numeric" title="Gol farkı">AV</th><th scope="col" class="numeric">Puan</th><th scope="col">Son 5 maç</th></tr></thead><tbody id="detailed-standings-body"></tbody></table></div>
+      <div class="table-container detailed-standings-scroll" tabindex="0" aria-label="Kaydırılabilir puan tablosu"><table><thead><tr><th scope="col">Sıra</th><th scope="col">Takım</th><th scope="col" class="numeric" title="Oynanan maç">O</th><th scope="col" class="numeric" title="Galibiyet">G</th><th scope="col" class="numeric" title="Beraberlik">B</th><th scope="col" class="numeric" title="Mağlubiyet">M</th><th scope="col" class="numeric" title="Atılan gol">A</th><th scope="col" class="numeric" title="Yenilen gol">Y</th><th scope="col" class="numeric" title="Gol farkı">AV</th><th scope="col" class="numeric">Puan</th><th scope="col">Son 5 maç</th></tr></thead><tbody id="detailed-standings-body"></tbody></table></div>
       <p class="standings-legend">O: Oynanan · G: Galibiyet · B: Beraberlik · M: Mağlubiyet · A: Atılan gol · Y: Yenilen gol · AV: Gol farkı.<br>Son 5 maç soldan sağa eskiden yeniye gösterilir. — eksik veri anlamına gelir.</p>
     </section>
-    <section id="matchweek-workspace" hidden lang="tr" aria-label="Maç Haftası">
+    <section id="matchweek-workspace" hidden aria-label="Maç Haftası">
       <div class="matchweek-layout">
       <section class="matchweek-fixtures" aria-label="Haftanın maçları">
+        <section id="live-centre" class="live-centre" hidden aria-labelledby="live-centre-title">
+          <div id="live-fixture-control" class="live-fixture-tabs" role="tablist" aria-label="Canlı maçlar" hidden></div>
+          <div class="live-centre-sheet">
+          <div class="live-centre-heading">
+            <div><span id="live-centre-badge" class="live-badge" hidden>CANLI</span><h2 id="live-centre-title">Canlı Maç Merkezi</h2></div>
+          </div>
+          <p id="live-centre-note" class="live-centre-note"></p>
+          <p id="live-announcement" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
+          <div id="live-match-content" hidden>
+            <div id="live-scoreboard" class="live-scoreboard"></div>
+            <div class="live-centre-grid">
+              <section class="live-statistics" aria-labelledby="live-statistics-title"><h3 id="live-statistics-title">Maç İstatistikleri</h3><div id="live-statistics"></div><p class="live-coverage-note">— İstatistik henüz sağlanmadı.</p></section>
+              <section class="live-events" aria-labelledby="live-events-title"><h3 id="live-events-title">Maç Olayları</h3><ol id="live-events" tabindex="0" aria-label="Kaydırılabilir maç olayları, en yeni önce"></ol></section>
+            </div>
+          </div>
+          </div>
+        </section>
       <div class="builder-heading"><h2 id="matchweek-range"></h2><label>Model<select id="matchweek-model" aria-label="Tahmin modeli"></select></label></div>
       <p id="matchweek-note" class="message" role="status"></p>
       <div class="table-container" tabindex="0" aria-label="Haftanın maçları"><table>
-        <caption class="sr-only">Bu haftanın maçları ve hesaplanan sonuç olasılıkları</caption>
-        <thead><tr><th scope="col">Gün</th><th scope="col">Saat</th><th scope="col">Ev</th><th scope="col">Odds</th><th scope="col">Deplasman</th></tr></thead>
+        <caption class="sr-only">Bu haftanın maçları, biten maçların skorları ve diğer maçların sonuç olasılıkları</caption>
+        <thead><tr><th scope="col">Gün</th><th scope="col">Saat</th><th scope="col">Ev</th><th scope="col">Tahmin / Sonuç</th><th scope="col">Deplasman</th></tr></thead>
         <tbody id="matchweek-matches"></tbody>
       </table></div>
-      <p class="message">Olasılıklar ev sahibi takıma göredir: 1 ev sahibi kazanır, X beraberlik, 2 deplasman kazanır. Yüzdeler model tahminleridir.</p>
-      <section id="matchweek-analysis" class="matchweek-analysis" aria-labelledby="matchweek-analysis-title" aria-live="polite">
+      <!-- Shown inside the odds table, directly under the chosen match. -->
+      <div id="matchweek-analysis-home" hidden><section id="matchweek-analysis" class="matchweek-analysis" aria-labelledby="matchweek-analysis-title" aria-live="polite">
         <h2 id="matchweek-analysis-title">Maç Analizi</h2>
         <div id="matchweek-analysis-content"><p>Analizi görmek için yukarıdan bir maç seçin.</p></div>
-      </section>
+      </section></div>
       </section>
       <aside class="matchweek-standings" aria-labelledby="matchweek-standings-title">
         <div class="builder-heading"><h2 id="matchweek-standings-title">Puan Durumu</h2><span id="matchweek-standings-count" class="badge"></span></div>
@@ -82,7 +117,7 @@
       </aside>
       </div>
     </section>
-    <section id="statistics-workspace" hidden lang="tr" aria-label="İstatistikler">
+    <section id="statistics-workspace" hidden aria-label="Oyuncu İstatistikleri">
       <div class="statistics-leaders">
         <section class="statistics-card statistics-card-scorers" aria-labelledby="statistics-scorers-title">
           <div class="builder-pool-heading"><h3 id="statistics-scorers-title">En Çok Gol Atanlar</h3></div>
@@ -114,7 +149,7 @@
       </div>
       <div class="statistics-lower">
         <section class="statistics-players" aria-labelledby="statistics-list-title">
-          <div class="builder-pool-heading"><h3 id="statistics-list-title">Oyuncu Listesi</h3><span id="statistics-list-count" class="badge">0 oyuncu</span></div>
+          <div class="builder-pool-heading"><h3 id="statistics-list-title">Oyuncu Listesi</h3></div>
           <div class="builder-filters">
             <label class="builder-search"><span class="sr-only">Oyuncu ara</span><input id="statistics-search" type="search" placeholder="Oyuncu veya takım…" autocomplete="off"></label>
             <label><span class="sr-only">Takım</span><select id="statistics-team"><option value="">Tüm takımlar</option></select></label>
@@ -122,17 +157,16 @@
               <option value="goals">Gol ↓</option>
               <option value="assists">Asist ↓</option>
               <option value="fantasy">Fantezi puanı ↓</option>
-              <option value="rating">Puan ↓</option>
+              <option value="rating" selected>Rating ↓</option>
               <option value="minutes_played">Dakika ↓</option>
               <option value="key_passes">Kilit pas ↓</option>
             </select></label>
           </div>
-          <div class="statistics-list-scroll" tabindex="0" aria-label="Kaydırılabilir oyuncu listesi"><table class="statistics-table">
+          <div class="statistics-list-scroll" tabindex="0" aria-label="Kaydırılabilir oyuncu listesi"><table class="statistics-table statistics-player-list-table">
             <caption class="sr-only">Oyuncular ve sezon toplamları. Bir isme tıklayarak maç istatistiklerini açın.</caption>
-            <thead><tr><th scope="col">Oyuncu</th><th scope="col" class="numeric">Dk</th><th scope="col" class="numeric">Gol</th><th scope="col" class="numeric">Asist</th><th scope="col" class="numeric">Puan</th></tr></thead>
+            <thead><tr><th scope="col">Oyuncu</th><th scope="col" class="numeric">Dk</th><th scope="col" class="numeric">Rating</th><th scope="col" class="numeric">Fantezi Puanı</th></tr></thead>
             <tbody id="statistics-list-body"></tbody>
           </table></div>
-          <p id="statistics-list-note" class="builder-rating-note" role="status"></p>
         </section>
         <section class="statistics-profile" aria-labelledby="statistics-profile-title">
           <div class="builder-pool-heading"><h3 id="statistics-profile-title">Oyuncu Profili</h3><span id="statistics-profile-name" class="badge">—</span></div>
@@ -176,39 +210,35 @@
         </section>
       </div>
     </section>
-    <section id="team-statistics-workspace" hidden lang="tr" aria-label="Takım İstatistikleri">
-      <div class="statistics-leaders">
-        <section class="statistics-card statistics-card-scorers" aria-labelledby="team-statistics-scored-title">
-          <div class="builder-pool-heading"><h3 id="team-statistics-scored-title">En Çok Gol Atanlar</h3></div>
-          <table class="statistics-table">
-            <caption class="sr-only">Sezonun en çok gol atan takımları</caption>
-            <thead><tr><th scope="col" class="numeric">#</th><th scope="col">Takım</th><th scope="col" class="numeric">Gol</th></tr></thead>
-            <tbody id="team-statistics-scored-body"></tbody>
-          </table>
-          <p id="team-statistics-scored-note" class="builder-rating-note" role="status"></p>
-        </section>
-        <section class="statistics-card statistics-card-assists" aria-labelledby="team-statistics-conceded-title">
-          <div class="builder-pool-heading"><h3 id="team-statistics-conceded-title">En Az Gol Yiyenler</h3></div>
-          <table class="statistics-table">
-            <caption class="sr-only">Sezonun en az gol yiyen takımları</caption>
-            <thead><tr><th scope="col" class="numeric">#</th><th scope="col">Takım</th><th scope="col" class="numeric">Yenilen</th></tr></thead>
-            <tbody id="team-statistics-conceded-body"></tbody>
-          </table>
-          <p id="team-statistics-conceded-note" class="builder-rating-note" role="status"></p>
-        </section>
-        <section class="statistics-card statistics-card-fantasy" aria-labelledby="team-statistics-clean-title">
-          <div class="builder-pool-heading"><h3 id="team-statistics-clean-title">En Çok Gol Yemeden Biten Maç</h3></div>
-          <table class="statistics-table">
-            <caption class="sr-only">Gol yemeden biten maç sayısına göre takımlar</caption>
-            <thead><tr><th scope="col" class="numeric">#</th><th scope="col">Takım</th><th scope="col" class="numeric">Maç</th></tr></thead>
-            <tbody id="team-statistics-clean-body"></tbody>
-          </table>
-          <p id="team-statistics-clean-note" class="builder-rating-note" role="status"></p>
-        </section>
-      </div>
+    <section id="team-statistics-workspace" hidden aria-label="Takım İstatistikleri">
+      <section id="team-analysis" class="team-analysis" aria-labelledby="team-analysis-title">
+        <div class="builder-pool-heading"><h3 id="team-analysis-title">Takım Analizi</h3><span id="team-analysis-asof" class="badge">—</span></div>
+        <p id="team-analysis-note" class="builder-rating-note" role="status"></p>
+        <div class="team-analysis-layout">
+          <div id="team-analysis-tabs" class="team-analysis-tabs" role="tablist" aria-label="Takım analizi grafikleri"></div>
+          <div class="team-analysis-content">
+            <section id="ta-fantasy-panel" class="ta-block" role="tabpanel" aria-labelledby="team-analysis-tab-fantasy" data-analysis-panel="fantasy" tabindex="0">
+              <h4 id="ta-fantasy-title">Fantezi Puanı · Mevkiye Göre</h4>
+              <div id="ta-fantasy-chart" class="ta-chart"></div>
+              <div class="ta-legend"><span><i class="ta-square" style="background: var(--ta-kl)"></i>Kaleci</span><span><i class="ta-square" style="background: var(--ta-def)"></i>Defans</span><span><i class="ta-square" style="background: var(--ta-os)"></i>Orta saha</span><span><i class="ta-square" style="background: var(--ta-for)"></i>Forvet</span></div>
+              <p id="ta-fantasy-note" class="builder-rating-note"></p>
+            </section>
+            <section id="ta-luck-panel" class="ta-block" role="tabpanel" aria-labelledby="team-analysis-tab-luck" data-analysis-panel="luck" tabindex="0" hidden>
+              <h4 id="ta-luck-title">Şans Göstergesi · Sonuç ve Pozisyon Farkı</h4>
+              <div id="ta-luck-chart" class="ta-chart"></div>
+              <div class="ta-legend"><span><i class="ta-square" style="background: var(--ta-over)"></i>Sonuçlar pozisyonlardan iyi</span><span><i class="ta-square" style="background: var(--ta-under)"></i>Sonuçlar pozisyonlardan kötü</span></div>
+              <p id="ta-luck-note" class="builder-rating-note"></p>
+            </section>
+            <section id="ta-compare-group" class="ta-block" aria-label="Karşılaştırma grafikleri" hidden>
+              <p id="ta-compare-note" class="builder-rating-note"></p>
+              <div id="ta-compare-chart" class="ta-compare-grid"></div>
+            </section>
+          </div>
+        </div>
+      </section>
       <div class="statistics-lower">
         <section class="statistics-players" aria-labelledby="team-statistics-list-title">
-          <div class="builder-pool-heading"><h3 id="team-statistics-list-title">Takım Listesi</h3><span id="team-statistics-list-count" class="badge">0 takım</span></div>
+          <div class="builder-pool-heading"><h3 id="team-statistics-list-title">Takım Listesi</h3></div>
           <div class="builder-filters">
             <label class="builder-search"><span class="sr-only">Takım ara</span><input id="team-statistics-search" type="search" placeholder="Takım…" autocomplete="off"></label>
             <label class="builder-sort"><span class="sr-only">Sıralama</span><select id="team-statistics-sort">
@@ -219,7 +249,7 @@
               <option value="cleanSheets">Gol yemeden ↓</option>
             </select></label>
           </div>
-          <div class="statistics-list-scroll" tabindex="0" aria-label="Kaydırılabilir takım listesi"><table class="statistics-table">
+          <div class="statistics-list-scroll" tabindex="0" aria-label="Kaydırılabilir takım listesi"><table class="statistics-table statistics-team-list-table">
             <caption class="sr-only">Takımlar ve sezon toplamları. Bir takıma tıklayarak profilini açın.</caption>
             <thead><tr><th scope="col">Takım</th><th scope="col" class="numeric">O</th><th scope="col" class="numeric">AG</th><th scope="col" class="numeric">YG</th><th scope="col" class="numeric">P</th></tr></thead>
             <tbody id="team-statistics-list-body"></tbody>
@@ -280,72 +310,54 @@
           </div>
         </section>
       </div>
-      <section id="team-analysis" class="team-analysis" aria-labelledby="team-analysis-title">
-        <div class="builder-pool-heading"><h3 id="team-analysis-title">Takım Analizi</h3><span id="team-analysis-asof" class="badge">—</span></div>
-        <p id="team-analysis-note" class="builder-rating-note" role="status"></p>
-        <div class="ta-pair">
-          <section class="ta-block" aria-labelledby="ta-fantasy-title">
-            <h4 id="ta-fantasy-title">Fantezi Puanı · Mevkiye Göre</h4>
-            <div id="ta-fantasy-chart" class="ta-chart"></div>
-            <div class="ta-legend"><span><i class="ta-square" style="background: var(--ta-kl)"></i>Kaleci</span><span><i class="ta-square" style="background: var(--ta-def)"></i>Defans</span><span><i class="ta-square" style="background: var(--ta-os)"></i>Orta saha</span><span><i class="ta-square" style="background: var(--ta-for)"></i>Forvet</span></div>
-            <p id="ta-fantasy-note" class="builder-rating-note"></p>
-          </section>
-          <section class="ta-block" aria-labelledby="ta-luck-title">
-            <h4 id="ta-luck-title">Şans Göstergesi · Sonuç ve Pozisyon Farkı</h4>
-            <div id="ta-luck-chart" class="ta-chart"></div>
-            <div class="ta-legend"><span><i class="ta-square" style="background: var(--ta-over)"></i>Sonuçlar pozisyonlardan iyi</span><span><i class="ta-square" style="background: var(--ta-under)"></i>Sonuçlar pozisyonlardan kötü</span></div>
-            <p id="ta-luck-note" class="builder-rating-note"></p>
-          </section>
-        </div>
-        <section class="ta-block" aria-labelledby="ta-compare-title">
-          <h4 id="ta-compare-title">Karşılaştırma Grafikleri</h4>
-          <p id="ta-compare-note" class="builder-rating-note"></p>
-          <div id="ta-compare-chart" class="ta-compare-grid"></div>
-        </section>
-      </section>
     </section>
-    <section id="builder-workspace" class="builder-workspace" hidden aria-label="Fantasy XI Builder">
-      <div class="builder-heading">
-        <div><p class="eyebrow">TEAM CRAFTER</p><h2>Build your Fantasy XI</h2><p>Choose a formation, then click or drag players onto the pitch.</p></div>
-        <span id="builder-count" class="badge" role="status">0 / 11 selected</span>
-      </div>
-      <div class="builder-toolbar">
-        <label>Formation<select id="builder-formation"><option value="4-4-2">4-4-2</option><option value="4-3-3" selected>4-3-3</option><option value="4-2-3-1">4-2-3-1</option><option value="3-4-3">3-4-3</option><option value="3-5-2">3-5-2</option><option value="5-3-2">5-3-2</option></select></label>
-        <button id="builder-clear" class="secondary">Clear team</button>
-      </div>
-      <p id="builder-message" class="builder-message" role="status" aria-live="polite">Select an empty pitch position, then choose a player. You can also drag players.</p>
+    <section id="builder-workspace" class="builder-workspace" hidden aria-label="Kadro Kur">
+      <p id="builder-message" class="builder-message" role="status" aria-live="polite"></p>
       <div class="builder-layout">
         <section class="builder-pitch-panel" aria-labelledby="builder-pitch-title">
-          <div class="builder-pitch-heading"><div><p class="eyebrow">YOUR XI</p><h3 id="builder-pitch-title">Starting eleven</h3></div><span id="builder-formation-label" class="badge">4-3-3</span></div>
-          <div id="builder-pitch" class="builder-pitch" aria-label="Editable fantasy team pitch"><div class="builder-pitch-markings" aria-hidden="true"><span class="builder-centre-circle"></span><span class="builder-box builder-box-top"></span><span class="builder-box builder-box-bottom"></span></div><div id="builder-slots" class="builder-slots"></div></div>
-          <p class="builder-help">Click a filled position to select it. Use × to remove its player. Drag between positions to swap or move players.</p>
+          <div class="builder-pitch-heading">
+            <div class="builder-pitch-left">
+              <div class="builder-pitch-identity"><p class="eyebrow">KADRON</p><h3 id="builder-pitch-title">İlk 11</h3></div>
+              <button id="builder-clear" class="secondary">Kadroyu temizle</button>
+            </div>
+            <div class="builder-pitch-totals">
+              <div><span>Bütçe · ₺M</span><strong id="builder-budget" role="status">0 / 100</strong></div>
+              <div><span>Kadro</span><strong id="builder-count" role="status">0 / 15</strong></div>
+            </div>
+            <label class="builder-pitch-formation"><span class="sr-only">Diziliş</span><select id="builder-formation"><option value="4-4-2">4-4-2</option><option value="4-3-3" selected>4-3-3</option><option value="4-2-3-1">4-2-3-1</option><option value="3-4-3">3-4-3</option><option value="3-5-2">3-5-2</option><option value="5-3-2">5-3-2</option></select></label>
+          </div>
+          <div id="builder-pitch" class="builder-pitch" aria-label="Düzenlenebilir fantezi kadro sahası"><div class="builder-pitch-markings" aria-hidden="true"><span class="builder-centre-circle"></span><span class="builder-box builder-box-top"></span><span class="builder-box builder-box-bottom"></span></div><div id="builder-slots" class="builder-slots"></div></div>
+          <section class="builder-bench" aria-labelledby="builder-bench-title">
+            <h3 id="builder-bench-title">Yedekler</h3>
+            <div id="builder-bench-slots"></div>
+          </section>
         </section>
         <section class="builder-pool" aria-labelledby="builder-pool-title">
-          <div class="builder-pool-heading"><h3 id="builder-pool-title">Players</h3><span id="builder-result-count" class="badge">0 players</span></div>
+          <div class="builder-pool-heading"><h3 id="builder-pool-title">Oyuncular</h3><span id="builder-result-count" class="badge">0 oyuncu</span></div>
           <div class="builder-filters">
-            <label class="builder-search"><span class="sr-only">Find player</span><input id="builder-search" type="search" placeholder="Player or club…" autocomplete="off"></label>
-            <label><span class="sr-only">Club</span><select id="builder-team"><option value="">All clubs</option></select></label>
-            <div class="builder-role-filters" role="group" aria-label="Filter by position">
-              <button type="button" data-builder-role="" aria-label="All positions" title="All positions" aria-pressed="true"><img src="assets/roles/all.svg" alt=""></button>
-              <button type="button" data-builder-role="GK" aria-label="Goalkeepers" title="Goalkeepers" aria-pressed="false"><img src="assets/roles/goalkeeper.svg" alt=""></button>
-              <button type="button" data-builder-role="DEF" aria-label="Defenders" title="Defenders" aria-pressed="false"><img src="assets/roles/defender.svg" alt=""></button>
-              <button type="button" data-builder-role="MID" aria-label="Midfielders" title="Midfielders" aria-pressed="false"><img src="assets/roles/midfielder.svg" alt=""></button>
-              <button type="button" data-builder-role="FWD" aria-label="Forwards" title="Forwards" aria-pressed="false"><img src="assets/roles/attacker.svg" alt=""></button>
+            <label class="builder-search"><span class="sr-only">Oyuncu ara</span><input id="builder-search" type="search" placeholder="Oyuncu veya takım…" autocomplete="off"></label>
+            <label><span class="sr-only">Takım</span><select id="builder-team"><option value="">Tüm takımlar</option></select></label>
+            <div class="builder-role-filters" role="group" aria-label="Mevkiye göre filtrele">
+              <button type="button" data-builder-role="" aria-label="Tüm mevkiler" title="Tüm mevkiler" aria-pressed="true"><img src="assets/roles/all.svg" alt=""></button>
+              <button type="button" data-builder-role="GK" aria-label="Kaleciler" title="Kaleciler" aria-pressed="false"><img src="assets/roles/goalkeeper.svg" alt=""></button>
+              <button type="button" data-builder-role="DEF" aria-label="Defans oyuncuları" title="Defans oyuncuları" aria-pressed="false"><img src="assets/roles/defender.svg" alt=""></button>
+              <button type="button" data-builder-role="MID" aria-label="Orta saha oyuncuları" title="Orta saha oyuncuları" aria-pressed="false"><img src="assets/roles/midfielder.svg" alt=""></button>
+              <button type="button" data-builder-role="FWD" aria-label="Forvetler" title="Forvetler" aria-pressed="false"><img src="assets/roles/attacker.svg" alt=""></button>
             </div>
-            <label class="builder-sort"><span class="sr-only">Sort descending</span><select id="builder-sort"><option value="rating">Rating ↓</option><option value="points">Points / match ↓</option></select></label>
+            <label class="builder-sort"><span class="sr-only">Sıralama</span><select id="builder-sort"><option value="rating">Maç puanı ↓</option><option value="points">Puan / maç ↓</option></select></label>
           </div>
-          <div class="builder-table-wrap" tabindex="0" aria-label="Scrollable player list"><table class="builder-table"><caption class="sr-only">Available players. Activate a player name to inspect statistics, or use the plus button to place the player in the team.</caption><thead><tr><th scope="col">Club</th><th scope="col">Player</th><th scope="col" class="numeric">Rating</th><th scope="col" class="numeric">Points per<br>match</th></tr></thead><tbody id="builder-player-list"></tbody></table></div>
+          <div class="builder-table-wrap" tabindex="0" aria-label="Kaydırılabilir oyuncu listesi"><table class="builder-table"><caption class="sr-only">Seçilebilir oyuncular. İstatistikler için oyuncu adına, kadroya eklemek için artı düğmesine basın.</caption><thead><tr><th scope="col">Takım</th><th scope="col">Oyuncu</th><th scope="col" class="numeric">Maç<br>puanı</th><th scope="col" class="numeric">Puan /<br>maç</th></tr></thead><tbody id="builder-player-list"></tbody></table></div>
           <p id="builder-fantasy-note" class="builder-rating-note" role="status"></p>
           <section id="builder-recommendations" class="builder-recommendations" hidden aria-labelledby="builder-recommendations-title">
-            <div class="builder-pool-heading"><h3 id="builder-recommendations-title">Recommended next picks</h3><label class="builder-risk"><span class="sr-only">Risk</span><select id="builder-risk" title="Spreading the defence protects a weekly score; stacking it buys the swings needed to catch someone."><option value="balanced">Balanced</option><option value="low">Low risk</option><option value="high">High risk</option></select></label><button id="builder-recommendations-retry" type="button" class="secondary" aria-label="Refresh recommendations">↻</button></div>
+            <div class="builder-pool-heading"><h3 id="builder-recommendations-title">Önerilen seçimler</h3><label class="builder-risk"><span class="sr-only">Risk</span><select id="builder-risk" title="Savunmayı farklı takımlara yaymak haftalık puanı korur; aynı takımdan yığmak, birini yakalamak için gereken dalgalanmayı getirir."><option value="balanced">Dengeli</option><option value="low">Düşük risk</option><option value="high">Yüksek risk</option></select></label><button id="builder-recommendations-retry" type="button" class="secondary" aria-label="Önerileri yenile">↻</button></div>
             <p id="builder-recommendations-note" class="builder-rating-note" role="status" aria-live="polite"></p>
-            <div class="builder-recommendations-scroll"><table><thead><tr><th scope="col">Player</th><th scope="col">Price</th><th scope="col">Exp. points</th><th scope="col"><span class="sr-only">Add player</span></th></tr></thead><tbody id="builder-recommendations-body"></tbody></table></div>
+            <div class="builder-recommendations-scroll"><table><thead><tr><th scope="col">Oyuncu</th><th scope="col">Fiyat</th><th scope="col">Beklenen puan</th><th scope="col"><span class="sr-only">Oyuncu ekle</span></th></tr></thead><tbody id="builder-recommendations-body"></tbody></table></div>
           </section>
-          <p class="builder-rating-note">Click a player name for fantasy points, next-match projections and availability. Use + or drag the row to place the player in your XI. Rating is the player's average eligible Sportmonks match rating. Points per match is the current season's average fantasy score per played match; — means unavailable.</p>
+          <p class="builder-rating-note">Fantezi puanları, sonraki maç tahmini ve durum bilgisi için oyuncu adına tıklayın. Oyuncuyu kadroya eklemek için + düğmesini kullanın veya satırı sürükleyin. Maç puanı, oyuncunun geçerli Sportmonks maç puanlarının ortalamasıdır. Puan / maç, bu sezon oynadığı maç başına ortalama fantezi puanıdır; — veri yok demektir.</p>
         </section>
       </div>
     </section>
-    <section id="tier-workspace" hidden lang="tr" aria-label="Oyuncu Listesi">
+    <section id="tier-workspace" hidden aria-label="Oyuncu Listesi">
       <details class="tier-method"><summary>Kademeler ve sıralama nasıl hesaplanıyor?</summary><p>S ≥ 8,00 · A ≥ 7,50 · B ≥ 7,00 · C ≥ 6,50 · D &lt; 6,50. Bunlar sitemizin gösterim aralıklarıdır; resmi Sportmonks kademeleri veya fantezi tahminleri değildir. Kullanılabilir her Sportmonks maç puanı eşit ağırlıklıdır. Pozisyon düzeltmesi uygulanmadan tüm mevkiler birlikte karşılaştırılır.</p><p>Bir oyuncunun sıralamaya girmesi için en az üç geçerli puanlı maçı gerekir. Bu sınırın altındaki oyuncular <strong>Ön Değerlendirme</strong>, geçerli puanı olmayan oyuncular <strong>Puansız</strong> olarak gösterilir. 1–10 aralığı dışındaki puanlar ve açıkça sıfır dakika gösteren kayıtlar ortalamaya alınmaz. Kademe sınırlarında yuvarlanmamış ortalama kullanılır.</p><p>Sıra, uygun oyuncuları sezon genelindeki yuvarlanmamış ortalama puana göre dizer. Aynı ortalamaya sahip oyuncular aynı sırayı paylaşır; sonraki sıra, beraberlikte kullanılan basamaklar kadar ilerler. Filtreler sezon sırasını değiştirmez. Ön değerlendirme ve puansız oyuncular sıralanan oyunculardan sonra gelir ve sıra alanlarında çizgi gösterilir. Mevki, kaynaktan gelen pozisyon bilgisidir.</p><p>Toplamlar gelecekteki fikstürü değil, mevcut maç kayıtlarını kullanır. Eksik istatistikler eksik kalır; yıldız işareti toplamın veri kapsamının eksik olduğunu gösterir. Takım filtresi, oyuncunun kaydedilmiş tüm takım üyelikleriyle eşleşir ve sezon toplamlarını korur.</p></details>
       <div class="tier-toolbar" aria-label="Oyuncu filtreleri">
         <div class="tier-role-filter" role="group" aria-label="Oyuncuları mevkiye göre filtrele">
@@ -382,21 +394,20 @@
       </div>
     </section>
     <section id="workspace" hidden>
-      <div class="panel-heading"><div><h2 id="table-heading">Player appearances</h2><p id="table-caption">Inspect the underlying records, with match context alongside each player.</p></div><span class="badge" id="result-count">0 records</span></div>
+      <div class="panel-heading"><div><h2 id="table-heading">Oyuncu katılımları</h2><p id="table-caption">Her satır bir oyuncunun bir maçtaki kaydıdır.</p></div><span class="badge" id="result-count">0 kayıt</span></div>
       <div class="filters">
-        <label class="search-label">Search<input id="search" type="search" placeholder="Player, team or fixture…" autocomplete="off"></label>
-        <label>Team<select id="team"><option value="">All teams</option></select></label>
-        <label id="position-filter">Position<select id="position"><option value="">All positions</option></select></label>
-        <label id="minutes-filter">Minimum minutes<input id="minutes" type="number" min="0" max="150" step="1" value="0"></label>
-        <button class="secondary" id="reset">Reset filters</button>
+        <label class="search-label">Ara<input id="search" type="search" placeholder="Oyuncu, takım veya maç…" autocomplete="off"></label>
+        <label>Takım<select id="team"><option value="">Tüm takımlar</option></select></label>
+        <label id="position-filter">Mevki<select id="position"><option value="">Tüm mevkiler</option></select></label>
+        <label id="minutes-filter">En az dakika<input id="minutes" type="number" min="0" max="150" step="1" value="0"></label>
+        <button class="secondary" id="reset">Filtreleri sıfırla</button>
       </div>
-      <div id="data-table-container" class="table-container" tabindex="0" aria-label="Scrollable data table"><table><thead id="table-head"></thead><tbody id="table-body"></tbody></table></div>
-      <div class="table-footer fixture-table-footer"><p id="table-note">— means not supplied. Missing values are never treated as zero.</p><nav class="pagination" aria-label="Table pages"><button class="secondary" id="previous" aria-label="Previous page">←</button><span id="page-label" role="status" aria-live="polite">Page 1 of 1</span><button class="secondary" id="next" aria-label="Next page">→</button></nav></div>
-      <div class="context-note"><strong>Read the context, then the numbers.</strong><p>This explorer shows recorded performance, not predicted fantasy points. Compare similar playing time and positions; one match is a small sample. xG uses the dedicated feed when supplied, otherwise the standard feed. The two are never added together.</p></div>
+      <div id="data-table-container" class="table-container" tabindex="0" aria-label="Kaydırılabilir veri tablosu"><table><thead id="table-head"></thead><tbody id="table-body"></tbody></table></div>
+      <div class="table-footer fixture-table-footer"><p id="table-note">— veri sağlanmadı demektir; eksik değerler asla sıfır sayılmaz.</p><nav class="pagination" aria-label="Tablo sayfaları"><button class="secondary" id="previous" aria-label="Önceki sayfa">←</button><span id="page-label" role="status" aria-live="polite">Sayfa 1 / 1</span><button class="secondary" id="next" aria-label="Sonraki sayfa">→</button></nav></div>
+      <div class="context-note"><strong>Önce bağlamı, sonra sayıları okuyun.</strong><p>Bu sayfa tahmin edilen fantezi puanlarını değil, kaydedilmiş performansı gösterir. Benzer süre ve mevkideki oyuncuları karşılaştırın; tek maç küçük bir örneklemdir. xG, varsa özel kaynaktan, yoksa standart kaynaktan gelir; ikisi asla toplanmaz.</p></div>
     </section>
-    <footer><span id="footer-lead">Built for your questions.</span> <span id="footer-source">Source: your Sportmonks exports · Files remain on this device</span></footer>
   </main>
-  <dialog id="player-dialog" lang="tr" aria-labelledby="player-detail-name">
+  <dialog id="player-dialog" aria-labelledby="player-detail-name">
     <div class="detail-heading"><div><p class="eyebrow">OYUNCU MAÇ GEÇMİŞİ</p><h2 id="player-detail-name"></h2><p id="player-detail-meta"></p></div><button id="close-player" class="secondary" autofocus>Kapat ×</button></div>
     <div id="player-detail-summary" class="detail-summary"></div>
     <p id="player-detail-coverage" class="coverage-note"></p>

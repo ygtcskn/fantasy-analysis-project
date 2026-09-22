@@ -1,7 +1,7 @@
 "use strict";
 
-// Takım İstatistikleri: the team counterpart of İstatistikler. Leader cards, a
-// searchable team list, and a profile of the selected team - two spider plots
+// Takım İstatistikleri: a tabbed team analysis, a searchable team list, and a
+// profile of the selected team - two spider plots
 // (src/web/features/team-statistics/team-radar-page.js), season totals, and the four match-by-match
 // charts drawn for that team by src/web/features/team-statistics/team-charts-page.js.
 //
@@ -68,6 +68,7 @@ function teamStatisticsIdentity(team, names, label) {
   club.append(createTeamLogo(team.id, names, false));
   const open = element("button", "statistics-player-button", team.name);
   open.type = "button";
+  open.title = team.name;
   open.setAttribute("aria-label", `${team.name} ${label}`);
   open.addEventListener("click", () => {
     teamStatisticsState.selected = team.id;
@@ -78,29 +79,13 @@ function teamStatisticsIdentity(team, names, label) {
   return club;
 }
 
-function renderTeamStatisticsCard(bodyId, noteId, teams, names, accessor, format, ascending = false) {
-  const leaders = teams.filter((team) => accessor(team) !== null)
-    .sort((a, b) => (ascending ? accessor(a) - accessor(b) : accessor(b) - accessor(a)) || a.name.localeCompare(b.name, "tr"))
-    .slice(0, 10);
-  const body = document.createDocumentFragment();
-  // Equal values share a rank.
-  let rank = 0;
-  leaders.forEach((team, index) => {
-    if (index === 0 || accessor(team) !== accessor(leaders[index - 1])) rank = index + 1;
-    const row = element("tr"), identity = element("td");
-    identity.append(teamStatisticsIdentity(team, names, "profilini göster"));
-    row.append(element("td", "numeric statistics-rank", String(rank)), identity,
-      element("td", "numeric statistics-value", format(accessor(team))));
-    body.append(row);
-  });
-  if (!leaders.length) {
-    const row = element("tr"), cell = element("td", "no-results", "Kayıtlı sonuç bulunamadı.");
-    cell.colSpan = 3;
-    row.append(cell);
-    body.append(row);
+function teamStatisticsFitNames() {
+  for (const button of $("team-statistics-list-body").querySelectorAll(".statistics-player-button")) {
+    button.style.fontSize = "";
+    for (let size = 12; size >= 8 && button.scrollWidth > button.clientWidth; size--) {
+      button.style.fontSize = `${size}px`;
+    }
   }
-  $(bodyId).replaceChildren(body);
-  $(noteId).textContent = leaders.length ? `İlk ${leaders.length} takım gösteriliyor.` : "";
 }
 
 function renderTeamStatisticsList(teams, names) {
@@ -109,7 +94,6 @@ function renderTeamStatisticsList(teams, names) {
     || TEAM_STATISTICS_SORTS[0];
   const visible = teams.filter((team) => !query || team.name.toLocaleLowerCase("tr").includes(query))
     .sort((a, b) => (accessor(b) ?? -Infinity) - (accessor(a) ?? -Infinity) || (a.position ?? 99) - (b.position ?? 99));
-  $("team-statistics-list-count").textContent = `${visible.length} takım`;
   const body = document.createDocumentFragment();
   for (const team of visible) {
     const row = element("tr"), identity = element("td");
@@ -178,7 +162,10 @@ function renderTeamStatisticsProfile(teams, names) {
     $("team-statistics-profile-name").textContent = "—";
     $("team-statistics-profile-note").textContent = "Puan durumunda takım bulunamadı.";
     for (const id of panels) $(id).replaceChildren();
-    for (const id of notes) $(id).textContent = "";
+    for (const id of notes) {
+      $(id).textContent = "";
+      if (id !== "team-statistics-facts-note") $(id).hidden = true;
+    }
     return;
   }
   teamStatisticsState.selected = selected.id;
@@ -193,14 +180,15 @@ function renderTeamStatisticsProfile(teams, names) {
     ["FT", "AET", "FT_PEN", "AWARDED", "WO"].includes(String(fixture["state.developer_name"] || fixture.state).toUpperCase()))
     .map((fixture) => String(fixture.fixture_id)));
   const rows = teamMetricsState.rows.filter((row) => finished.has(row.fixture_id));
-  if (teamMetricsState.state === "ready" && typeof renderTeamRadars === "function") {
+  if (typeof renderTeamRadars === "function") {
     renderTeamRadars(selected.id, rows, (id) => teamName(id, names));
   } else {
     for (const id of panels.slice(0, 4)) $(id).replaceChildren();
-    const note = teamMetricsState.state === "unavailable" ? teamMetricsState.message
-      : typeof renderTeamRadars !== "function" ? "Radar dosyaları yüklenemedi; src/web/serve.py'yi yeniden başlatıp sayfayı yenileyin."
-        : "Takım maç istatistikleri yükleniyor…";
-    for (const id of ["team-statistics-radar-note", "team-statistics-detailed-note"]) $(id).textContent = note;
+    const note = "Radar dosyaları yüklenemedi; src/web/serve.py'yi yeniden başlatıp sayfayı yenileyin.";
+    for (const id of ["team-statistics-radar-note", "team-statistics-detailed-note"]) {
+      $(id).textContent = note;
+      $(id).hidden = !note;
+    }
   }
   renderTeamStatisticsFacts(selected, rows);
 }
@@ -208,19 +196,15 @@ function renderTeamStatisticsProfile(teams, names) {
 function renderTeamStatistics() {
   if (teamMetricsState.key !== state.seasonSlug) loadTeamMetrics();
   const { names, list } = teamStatisticsTeams();
-  renderTeamStatisticsCard("team-statistics-scored-body", "team-statistics-scored-note", list, names,
-    (team) => team.scored, (value) => displayNumber(value));
-  renderTeamStatisticsCard("team-statistics-conceded-body", "team-statistics-conceded-note", list, names,
-    (team) => team.conceded, (value) => displayNumber(value), true);
-  renderTeamStatisticsCard("team-statistics-clean-body", "team-statistics-clean-note", list, names,
-    (team) => team.cleanSheets, (value) => displayNumber(value));
   renderTeamStatisticsList(list, names);
   renderTeamStatisticsProfile(list, names);
   if (typeof renderTeamAnalysis === "function") renderTeamAnalysis(list, names);
+  requestAnimationFrame(teamStatisticsFitNames);
 }
 
 function setupTeamStatistics() {
   $("team-statistics-search").addEventListener("input", renderTeamStatistics);
   $("team-statistics-sort").addEventListener("change", renderTeamStatistics);
+  window.addEventListener("resize", () => requestAnimationFrame(teamStatisticsFitNames));
   if (typeof setupTeamAnalysis === "function") setupTeamAnalysis();
 }

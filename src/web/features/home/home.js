@@ -20,27 +20,32 @@ function renderStandings(teams, prefix = "standings") {
   select.replaceChildren();
   for (const key of groups) {
     const row = source.find((item) => standingGroupKey(item) === key);
-    select.add(new Option(`Stage ${row.stage_id || "unknown"}${row.group_id ? ` · Group ${row.group_id}` : ""}`, key));
+    select.add(new Option(`Aşama ${row.stage_id || "bilinmiyor"}${row.group_id ? ` · Grup ${row.group_id}` : ""}`, key));
   }
   select.value = state.standingsGroup || "";
   $(`${prefix}-group-control`).hidden = groups.length <= 1;
   const rows = source.filter((row) => standingGroupKey(row) === state.standingsGroup).sort((a, b) => (number(a.position) ?? Infinity) - (number(b.position) ?? Infinity));
-  $(`${prefix}-count`).textContent = `${rows.length} ${prefix === "standings" ? "clubs" : "takım"}`;
-  $(`${prefix}-note`).textContent = prefix === "standings"
-    ? (state.tables["standings.csv"] ? "League points and positions as supplied by Sportmonks." : "Open standings.csv to display the league points table.")
-    : (state.tables["standings.csv"] ? "Kaydedilmiş Sportmonks puan tablosu." : "Puan tablosu için sezon verilerini yükleyin.");
+  $(`${prefix}-count`).textContent = `${rows.length} takım`;
+  // Maç Haftası shows the table as it would stand if the matches in play ended now.
+  const live = prefix === "matchweek-standings" && typeof matchweekLiveStandings === "function" ? matchweekLiveStandings(rows) : null;
+  $(`${prefix}-note`).textContent = !state.tables["standings.csv"] ? "Puan tablosu için sezon verilerini yükleyin."
+    : prefix === "matchweek-standings" ? "" : "Sıra ve puanlar Sportmonks'un verdiği gibidir.";
   const body = document.createDocumentFragment();
-  for (const row of rows) {
+  for (const [index, row] of (live ? live.order : rows).entries()) {
     const tr = element("tr");
     const club = element("td");
     const identity = createTeamLink(row.participant_id, teamName(row.participant_id, teams), "standing-club");
     identity.replaceChildren(createTeamLogo(row.participant_id, teams, false), element("span", "", teamName(row.participant_id, teams)));
     club.append(identity);
-    tr.append(element("td", "standing-position", displayNumber(row.position)), club, element("td", "numeric standing-points", displayNumber(row.points)));
+    const entry = live?.teams.get(String(row.participant_id));
+    const points = element("td", `numeric standing-points${entry ? ` standing-live standing-live-${entry.status}` : ""}`,
+      displayNumber(entry ? entry.points : row.points));
+    if (entry) points.title = `${displayNumber(entry.base)} + ${entry.gained} · ${entry.own}–${entry.other} ${entry.opponent}${entry.live ? " (sürüyor)" : " (bitti, kayda girmedi)"}`;
+    tr.append(element("td", "standing-position", displayNumber(live ? index + 1 : row.position)), club, points);
     body.append(tr);
   }
   if (!rows.length) {
-    const tr = element("tr"), td = element("td", "no-results", state.tables["standings.csv"] ? "No standings supplied in this file." : "Your league table will appear here.");
+    const tr = element("tr"), td = element("td", "no-results", state.tables["standings.csv"] ? "Bu dosyada puan durumu yok." : "Puan tablosu burada görünecek.");
     td.colSpan = 3; tr.append(td); body.append(tr);
   }
   $(`${prefix}-body`).replaceChildren(body);
@@ -55,7 +60,7 @@ function homeRounds() {
   const rounds = new Map();
   for (const fixture of fixtures) {
     const key = fixtureRoundKey(fixture);
-    if (!rounds.has(key)) rounds.set(key, { key, name: fixture["round.name"] ? `Matchweek ${fixture["round.name"]}` : key === "unassigned" ? "Unassigned fixtures" : `Round ${key}`, fixtures: [] });
+    if (!rounds.has(key)) rounds.set(key, { key, name: fixture["round.name"] ? `${fixture["round.name"]}. Hafta` : key === "unassigned" ? "Haftası belirsiz maçlar" : `Tur ${key}`, fixtures: [] });
     rounds.get(key).fixtures.push(fixture);
   }
   return [...rounds.values()];
@@ -88,26 +93,26 @@ function renderHomeFixtures(teams) {
   const select = $("home-round");
   select.replaceChildren();
   for (const round of rounds) select.add(new Option(round.name, round.key));
-  if (!rounds.length) select.add(new Option("No matchweeks loaded", ""));
+  if (!rounds.length) select.add(new Option("Yüklü hafta yok", ""));
   select.value = state.homeRound || "";
   select.disabled = !rounds.length;
   const index = rounds.findIndex((round) => round.key === state.homeRound);
   $("home-round-prev").disabled = index <= 0;
   $("home-round-next").disabled = index < 0 || index === rounds.length - 1;
   const fixtures = rounds[index]?.fixtures || [];
-  $("home-fixture-count").textContent = `${fixtures.length} matches`;
-  $("home-fixtures-note").textContent = !state.tables["fixtures.csv"] ? "Open fixtures.csv and teams.csv to browse the schedule." : !state.tables["fixture_scores.csv"] ? "Add fixture_scores.csv for results. Kickoff times are shown as exported." : "Saved results, not a live feed. Kickoff times are shown as exported.";
+  $("home-fixture-count").textContent = `${fixtures.length} maç`;
+  $("home-fixtures-note").textContent = !state.tables["fixtures.csv"] ? "Fikstürü görmek için fixtures.csv ve teams.csv dosyalarını açın." : !state.tables["fixture_scores.csv"] ? "Sonuçlar için fixture_scores.csv ekleyin. Başlama saatleri dışa aktarıldığı gibidir." : "Canlı yayın değil, kaydedilen sonuçlar. Başlama saatleri dışa aktarıldığı gibidir.";
   const scores = currentFixtureScores();
   const list = document.createDocumentFragment();
   let previousDate = null;
   for (const fixture of fixtures) {
-    const date = fixture.kickoff?.slice(0, 10) || "Date to be confirmed";
-    if (date !== previousDate) { list.append(element("h3", "fixture-date", date)); previousDate = date; }
+    const date = fixture.kickoff?.slice(0, 10) || "";
+    if (date !== previousDate) { list.append(element("h3", "fixture-date", longDate(date))); previousDate = date; }
     const match = element("article", "home-match");
     const homeName = teamName(fixture.home_team_id, teams), awayName = teamName(fixture.away_team_id, teams);
-    match.setAttribute("aria-label", `${homeName} versus ${awayName}`);
+    match.setAttribute("aria-label", `${homeName} - ${awayName}`);
     const heading = element("div", "home-match-meta");
-    heading.append(element("span", "", fixture.kickoff?.slice(11, 16) || "Time TBC"), element("span", "fixture-status", fixture["state.name"] || fixture.state || "Status not supplied"));
+    heading.append(element("span", "", fixture.kickoff?.slice(11, 16) || "Saat belli değil"), element("span", "fixture-status", fixtureStateLabel(fixture)));
     const homeScore = scores.get(`${fixture.fixture_id}:${fixture.home_team_id}`);
     const awayScore = scores.get(`${fixture.fixture_id}:${fixture.away_team_id}`);
     const notStarted = ["NS", "TBA", "POSTP", "CANC", "CANCELLED"].includes(String(fixture.state || "").toUpperCase());
@@ -122,14 +127,14 @@ function renderHomeFixtures(teams) {
     }
     list.append(match);
   }
-  if (!fixtures.length) list.append(element("p", "no-results", state.tables["fixtures.csv"] ? "No fixtures supplied in this file." : "Your matchweek fixtures will appear here."));
+  if (!fixtures.length) list.append(element("p", "no-results", state.tables["fixtures.csv"] ? "Bu dosyada maç yok." : "Haftanın maçları burada görünecek."));
   $("home-fixtures-list").replaceChildren(list);
 }
 
 function renderHome() {
   const teams = homeTeams();
   const season = $("season-label").textContent;
-  $("home-season-note").textContent = season !== "—" ? `Season ${season} · Sportmonks data` : "Open standings.csv, fixtures.csv, teams.csv and fixture_scores.csv to start.";
+  $("home-season-note").textContent = season !== "—" ? `${season} sezonu · Sportmonks verisi` : "Başlamak için standings.csv, fixtures.csv, teams.csv ve fixture_scores.csv dosyalarını açın.";
   renderStandings(teams);
   renderHomeFixtures(teams);
 }

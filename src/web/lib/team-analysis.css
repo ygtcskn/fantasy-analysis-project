@@ -20,6 +20,26 @@
 .team-analysis .builder-pool-heading { padding: 14px 16px 8px; }
 .team-analysis h3 { font-size: 16px; }
 .team-analysis > .builder-rating-note { padding: 0 16px 10px; margin: 0; color: var(--muted); }
+#team-statistics-workspace > .team-analysis { margin: 0 0 24px; }
+.team-analysis-layout { display: grid; grid-template-columns: minmax(190px, 220px) minmax(0, 1fr); border-top: 1px solid var(--line); }
+.team-analysis-tabs { display: flex; flex-direction: column; max-height: 610px; overflow-y: auto; border-right: 1px solid var(--line); background: var(--surface-soft); }
+.team-analysis-tab { flex: none; border: 0; border-bottom: 1px solid var(--line); border-left: 3px solid transparent; padding: 13px 14px; background: transparent; color: var(--muted); font-size: 12px; font-weight: 600; line-height: 1.35; text-align: left; }
+.team-analysis-tab:hover { background: var(--surface-raised); color: var(--ink); }
+.team-analysis-tab[aria-selected="true"] { border-left-color: var(--statistics-plot-line); background: var(--surface); color: var(--ink); }
+.team-analysis-content { min-width: 0; min-height: 550px; padding: 16px; }
+.team-analysis-content > .ta-block { margin: 0; min-height: 516px; }
+.team-analysis-content .ta-chart > svg { width: 100%; }
+.team-analysis-content .ta-compare-grid { display: block; }
+.team-analysis-content .ta-compare-card { border: 0; padding: 0; background: transparent; }
+.team-analysis-content .ta-compare-card svg { width: 100%; max-width: 900px; margin-inline: auto; }
+@media (max-width: 760px) {
+  .team-analysis-layout { grid-template-columns: minmax(0, 1fr); }
+  .team-analysis-tabs { flex-direction: row; max-height: none; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+  .team-analysis-tab { flex: 0 0 190px; border-bottom: 0; border-left: 0; border-top: 3px solid transparent; }
+  .team-analysis-tab[aria-selected="true"] { border-left-color: transparent; border-top-color: var(--statistics-plot-line); }
+  .team-analysis-content { min-height: 380px; padding: 12px; }
+  .team-analysis-content > .ta-block { min-height: 356px; }
+}
 .ta-block { margin: 0 16px 16px; border: 1px solid var(--line); border-radius: 8px; padding: 12px; background: var(--surface-raised); min-width: 0; }
 .ta-block h4 { margin: 0 0 8px; font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: .3px; }
 .ta-block .builder-rating-note { margin: 8px 0 0; padding: 0; color: var(--muted); font-size: 11px; line-height: 1.55; }

@@ -1,5 +1,22 @@
 # Süper Lig Lab — local data explorer
 
+## Maç Tribünü
+
+The sidebar's **Sosyal → Maç Tribünü** page (`index.html?view=social`) groups
+saved fixtures by matchweek. Blue match headers contain a **Konu aç** control;
+rose topic rows expand to show the discussion and a reply form. The page supports
+dark mode and narrow screens. It uses the existing loaded fixtures and teams.
+
+Discussions are a session-only UI preview: topics and replies stay in memory in
+this tab and disappear on reload. They are not sent to other users or saved to
+CSV, SQLite or browser storage. There are no seeded posts or simulated users.
+Shared, persistent discussions require a future backend and identity system.
+The implementation lives in `features/social/`.
+
+Every view, including individual team pages, uses the shared light-purple banner in
+`styles/page-header.css`. It contains the page title, season/context and description,
+and stays light purple in dark mode. Load this stylesheet after `theme-dark.css`.
+
 For automatic data loading, run this from the project root (Python 3.10 or newer; no extra packages):
 
 ```powershell
@@ -8,9 +25,52 @@ python src/web/serve.py --season 2026/2027
 
 Open **http://127.0.0.1:8000** in your browser and keep the terminal open. The website automatically reads all seven CSVs from `data/final/sportmonks/2026-2027` on each page load. After your next download finishes, reload the page or click **Refresh saved data**. You do not need to select files or edit website code. The server reads the saved files on each request, so it does not need restarting after a download. To change seasons, stop it with Ctrl+C and restart with a different `--season`. If port 8000 is busy, add `--port 8001` and open the printed URL.
 
-This only updates the website from your saved CSVs. It does not download new Sportmonks data or run your Python analysis. Finish downloading/exporting before refreshing; files are validated together before replacing the displayed dataset. Missing files or validation errors keep the previous loaded data. All seven supported CSVs must exist for automatic loading.
+The main dataset loads from your saved CSVs and does not run your Python analysis. Maç Haftası additionally requests live Sportmonks data while visible, as described below. Finish downloading/exporting before refreshing; files are validated together before replacing the displayed dataset. Missing files or validation errors keep the previous loaded data. All seven supported CSVs must exist for automatic loading.
 
-The server binds only to this computer and serves an explicit list of website assets, seven core CSVs, optional `fixture_formations.csv` for team pages, and the tables `src/tables` publishes under `data/final/tables/<season>/` (as `/local-data/tables/<name>.csv`). Those tables hold the season totals, league table, leader cards, ratings and tiers; the pages are being switched over to read them instead of computing their own, one page at a time. Run `python src/run_pipeline.py --season 2026/2027` to build them - see [src/tables/README.md](../tables/README.md). It does not expose `.env`, source Python files, databases, raw exports, or directory listings. It creates no files and makes no provider calls. Stop it with Ctrl+C when finished.
+The server binds only to this computer and serves allowed website assets, seven core CSVs, optional `fixture_formations.csv` for team pages, and the tables `src/tables` publishes under `data/final/tables/<season>/` (as `/local-data/tables/<name>.csv`). Those tables hold the season totals, league table, leader cards, ratings and tiers; the pages are being switched over to read them instead of computing their own, one page at a time. Run `python src/run_pipeline.py --season 2026/2027` to build them - see [src/tables/README.md](../tables/README.md). It does not expose `.env`, source Python files, databases, raw exports, or directory listings. It creates no files. Only `/local-live.csv` requests provider data. Stop it with Ctrl+C when finished.
+
+## Live match centre
+
+On **Maç Haftası**, **Canlı Maç Merkezi** sits below the purple header and above
+the prediction/standings layout. It appears for in-progress matches in the served
+season and disappears after a successful update reports none. A visible header
+dropdown lists the live games with team names and scores, alongside the match
+count. It stays visible with one game and preserves the selected match during
+updates, switching to an available game if that match ends.
+The scoreboard shows CURRENT scores and provider minutes;
+statistics compare possession, shots, corners, dangerous attacks, fouls and cards.
+Events show goals, substitutions, cards and VAR information, newest first. Missing
+statistics stay as dashes; a connection failure hides the old scores and statistics
+and displays an unavailable notice. Confirmed results update the Matchweek display
+in memory; saved predictions and CSV files are never overwritten.
+
+Restart the local server after installing this change, then refresh the browser.
+The server uses the existing local `SPORTMONKS_API_TOKEN` from the environment or
+project `.env`; the token needs access to the league's live data. It never goes to
+the browser or logs. No widget subscription or embed snippet is used: this is a
+native panel powered by the [Sportmonks in-play endpoint](https://docs.sportmonks.com/v3/endpoints-and-entities/endpoints/livescores/get-inplay-livescores).
+Available statistics/events depend on Sportmonks coverage and subscription access.
+
+The visible page polls every 30 seconds during games and every 60 seconds when
+none are live. It pauses when hidden or when another view is selected. The server
+shares a locked CSV snapshot across tabs, backs off for at least 120 seconds after
+errors, and honors longer `Retry-After` delays. A HEAD request makes no API call.
+The league/season pair must be unambiguous in `fixtures.csv`; returned fixtures are
+checked against both IDs. Scheduled/finished games are excluded from the live panel.
+When a previously observed live fixture disappears, the server uses one bounded
+[fixture-by-IDs request](https://docs.sportmonks.com/v3/endpoints-and-entities/endpoints/fixtures/get-fixtures-by-multiple-ids)
+to confirm its state and retrieve final statistics and lineups. Absence from the
+live feed alone never implies full time. Confirmed FT/AET/FT_PEN snapshots remain
+available in a CSV memory cache for seven days; interrupted or cancelled games do
+not become results. Provider JSON is decoded only in memory, converted to flat CSV
+for the browser, and discarded. Nothing is saved to disk.
+
+To keep the server entirely offline, add `--no-live` to the startup command.
+Direct file opening and manually loaded datasets do not activate the live feed.
+Offline regression cases are in `tests/test_live.py`; run them yourself with
+`python -m unittest discover -s tests -p test_live.py`. They mock all provider calls.
+Finished-result display and identity regressions can be run separately with
+`node --test tests/test_matchweek_results.js`; they use only Node's built-in modules.
 
 You can still double-click `index.html` for manual file selection instead of starting the server. Browsers cannot automatically read arbitrary local folders from a directly opened HTML file:
 
@@ -19,7 +79,7 @@ You can still double-click `index.html` for manual file selection instead of sta
 3. For **Home**, select `standings.csv`, `fixtures.csv`, `teams.csv`, and `fixture_scores.csv` together (hold Ctrl while selecting). Add `player_match_stats.csv`, `players.csv`, and `squads.csv` for the player pages. All seven files can be selected together.
 4. **Home** is the opening page: a wide season overview above a league points table on the left and fixtures on the right, matching the supplied layout. The panels stack on mobile. The points table uses the provider's position and points without recalculating them. If multiple competition groups exist, use the group selector. Fixtures can be browsed by matchweek, with club logos, kickoff, status, and saved scores. Only `CURRENT` score records are used; half-time and period scores are never added together. Missing scores stay blank (a dash). The page is a saved snapshot, not a live feed; times are displayed as exported.
 5. Open **Player Tier List** from the sidebar. The centered table begins with **Rank, Logo, Role, Player, Tier, AVG Rating**, followed by rated matches, match records, minutes, goals, assists, xG, shots, key passes, and saves. Team names remain searchable even though clubs are represented by logos: typing `Galatasaray` shows players associated with that club in the loaded season. You can also filter by team or position. Click a player's name to open their full match history; select **Show every exported field** for all statistics from every supplied match record, including missing fields and the original provider ratings.
-6. **Fikstür**, directly below **Puan Durumu** in the shared sidebar, displays the complete season without filters, matchweek selection, pagination, or a column-heading row. Each Turkish section row uses `Maç Haftası N - DD/MM`, based on that matchweek's earliest kickoff date, followed by Saat, Ev Sahibi, Skor, and Deplasman values. Home and away club names and logos link to their team pages. Missing scores stay as dashes. Fixture and standings rows alternate between purple and light purple in both site themes. Direct URL: `http://127.0.0.1:8000/index.html?view=fixtures`.
+6. **Fikstür**, directly below **Puan Durumu** in the shared sidebar, displays the complete season without filters, matchweek selection, pagination, or a column-heading row. Each Turkish section row uses `Maç Haftası N - DD/MM`, based on that matchweek's earliest kickoff date, followed by Saat, Ev Sahibi, Skor, and Deplasman values. Home and away club names and logos link to their team pages. Missing scores stay as dashes. Fixture and standings rows alternate between purple and light purple in dark mode. Direct URL: `http://127.0.0.1:8000/index.html?view=fixtures`.
 7. **Player appearances** continues to provide searchable, sortable records with its existing 40-row pages and Sportmonks ratings.
 
 The main workspace is centered with empty side margins. Move the mouse to the left edge for a temporary navigation preview; moving away closes it. Click the menu button to lock the sidebar open, then click the same button again to close it. A sidebar locked open stays visible when the pointer moves away or the page is clicked. Escape and selecting a destination close it. The slide animation remains active, except when reduced motion is enabled in the operating system. The sidebar overlays the page and does not change its horizontal position.
@@ -89,11 +149,13 @@ The player pool includes points per match beside Rating. Sort by either metric, 
 
 **Maç Haftası** appears under Fantezi, above Fantasy XI Builder, at `index.html?view=matchweek`. It shows saved fixtures in the current Tuesday–Monday calendar window, using Europe/Istanbul dates and kickoff times. The window updates while the page is open and when the tab becomes visible again. Empty weeks remain empty rather than jumping to a future round.
 
-Fixtures appear on the left as Gün, Saat, Ev, Odds, Deplasman. The central odds cell contains labelled 1/X/2 probabilities: green for home win, yellow for draw, red for away win; unavailable values stay neutral. The full provider standings appear on the right without an internal scrolling area. On narrower screens, standings move below the fixtures.
+Fixtures appear on the left as Gün, Saat, Ev, Tahmin / Sonuç, Deplasman. The central cell shows final CURRENT scores for finished matches (FT/AET/FT_PEN, including numeric states 5/7/8); other games show labelled 1/X/2 probabilities. Missing scores stay as dashes. Finished games do not trigger missing-prediction warnings. The full provider standings appear on the right without an internal scrolling area. On narrower screens, standings move below the fixtures.
 
-Click a fixture row or activate its odds button with the keyboard to select it. The Maç Analizi panel beneath the fixtures shows the selected teams, kickoff, saved score when available, model probabilities and expected goals. Changing the model updates the selected analysis. Selection clears when the fixture leaves the displayed week; missing predictions have an explicit empty state.
+Click a fixture row or activate its score/odds button with the keyboard to select it. For finished games, the panel is titled **Maç Sonucu ve İstatistikleri** and shows that game's final score, team match statistics, actual starting XI, fantasy player points and saved league context. Previously saved results use `team_metrics.csv` and `player_match_stats.csv`; live-to-finished transitions use the confirmed provider snapshot. Missing player or team data remains unavailable, with no substitute lineup from another match. Pre-match probabilities and future player projections are not presented as post-match statistics. Other games retain the existing Maç Analizi preview. Selection stays on the same fixture when it finishes and clears when it leaves the displayed week.
 
-The analysis shows each team's last starting XI on two mini pitches, then a team comparison. Last XI uses the latest FT fixture before the selected kickoff and the current time, conservatively allowing three hours for completion. It uses saved starter flags and formation coordinates, falling back to labelled role groups when coordinates are incomplete. It never substitutes a predicted XI or fills missing starters. The comparison includes model win/draw probabilities and expected goals, plus form, goals scored/conceded per match and clean sheets from up to five preceding completed fixtures in the loaded season. Missing scores remain unavailable; history is shown even without a forecast.
+**Fantezi Lig · Oyuncu Puanları** lists each team's players by descending match-specific `points_total` from the validated `points/player_match_points.csv` snapshot. These totals already include bonuses. Matching requires the season, fixture, Sportmonks player ID, team and opponent; ambiguous or unavailable totals remain dashes. Zero and negative points are preserved. Sportmonks ratings are not used as fantasy points. A newly finished game's fantasy totals appear after the user publishes fresh scoring outputs and refreshes the page; the website does not run scoring itself.
+
+The pre-match analysis shows each team's last starting XI on two mini pitches, then a team comparison. Last XI uses the latest FT fixture before the selected kickoff and the current time, conservatively allowing three hours for completion. It uses saved starter flags and formation coordinates, falling back to labelled role groups when coordinates are incomplete. It never substitutes a predicted XI or fills missing starters. The comparison includes model win/draw probabilities and expected goals, plus form, goals scored/conceded per match and clean sheets from up to five preceding completed fixtures in the loaded season. Missing scores remain unavailable; history is shown even without a forecast.
 
 The fantasy comparison sums baseline_expected_points for the selected fixture by team and fantasy position (KL, DEF, OS, FOR), before injury and other availability adjustments. The table labels this assumption. These are totals across exported players, not the historical last XI or a claim of complete squad coverage. Each value shows available/exported player counts; partial totals are labelled and missing baselines are never zero-filled. The XI Builder's season, fixture and deadline checks still apply; individual player forecasts retain their availability adjustments. Player-point totals are independent of the match-odds model selector.
 
@@ -101,7 +163,7 @@ Selected-match analysis also compares the teams' current-season league ranks for
 
 The fantasy team's headline value uses at most three players with the highest positive baseline expected points for that single fixture, respecting the three-per-club cap. It lists their names and contributions. This is a club comparison without budget or formation optimization; injuries remain ignored. Position rows still show all exported players in each group, not the selected trio's breakdown. Missing forecasts leave an explicitly partial candidate pool.
 
-The page reads `data/final/odds/predictions.csv` through the local server, separately from player projections. Choose a model to view its home-win, draw and away-win probabilities as percentages. Predictions must match the saved season, fixture ID, team orientation and kickoff, have been generated before kickoff, and contain valid probabilities summing to one. Missing or ambiguous predictions display —. Completed matches can retain their saved pre-match forecast. Weekly rollover does not run models or download data; rerun the odds analysis yourself and click Refresh saved data to load fresh outputs. Restart the local server after installing these route changes.
+The page reads `data/final/odds/predictions.csv` through the local server, separately from player projections. Choose a model to view its home-win, draw and away-win probabilities as percentages. Predictions must match the saved season, fixture ID, team orientation and kickoff, have been generated before kickoff, and contain valid probabilities summing to one. Missing or ambiguous predictions display —. Completed matches show their result; any saved pre-match forecasts remain unchanged on disk. Weekly rollover does not run models or download data; rerun the odds analysis yourself and click Refresh saved data to load fresh outputs. Restart the local server after installing these route changes.
 
 Dragging a player from the pool or between pitch positions shows only their club shirt with its jersey number (when available), on a transparent background with no name beneath it.
 
@@ -109,19 +171,32 @@ Click an empty pitch position and the recommendation table ranks every candidate
 
 After the first XI selection, the player list shrinks and a recommendation table appears beneath it. The local server lazily loads `src/xi_optimizer` and solves the remaining XI with selected players locked, the current formation, ₺100M budget, and maximum three players per club. Suggestions are members of one optimal completed XI, ordered by their individual expected points; they are not exhaustive forced-candidate alternative rankings. Empty-slot selection filters visible suggestions by position. Add buttons fill compatible empty slots without replacing locked players. Placement uses TFF fantasy roles when available.
 
-## Themes
+## Squad substitutes
 
-`styles.css` defines the light palette on bare `:root` and overrides it under
-`:root[data-theme="dark"]`. Older rules write a literal `white` and pair it with
-a `:root[data-theme="dark"] .thing { background: var(--surface); }` override
-further down; newer ones use `var(--surface)` directly, which carries both
-themes in a single declaration and cannot drift apart.
+Kadro Kur includes four unrestricted substitute slots beneath the pitch. They
+support selection, removal and drag/swap with compatible starting positions, and
+stay on the bench when the formation changes. All selected players share the
+₺100M budget and three-per-club cap; unknown prices prevent a new selection.
+The displayed spend uses the published projection prices, including sidelined
+players. A substitute can be unavailable without blocking starting-XI suggestions.
 
-Prefer the variables — `--surface`, `--surface-raised`, `--surface-soft`,
-`--field`, `--ink`, `--muted`, `--line`. Only accent colours need an explicit
-dark variant, because a deep colour vanishes against a dark panel. Check any
-change in both themes: a hardcoded white panel keeps light-theme text colour
-rules working while the dark theme paints near-white text onto it.
+Recommendations optimize only the starting XI. Selected bench players are removed
+from its candidate pool; their reviewed TFF prices and club counts reduce the
+available budget and club capacity on the server. Empty bench places reserve no
+money, and bench players contribute no points to the starting-XI estimate. Select
+bench players from the player list. Restart the local server after this update.
+
+Regression checks (user-run): `node --test tests/test_builder_bench.cjs`, plus
+`tests/test_xi_recommendations.py` and `tests/test_xi_optimizer.py` with unittest.
+
+## Appearance
+
+The website uses dark mode only. Both HTML entry points set data-theme to dark
+before rendering, independently of old saved preferences. The sidebar has no
+theme selector or personal-explorer note. The shared page banner stays light purple.
+
+Use the existing CSS variables for surfaces, fields, text and borders. Dark styling
+lives in styles/theme-dark.css, loaded before the shared page-header stylesheet.
 
 ## İstatistikler
 
@@ -200,15 +275,9 @@ Put logos in `assets/team-logos/`, using the Sportmonks team ID as the filename:
 ## Takım İstatistikleri
 
 `index.html?view=team-statistics`, directly below İstatistikler in the sidebar.
-The team counterpart of the player page, laid out the same way: three leader
-cards, a searchable team list, and a profile of the team clicked in the list or
-a card (the league leader until then).
+The page starts with Takım Analizi, followed by a searchable team list and a
+profile of the team clicked in the list or a chart (the league leader until then).
 
-- **Leader cards:** most goals scored, fewest conceded, and most clean sheets.
-  Clean sheets carry fantasy points for goalkeepers and defenders, which is why
-  they earn the third card. Goals come from the provider's standings totals,
-  falling back to saved results the way Puan Durumu does; clean sheets come only
-  from saved CURRENT scores, and a match whose score is missing is not counted.
 - **Team list:** played, goals for and against, and points, sortable by points,
   goals scored, goals conceded (fewest first), goal difference or clean sheets.
 - **Spider plots:** Genel Nitelikler and Ayrıntılı Ölçütler for teams, built in
@@ -223,16 +292,20 @@ a card (the league leader until then).
   from `lib/team-analysis.js`; see
   [lib/team-analysis.md](lib/team-analysis.md).
 
-- **Takım Analizi:** below the profile, charts comparing every team this season:
-  fantasy points by position, luck, and ten one-point-per-team comparisons
-  (attack against defence, points against expected points, goals against xG and
-  more). They live in `lib/team-analysis.js` and redraw on every data refresh.
+- **Takım Analizi:** at the top, with a left tab for each chart comparing every
+  team this season: fantasy points by position, luck, and ten one-point-per-team
+  comparisons (attack against defence, points against expected points, goals
+  against xG and more). One chart is shown at a time. They live in
+  `lib/team-analysis.js` and redraw on every data refresh.
 
-Match statistics come from `team_metrics.csv`, which the page reads on demand
-through `serve.py` because older exports do not include it; without it the
-cards, list and totals from standings still work, and the spider plots and the
-match-by-match charts say what is missing. **Refresh saved data** re-reads it. Restart
-`serve.py` once after installing this page so it serves the new files.
+Team facts and match-by-match charts read `team_metrics.csv`. Both team and
+player spider plots read prepared `data/final/spider/<season>/spider_stats.csv`
+files; build them from saved player and team statistics with
+`python -m src.spider.build_spider_stats --all-seasons`, or let the next
+`src/run_pipeline.py` run refresh all saved seasons. See
+[lib/radar.md](lib/radar.md) for the source and missing-value rules. **Refresh
+saved data** re-reads the published CSVs. Restart `serve.py` once after
+installing the new route.
 
 ## Tier rules
 
@@ -266,7 +339,8 @@ src/web/
   serve.py                    Read-only local server
   core/                       The shell every page shares
     app.js                      Loading, navigation, shared helpers
-    sidebar.js                  Sidebar and theme
+    locale.js                   Turkish labels and date formats
+    sidebar.js                  Sidebar navigation
     kits.js                     Club colours and crests
   data/                       Everything that reads a file
     csv.js                      CSV parsing
@@ -282,6 +356,7 @@ src/web/
   styles/
     styles.css                  Global appearance and theme variables
     panels.css                  Shared panel, table and profile styles
+    theme-dark.css              Every dark rule: tokens, then shared panels, headings and zebra tables
   assets/                     Club logos, role icons, player portraits
 ```
 

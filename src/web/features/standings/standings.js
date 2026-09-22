@@ -14,9 +14,11 @@ const europeanPlaces = new Map([
   [4, { competition: "uecl", label: "UEFA Konferans Ligi" }],
 ]);
 
+// The position cell carries the European-place marker on its left edge, so the
+// table needs no separate marker column (which read as an empty gap).
 function qualificationCell(position) {
   const place = europeanPlaces.get(number(position));
-  const cell = element("td", `qualification-spot${place ? ` qualification-${place.competition}` : ""}`);
+  const cell = element("td", `standing-position qualification-spot${place ? ` qualification-${place.competition}` : ""}`, displayNumber(position));
   if (place) {
     cell.title = place.label;
     cell.setAttribute("aria-label", place.label);
@@ -71,7 +73,7 @@ function renderDetailedStandings() {
     const identity = createTeamLink(row.participant_id, teamName(row.participant_id, teams), "standing-club");
     identity.replaceChildren(createTeamLogo(row.participant_id, teams, false), element("span", "", teamName(row.participant_id, teams)));
     clubCell.append(identity);
-    tr.append(qualificationCell(row.position), element("td", "standing-position", displayNumber(row.position)), clubCell);
+    tr.append(qualificationCell(row.position), clubCell);
     const results = standingResults(row, scores);
     for (const [metric, derivedKey] of standingsMetrics) {
       let official = number(row[`details.${metric}`]);
@@ -103,7 +105,7 @@ function renderDetailedStandings() {
   }
   if (!rows.length) {
     const tr = element("tr"), cell = element("td", "no-results", "Puan tablosu için standings.csv dosyasını yükleyin.");
-    cell.colSpan = 12; tr.append(cell); body.append(tr);
+    cell.colSpan = 11; tr.append(cell); body.append(tr);
   }
   $("detailed-standings-body").replaceChildren(body);
 }

@@ -3,10 +3,11 @@
 The charts of Takım İstatistikleri (`index.html?view=team-statistics`), current
 season only. Four of them are match by match and belong to **Takım Profili**,
 where they are drawn for the open team alone: xG against xGA, xG form, goal
-minutes and pressure balance. The **Takım Analizi** section below the profile
-compares every team: fantasy points by position, the luck indicator and a grid
-of ten one-point-per-team comparisons. They are drawn in the browser from the
-saved season CSVs, so there is nothing to build or export: each weekly download
+minutes and pressure balance. The **Takım Analizi** section at the top of the page
+compares every team: fantasy points by position, the luck indicator and ten
+one-point-per-team comparisons, each selected from a tab on the left. They are
+drawn in the browser from the saved season CSVs, so there is nothing to build
+or export: each weekly download
 followed by **Refresh saved data** redraws all of them. A badge states the
 latest round included, and the section note says when the last download caught
 fixtures still in play.

@@ -45,6 +45,18 @@ class OptimizerTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             optimize(pool(), locked={"999"})
 
+    def test_substitute_club_reservations_apply_to_solutions_and_recommendations(self):
+        players = pool()
+        reserved = {"1": 2}
+        result = optimize(players, formation="4-3-3", reserved_clubs=reserved)
+        self.assertIsNotNone(result)
+        self.assertLessEqual(sum(p.team == "1" for p in result.players), 1)
+        self.assertIsNone(optimize(players, formation="4-3-3", locked={"1", "7"}, reserved_clubs=reserved))
+        rows = recommend(players, formation="4-3-3", locked={"1"}, reserved_clubs=reserved)
+        self.assertTrue(rows)
+        by_id = {p.id: p for p in players}
+        self.assertTrue(all(by_id[row["player_id"]].team != "1" for row in rows))
+
     def test_recommendations_use_completed_xi(self):
         players = pool()
         best = optimize(players, formation="4-3-3", locked={"1"})

@@ -14,7 +14,7 @@ Run the local website from the project root:
 python src/web/serve.py --season 2026/2027
 ```
 
-Open [http://127.0.0.1:8000](http://127.0.0.1:8000) and leave the terminal running. The page automatically loads the saved season CSVs from `data/final/sportmonks/2026-2027`. After your next download finishes, reload the page or click **Refresh saved data**; no file selection or code changes are needed. This reads local files only and makes no Sportmonks calls. Stop the server with Ctrl+C.
+Open [http://127.0.0.1:8000](http://127.0.0.1:8000) and leave the terminal running. The page automatically loads the saved season CSVs from `data/final/sportmonks/2026-2027`. After your next download finishes, reload the page or click **Refresh saved data**; no file selection or code changes are needed. Maç Haftası also shows an on-demand live match centre using the local Sportmonks token while that view is visible. Add `--no-live` to disable provider requests. See [live match centre setup](src/web/README.md#live-match-centre). Stop the server with Ctrl+C.
 
 **Home** shows the league points table on the left and fixtures on the right. **Player Tier List** groups players by average Sportmonks match rating, shows season totals, and opens full match statistics, including roster players with no appearances. You can still open `src/web/index.html` directly and select CSVs manually. See `src/web/README.md` for details. No domain has been connected or website published.
 
@@ -74,7 +74,7 @@ succeeded:
 3. the website tables (`src/tables`)
 4. SQLite (`src/fetch/build_database.py`), unless you pass `--skip-database`
 
-Then reload the site, or click **Refresh saved data** on it.
+Then reload the site.
 
 Files:
 

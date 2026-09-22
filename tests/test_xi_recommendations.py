@@ -59,6 +59,40 @@ if __name__ == "__main__":
     unittest.main()
 
 
+class SubstituteTests(RecommendationAdapterTests):
+    def setUp(self):
+        super().setUp()
+        self.source.FINAL = Path("unused")
+        self.source.read = Mock(return_value=[{
+            "sportmonks_player_id": "3", "sportmonks_team_id": "10",
+            "match_status": "matched", "price_million_try": "6",
+        }])
+        self.source.money = lambda value: int(value) * 1_000_000
+
+    def test_substitute_cost_and_club_reduce_starting_xi_capacity(self):
+        # No eligible projection is needed for a manually selected substitute.
+        with patch.object(adapter, "modules", return_value=(self.model, self.source)):
+            rows = adapter.recommendations("2026-2027", dict(self.query, bench=["3"]))
+        self.assertEqual(rows[0]["status"], "complete")
+        self.assertEqual(rows[0]["remaining_budget"], 89)
+        self.assertEqual(self.model.optimize.call_args.kwargs["budget"], 94_000_000)
+        self.assertEqual(self.model.optimize.call_args.kwargs["reserved_clubs"], {"10": 1})
+        self.assertEqual(self.model.optimize.call_args.kwargs["locked"], ["1"])
+
+    def test_substitute_is_removed_from_starter_candidates(self):
+        self.source.load_pool.return_value[0].append(SimpleNamespace(id="3"))
+        with patch.object(adapter, "modules", return_value=(self.model, self.source)):
+            adapter.recommendations("2026-2027", dict(self.query, bench=["3"]))
+        self.assertNotIn("3", [p.id for p in self.model.optimize.call_args.args[0]])
+
+    def test_invalid_bench_cannot_reach_solver(self):
+        for bench in ("1", "3,3", "3,4,5,6,7", "unknown", "999"):
+            with self.subTest(bench=bench), patch.object(adapter, "modules", return_value=(self.model, self.source)):
+                rows = adapter.recommendations("2026-2027", dict(self.query, bench=[bench]))
+                self.assertEqual(rows[0]["status"], "unavailable")
+                self.model.optimize.assert_not_called()
+
+
 class RiskSettingTests(RecommendationAdapterTests):
     def test_named_presets_reach_the_solver(self):
         for risk in ("balanced", "low", "high"):

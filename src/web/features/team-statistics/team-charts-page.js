@@ -2,7 +2,7 @@
 
 // Page wiring for the charts of Takım İstatistikleri: the four match-by-match
 // charts inside Takım Profili, drawn for the open team alone, and the Takım
-// Analizi section below it, which compares every team. Depends on
+// Analizi section above it, which compares every team. Depends on
 // team-analysis.js and on the page helpers ($, displayNumber, state,
 // readFantasyCSV, currentFixtureScores, fantasyState, teamStatisticsState,
 // teamMetricsState). Nothing is cached across downloads: each render reads the
@@ -12,6 +12,25 @@
 // Minute-level data the other pages do not need, read on demand. Each file is
 // optional: a chart whose file is missing says so and the rest still draw.
 const teamAnalysisExtras = { key: null, state: "idle", events: null, pressure: null, periods: null };
+let teamAnalysisSelectedTab = "fantasy";
+
+function showTeamAnalysisTab(id, focus = false) {
+  const tabs = [...$("team-analysis-tabs").querySelectorAll("[data-analysis-tab]")];
+  if (!tabs.some((tab) => tab.dataset.analysisTab === id)) id = "fantasy";
+  teamAnalysisSelectedTab = id;
+  for (const tab of tabs) {
+    const selected = tab.dataset.analysisTab === id;
+    tab.setAttribute("aria-selected", String(selected));
+    tab.tabIndex = selected ? 0 : -1;
+    if (selected && focus) tab.focus();
+  }
+  $("ta-fantasy-panel").hidden = id !== "fantasy";
+  $("ta-luck-panel").hidden = id !== "luck";
+  $("ta-compare-group").hidden = !id.startsWith("compare-");
+  for (const panel of $("ta-compare-chart").querySelectorAll("[data-analysis-panel]")) {
+    panel.hidden = panel.dataset.analysisPanel !== id;
+  }
+}
 
 async function loadTeamAnalysisExtras() {
   const key = state.seasonSlug;
@@ -85,7 +104,7 @@ function renderTeamAnalysis(list, names) {
   const pending = when.round !== null && when.finished < when.scheduled
     ? ` ${when.round}. haftanın ${when.scheduled - when.finished} maçı henüz bitmiş olarak kaydedilmedi; bir sonraki indirmeden sonra eklenir.` : "";
   $("team-analysis-note").textContent = `Bu sezon, ${when.matches} bitmiş maç. Grafikler her indirmeden sonra `
-    + "“Kaydedilen veriyi yenile” ile güncellenir. Bir takım adına veya noktaya tıklayarak profili açın." + pending;
+    + "sayfa yenilenince güncellenir. Bir takım adına veya noktaya tıklayarak profili açın." + pending;
   const statsMissing = teamMetricsState.state === "unavailable" ? `${teamMetricsState.message} ` : "";
 
   renderTeamProfileCharts(played, selected, names, statsMissing);
@@ -94,7 +113,7 @@ function renderTeamAnalysis(list, names) {
   const ledger = fantasyReady ? [...fantasyState.matches.values()].flat() : [];
   const roles = TeamAnalysis.fantasyByRole(ledger, names);
   teamAnalysisBlock("ta-fantasy", roles.length ? TeamAnalysis.fantasyChart(roles, names, selected) : "",
-    !fantasyReady ? "Fantezi analizi yüklenmedi. Kaydedilen veriyi yenileyin."
+    !fantasyReady ? "Fantezi analizi yüklenmedi. Sayfayı yenileyin."
       : !roles.length ? "Bu sezon için fantezi puanı bulunamadı."
         : "Yayınlanan puan tablosundaki bu sezonun puanları, oyunun mevkilerine göre toplandı. Hangi takımın defansı veya hücumu puan getiriyor, doğrudan görünür.");
 
@@ -112,21 +131,52 @@ function renderTeamAnalysis(list, names) {
   const cards = TeamAnalysis.comparisons.map((spec) => {
     const rows = TeamAnalysis.comparisonRows(spec, withPoints, order);
     const basis = rows.length ? `${rows.length} takım, takım başına en az ${Math.min(...rows.map((row) => row.matches))} maç.`
-      : spec.id === "fantasy" && !fantasyReady ? "Fantezi analizi yüklenmedi. Kaydedilen veriyi yenileyin."
+      : spec.id === "fantasy" && !fantasyReady ? "Fantezi analizi yüklenmedi. Sayfayı yenileyin."
         : "Bu karşılaştırma için veri yok.";
-    return `<figure class="ta-compare-card"><figcaption>${escapeTeamAnalysis(spec.title)}</figcaption>`
+    return `<figure id="team-analysis-panel-compare-${spec.id}" class="ta-compare-card" role="tabpanel" aria-labelledby="team-analysis-tab-compare-${spec.id}" data-analysis-panel="compare-${spec.id}" tabindex="0" hidden><figcaption>${escapeTeamAnalysis(spec.title)}</figcaption>`
       + `${rows.length ? TeamAnalysis.scatter(rows, spec, names, selected) : ""}`
       + `<p class="builder-rating-note">${escapeTeamAnalysis(`${spec.note} ${basis}`)}</p></figure>`;
   });
   $("ta-compare-chart").innerHTML = cards.join("");
   $("ta-compare-note").textContent = statsMissing + "Her nokta bir takım, bu sezonun bitmiş maçlarından. Eşit ölçekli çiftlerde (puan–xPts, gol–xG, "
     + "yenilen–xGA) kesikli çizgi iki değerin eşit olduğu yer; diğerlerinde lig ortalamaları. Köşe yazıları o bölgenin ne anlama geldiğini söyler.";
+  showTeamAnalysisTab(teamAnalysisSelectedTab);
 }
 
 const escapeTeamAnalysis = (value) => String(value ?? "").replace(/[&<>"']/g,
   (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
 
 function setupTeamAnalysis() {
+  const tabs = [
+    { id: "fantasy", title: "Fantezi Puanı · Mevkiye Göre", panel: "ta-fantasy-panel" },
+    { id: "luck", title: "Şans Göstergesi · Sonuç ve Pozisyon Farkı", panel: "ta-luck-panel" },
+    ...TeamAnalysis.comparisons.map((spec) => ({ id: `compare-${spec.id}`, title: spec.title,
+      panel: `team-analysis-panel-compare-${spec.id}` })),
+  ];
+  const tabList = $("team-analysis-tabs");
+  for (const tab of tabs) {
+    const button = element("button", "team-analysis-tab", tab.title);
+    button.type = "button";
+    button.id = `team-analysis-tab-${tab.id}`;
+    button.dataset.analysisTab = tab.id;
+    button.setAttribute("role", "tab");
+    button.setAttribute("aria-controls", tab.panel);
+    tabList.append(button);
+  }
+  showTeamAnalysisTab(teamAnalysisSelectedTab);
+  tabList.addEventListener("click", (event) => {
+    const tab = event.target.closest("[data-analysis-tab]");
+    if (tab) showTeamAnalysisTab(tab.dataset.analysisTab);
+  });
+  tabList.addEventListener("keydown", (event) => {
+    const current = event.target.closest("[data-analysis-tab]");
+    if (!current || !["ArrowDown", "ArrowUp", "ArrowRight", "ArrowLeft", "Home", "End"].includes(event.key)) return;
+    event.preventDefault();
+    const index = tabs.findIndex((tab) => tab.id === current.dataset.analysisTab);
+    const next = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1
+      : (index + (["ArrowDown", "ArrowRight"].includes(event.key) ? 1 : -1) + tabs.length) % tabs.length;
+    showTeamAnalysisTab(tabs[next].id, true);
+  });
   const open = (target) => {
     const team = target.closest("[data-team]")?.dataset.team;
     if (!team) return;

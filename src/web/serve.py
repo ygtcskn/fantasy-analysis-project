@@ -1,4 +1,4 @@
-"""Serve saved CSVs and on-demand XI recommendations. No provider requests or data writes."""
+"""Serve saved CSVs, XI recommendations and on-demand live Sportmonks CSVs. No data writes."""
 
 import argparse
 import csv
@@ -27,7 +27,7 @@ OPTIONAL_CSV_NAMES = {"fixture_formations.csv", "download_status.csv", "team_met
                       "events.csv", "fixture_pressure.csv", "fixture_periods.csv"}
 # Earlier seasons are read only to widen the radar's reference population; the
 # player's own plotted values always come from the served season.
-HISTORY_NAMES = {"fixtures.csv", "player_match_stats.csv", "squads.csv", "team_metrics.csv"}
+HISTORY_NAMES = {"fixtures.csv", "player_match_stats.csv", "squads.csv", "team_metrics.csv", "spider_stats.csv"}
 
 # The website is one folder - core/, data/, lib/, features/, styles/, assets/ -
 # so it is served as one folder rather than as a list of files that has to be
@@ -76,10 +76,13 @@ def history_seasons():
     """Season folders the radar can pool: complete enough to scope and aggregate."""
     return sorted(path.name for path in DATA_ROOT.iterdir()
                   if path.is_dir() and re.fullmatch(r"\d{4}-\d{4}", path.name)
-                  and all((path / name).is_file() for name in ("fixtures.csv", "player_match_stats.csv")))
+                  and (path / "fixtures.csv").is_file()
+                  and (FINAL_ROOT / "spider" / path.name / "spider_stats.csv").is_file())
 
 
-def make_handler(csv_root):
+def make_handler(csv_root, live_enabled=True):
+    from src.web.live import LiveFeed
+    live_feed = LiveFeed(csv_root, enabled=live_enabled)
     # Every season total, ranking and percentile the site draws is built by
     # src/tables and published here; the browser only renders them. Resolved per
     # request, so a pipeline run that adds a table needs no restart.
@@ -108,6 +111,12 @@ def make_handler(csv_root):
                 self.send_error(403, "Open the printed localhost URL.")
                 return
             path = urlsplit(self.path).path
+            if path == "/local-live.csv":
+                if self.headers.get("Sec-Fetch-Site") not in {None, "same-origin", "none"}:
+                    self.send_error(403, "Use the local website.")
+                    return
+                self.send_bytes(live_feed.snapshot(head_only), "text/csv; charset=utf-8", head_only)
+                return
             if path == "/local-recommendations.csv":
                 if self.headers.get("Sec-Fetch-Site") not in {None, "same-origin", "none"}:
                     self.send_error(403, "Use the local website.")
@@ -144,7 +153,10 @@ def make_handler(csv_root):
             history = re.fullmatch(r"/local-data/history/(\d{4}-\d{4})/([a-z_]+\.csv)", path)
             csv_name = path.removeprefix("/local-data/")
             if history and history[2] in HISTORY_NAMES:
-                root, relative, content_type = DATA_ROOT / history[1], history[2], "text/csv; charset=utf-8"
+                root = FINAL_ROOT / "spider" / history[1] if history[2] == "spider_stats.csv" else DATA_ROOT / history[1]
+                relative, content_type = history[2], "text/csv; charset=utf-8"
+            elif path == "/local-data/spider/spider_stats.csv":
+                root, relative, content_type = FINAL_ROOT / "spider" / csv_root.name, "spider_stats.csv", "text/csv; charset=utf-8"
             elif path.startswith("/local-data/") and csv_name in CSV_NAMES | OPTIONAL_CSV_NAMES:
                 root, relative, content_type = csv_root, csv_name, "text/csv; charset=utf-8"
             elif path.startswith("/local-data/") and csv_name in fantasy_files:
@@ -198,6 +210,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--season", type=season_name, default="2026/2027")
     parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument("--no-live", action="store_true", help="Disable on-demand Sportmonks live requests.")
     args = parser.parse_args()
     if not 1 <= args.port <= 65535:
         parser.error("Port must be between 1 and 65535.")
@@ -208,13 +221,15 @@ def main():
     if missing:
         parser.error(f"Missing season CSVs: {', '.join(missing)}")
     try:
-        server = ThreadingHTTPServer(("127.0.0.1", args.port), make_handler(csv_root))
+        server = ThreadingHTTPServer(("127.0.0.1", args.port), make_handler(csv_root, live_enabled=not args.no_live))
     except OSError as error:
         parser.exit(1, f"Cannot start the local server: {error}\nTry --port 8001 if the port is busy.\n")
     print(f"Open http://127.0.0.1:{args.port}")
     print(f"Reading saved CSVs from: {csv_root}")
     print("After a download finishes, refresh the page or click Refresh saved data.")
-    print("Keep this terminal open. Press Ctrl+C to stop. No Sportmonks calls are made.")
+    print("Live Sportmonks requests disabled." if args.no_live else
+          "Live Sportmonks data is requested only while the Matchweek page is visible.")
+    print("Keep this terminal open. Press Ctrl+C to stop.")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

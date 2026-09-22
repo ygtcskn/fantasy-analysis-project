@@ -62,7 +62,7 @@ function createTeamLogo(id, teams, clickable = true) {
     const initials = teams.get(id)?.short_code || name.split(/\s+/).map((part) => part[0]).join("").slice(0, 3);
     const fallback = element("span", "club-logo-fallback", initials);
     fallback.setAttribute("role", "img");
-    fallback.setAttribute("aria-label", document.documentElement.lang === "tr" ? `${name} (logo bulunamadı)` : `${name} (logo unavailable)`);
+    fallback.setAttribute("aria-label", `${name} (logo bulunamadı)`);
     const img = document.createElement("img");
     img.alt = `${name} logo`;
     img.width = 32;

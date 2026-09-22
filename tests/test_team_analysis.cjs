@@ -193,14 +193,22 @@ test("the charts load with their feature and the website folder is served whole"
   for (const id of ["ta-xg-chart", "ta-fantasy-chart", "ta-luck-chart", "ta-form-chart", "ta-timing-chart", "ta-momentum-chart", "ta-compare-chart"]) {
     assert.ok(html.includes(`id="${id}"`), id);
   }
-  // The four match-by-match charts belong to the profile; the league-wide ones
-  // stay in Takım Analizi below it. Fixture difficulty is gone from both.
-  const profile = html.slice(html.indexOf('id="team-statistics-profile"'), html.indexOf('id="team-analysis"'));
+  // League-wide charts lead the page; match-by-match charts stay in the profile.
+  const analysisStart = html.indexOf('id="team-analysis"');
+  const listStart = html.indexOf('id="team-statistics-list-title"');
+  const profileStart = html.indexOf('id="team-statistics-profile"');
+  assert.ok(analysisStart < listStart && listStart < profileStart);
+  const analysis = html.slice(analysisStart, listStart);
+  const profile = html.slice(profileStart, html.indexOf('id="builder-workspace"'));
   for (const id of ["ta-xg-chart", "ta-form-chart", "ta-timing-chart", "ta-momentum-chart"]) {
     assert.ok(profile.includes(`id="${id}"`), id);
   }
   for (const id of ["ta-fantasy-chart", "ta-luck-chart", "ta-compare-chart"]) {
-    assert.ok(!profile.includes(`id="${id}"`) && html.includes(`id="${id}"`), id);
+    assert.ok(!profile.includes(`id="${id}"`) && analysis.includes(`id="${id}"`), id);
+  }
+  assert.match(analysis, /id="team-analysis-tabs"[^>]*role="tablist"/);
+  for (const id of ["team-statistics-scored-body", "team-statistics-conceded-body", "team-statistics-clean-body"]) {
+    assert.ok(!html.includes(`id="${id}"`), id);
   }
   for (const id of ["ta-ticker-chart", "team-statistics-timeline-chart", "team-statistics-ratings-chart"]) {
     assert.ok(!html.includes(`id="${id}"`), id);

@@ -1,41 +1,45 @@
 <!doctype html>
-<html lang="en">
+<html lang="tr" data-theme="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Team — Süper Lig Lab</title>
-  <script>try{document.documentElement.dataset.theme=localStorage.getItem("superlig-theme")==="dark"?"dark":"light"}catch{document.documentElement.dataset.theme="light"}</script>
+  <title>Takım — Süper Lig Lab</title>
   <link rel="stylesheet" href="styles/styles.css">
   <link rel="stylesheet" href="features/team-page/team-page.css">
+  <link rel="stylesheet" href="styles/theme-dark.css">
+  <link rel="stylesheet" href="styles/page-header.css">
   <script src="data/csv.js" defer></script>
+  <script src="core/locale.js" defer></script>
   <script src="core/sidebar.js" defer></script>
   <script src="features/team-page/team-page.js" defer></script>
 </head>
 <body class="team-page">
   <main>
-    <header class="topbar"><a class="team-link" href="index.html">← League overview</a><span class="badge">SÜPER LİG LAB</span></header>
-    <section class="page-heading team-page-heading">
-      <img id="team-crest" width="72" height="72" alt="" hidden>
-      <div><p class="eyebrow">CLUB / SEASON EXPLORER</p><h1 id="team-name">Team</h1><p id="team-season" class="team-muted"></p></div>
-      <div class="team-data-actions"><button id="team-refresh" class="secondary" hidden>Refresh saved data ↻</button><button id="team-open" class="text-button">Open team CSVs</button><input id="team-files" type="file" accept=".csv,text/csv" multiple hidden></div>
-    </section>
+    <header class="page-header" aria-labelledby="team-name">
+      <div class="topbar"><a class="team-link" href="index.html">← Lig özeti</a><span class="badge">SÜPER LİG LAB</span></div>
+      <div class="page-heading team-page-heading">
+        <img id="team-crest" width="72" height="72" alt="" hidden>
+        <div><p class="eyebrow">TAKIM / SEZON</p><h1 id="team-name">Takım</h1><p id="team-season" class="team-muted"></p></div>
+        <div class="team-data-actions"><button id="team-refresh" class="secondary" hidden>Kaydedilen veriyi yenile ↻</button><button id="team-open" class="text-button">Takım CSV dosyalarını aç</button><input id="team-files" type="file" accept=".csv,text/csv" multiple hidden></div>
+      </div>
+    </header>
     <p id="team-message" class="message" role="status" aria-live="polite"></p>
     <div class="team-dashboard">
       <section class="team-panel lineup-panel" aria-labelledby="lineup-title">
-        <div class="team-matchday"><button id="team-week-prev" class="secondary" aria-label="Previous match">←</button><label for="team-match">MATCHDAY<select id="team-match" disabled><option>No matches loaded</option></select></label><button id="team-week-next" class="secondary" aria-label="Next match">→</button></div>
-        <div class="team-panel-title"><div><p class="eyebrow">ON THE PITCH</p><h2 id="lineup-title">Starting eleven</h2></div><span id="team-formation" class="badge">Formation —</span></div>
-        <p id="lineup-note" class="team-panel-note">Select a match to see its starting lineup.</p>
-        <div class="team-pitch" aria-label="Starting lineup pitch"><div class="pitch-markings" aria-hidden="true"><span class="pitch-circle"></span><span class="pitch-box pitch-box-top"></span><span class="pitch-box pitch-box-bottom"></span></div><div id="team-lineup" class="pitch-players"></div></div>
-        <p class="team-panel-note">Player badges show supplied Sportmonks ratings. — means no eligible rating.</p>
+        <div class="team-matchday"><button id="team-week-prev" class="secondary" aria-label="Önceki maç">←</button><label for="team-match">MAÇ<select id="team-match" disabled><option>Yüklü maç yok</option></select></label><button id="team-week-next" class="secondary" aria-label="Sonraki maç">→</button></div>
+        <div class="team-panel-title"><div><p class="eyebrow">SAHADA</p><h2 id="lineup-title">İlk 11</h2></div><span id="team-formation" class="badge">Diziliş —</span></div>
+        <p id="lineup-note" class="team-panel-note">İlk 11'i görmek için bir maç seçin.</p>
+        <div class="team-pitch" aria-label="İlk 11 sahası"><div class="pitch-markings" aria-hidden="true"><span class="pitch-circle"></span><span class="pitch-box pitch-box-top"></span><span class="pitch-box pitch-box-bottom"></span></div><div id="team-lineup" class="pitch-players"></div></div>
+        <p class="team-panel-note">Oyuncu rozetleri Sportmonks maç puanını gösterir. — geçerli puan yok demektir.</p>
       </section>
       <div class="team-match-panels">
-        <section class="team-panel played-panel" aria-labelledby="played-title"><div class="team-panel-title"><h2 id="played-title">Already played</h2><span id="played-count" class="badge">0 matches</span></div><div id="team-played" class="team-match-list"></div></section>
-        <section class="team-panel upcoming-panel" aria-labelledby="upcoming-title"><div class="team-panel-title"><h2 id="upcoming-title">Next 5 games</h2><span class="team-muted">Season schedule</span></div><div id="team-upcoming" class="team-match-list"></div></section>
-        <section class="team-panel selected-panel" aria-labelledby="selected-title"><div class="team-panel-title"><h2 id="selected-title">Selected matchweek</h2></div><div id="team-score" class="team-score"></div><div class="match-best"><h3>Best players of the game</h3><p class="team-muted">Both teams · supplied match ratings</p><div id="team-match-best"></div></div></section>
+        <section class="team-panel played-panel" aria-labelledby="played-title"><div class="team-panel-title"><h2 id="played-title">Oynanan maçlar</h2><span id="played-count" class="badge">0 maç</span></div><div id="team-played" class="team-match-list"></div></section>
+        <section class="team-panel upcoming-panel" aria-labelledby="upcoming-title"><div class="team-panel-title"><h2 id="upcoming-title">Sıradaki 5 maç</h2><span class="team-muted">Sezon fikstürü</span></div><div id="team-upcoming" class="team-match-list"></div></section>
+        <section class="team-panel selected-panel" aria-labelledby="selected-title"><div class="team-panel-title"><h2 id="selected-title">Seçilen hafta</h2></div><div id="team-score" class="team-score"></div><div class="match-best"><h3>Maçın en iyileri</h3><p class="team-muted">İki takım · Sportmonks maç puanları</p><div id="team-match-best"></div></div></section>
       </div>
-      <section class="team-panel overall-panel" aria-labelledby="overall-title"><div class="team-panel-title"><div><p class="eyebrow">SEASON LEADERS</p><h2 id="overall-title">Best players overall</h2></div><label class="overall-minimum">Minimum rated matches<select id="team-min-rated"><option value="1">1 match</option><option value="3" selected>3 matches</option><option value="5">5 matches</option><option value="10">10 matches</option></select></label></div><p class="team-panel-note">Average Sportmonks rating in completed matches for this club only. Matches are equally weighted; missing ratings and zero-minute records are excluded.</p><div id="team-overall" class="overall-players"></div></section>
+      <section class="team-panel overall-panel" aria-labelledby="overall-title"><div class="team-panel-title"><div><p class="eyebrow">SEZONUN EN İYİLERİ</p><h2 id="overall-title">Sezonun en iyi oyuncuları</h2></div><label class="overall-minimum">En az puanlı maç<select id="team-min-rated"><option value="1">1 maç</option><option value="3" selected>3 maç</option><option value="5">5 maç</option><option value="10">10 maç</option></select></label></div><p class="team-panel-note">Yalnızca bu takımın tamamlanan maçlarındaki ortalama Sportmonks maç puanı. Maçlar eşit ağırlıklıdır; eksik puanlar ve sıfır dakikalık kayıtlar dahil edilmez.</p><div id="team-overall" class="overall-players"></div></section>
     </div>
-    <footer>Source: your saved Sportmonks CSVs <span>Saved snapshot · Kickoff times shown as exported</span></footer>
+    <footer>Kaynak: kaydedilen Sportmonks CSV dosyalarınız <span>Kayıtlı veri · Başlama saatleri dışa aktarıldığı gibi</span></footer>
   </main>
 </body>
 </html>

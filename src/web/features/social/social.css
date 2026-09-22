@@ -1,0 +1,53 @@
+#social-workspace { padding-bottom: 32px; }
+.social-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 16px; }
+.social-toolbar h2 { font-size: 23px; margin: 6px 0; font-weight: 600; }
+.social-toolbar label { display: grid; gap: 6px; font-size: 12px; color: var(--muted); min-width: 165px; }
+.social-session-note { color: var(--muted); font-size: 12px; line-height: 1.6; margin: 0 0 24px; }
+.social-match { margin-bottom: 28px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--paper); }
+.social-match-header { display: flex; align-items: center; gap: 20px; padding: 22px 24px; background: #eaf0ff; border-left: 4px solid #526ed3; color: #263c7a; }
+.social-match-heading { flex: 1; min-width: 0; }
+.social-match-heading h3 { font-size: 19px; line-height: 1.45; margin: 0; overflow-wrap: anywhere; }
+.social-match-date { margin: 0 0 7px; font-size: 11px; color: #52658e; }
+.social-topic-count { font-size: 12px; white-space: nowrap; }
+.social-button { background: var(--paper); color: var(--ink); border: 1px solid var(--line); border-radius: 7px; padding: 9px 14px; font-size: 12px; min-height: 38px; cursor: pointer; }
+.social-match-header > .social-button { background: #334faa; border-color: #334faa; color: white; white-space: nowrap; }
+.social-button:hover { filter: brightness(.94); }
+#social-workspace :focus-visible { outline: 3px solid #8299f1; outline-offset: 3px; }
+.social-topic-list { padding: 8px 16px; }
+.social-topic { border: 1px solid var(--line); border-left: 3px solid #ce6979; border-radius: 6px; margin: 8px 0; overflow: hidden; }
+.social-topic-row { display: flex; align-items: center; gap: 14px; padding: 12px 16px; cursor: pointer; background: #fff8f8; color: #633c47; list-style: none; }
+.social-topic-row::-webkit-details-marker { display: none; }
+.social-topic-row::after { content: "+"; font-size: 19px; }
+.social-topic[open] > summary::after { content: "−"; }
+.social-topic-icon { color: #b24e65; font-size: 21px; }
+.social-topic-identity { display: grid; gap: 5px; flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.social-topic-identity strong { font-size: 14px; font-weight: 600; }
+.social-topic-identity small, .social-reply-count { font-size: 11px; }
+.social-reply-count { white-space: nowrap; }
+.social-empty { padding: 19px 12px; margin: 0; color: var(--muted); font-size: 13px; line-height: 1.7; }
+.social-discussion { padding: 6px 20px 20px; border-top: 1px solid var(--line); }
+.social-post { padding: 12px 0; border-bottom: 1px solid var(--line); margin-bottom: 12px; }
+.social-post-meta { font-size: 11px; color: var(--muted); }
+.social-post-body { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; line-height: 1.7; }
+.social-form { display: grid; gap: 14px; padding: 20px; }
+.social-form label { display: grid; gap: 7px; font-size: 12px; }
+.social-form input, .social-form textarea { width: 100%; min-width: 0; padding: 10px; font: inherit; border: 1px solid var(--line); border-radius: 6px; color: var(--ink); background: var(--paper); }
+.social-form textarea { resize: vertical; }
+.social-actions { display: flex; gap: 8px; }
+.social-discussion .social-form { padding: 16px 0 0; }
+#social-status { color: var(--muted); font-size: 12px; }
+[data-theme="dark"] .social-match-header { background: #202d4b; color: #d5e0ff; border-left-color: #8299f1; }
+[data-theme="dark"] .social-match-date { color: #b0bfde; }
+[data-theme="dark"] .social-topic-row { background: #33272f; color: #f2d9df; }
+[data-theme="dark"] .social-topic-icon { color: #e699ab; }
+@media (max-width: 650px) {
+  .social-toolbar { align-items: stretch; flex-direction: column; gap: 12px; }
+  .social-toolbar h2 { font-size: 20px; }
+  .social-match-header { padding: 16px; gap: 12px; flex-wrap: wrap; }
+  .social-match-heading { flex-basis: 100%; }
+  .social-match-heading h3 { font-size: 17px; }
+  .social-match-header > .social-button { margin-left: auto; }
+  .social-topic-list { padding: 5px 8px; }
+  .social-topic-row { padding: 12px 10px; gap: 9px; }
+  .social-topic-icon { display: none; }
+}

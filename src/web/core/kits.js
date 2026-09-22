@@ -138,7 +138,39 @@ const SUPERLIG_KITS = {
 };
 
 // Used when a player has no squad row, or plays for a club not in the table.
-const NEUTRAL_KIT = { name: "Unknown club", base: "#8C9A8F", pattern: "plain", alt: "#B8C4BA", print: "#20302A", source: "approximate" };
+// Goalkeeper kits, drawn on the same shirt as the outfield kits.
+//
+// Clubs publish far less about goalkeeper shirts than outfield ones. When this
+// table was written (September 2026) the only 26-27 goalkeeper colours found in
+// Turkish press were Galatasaray's (green, yellow and purple sets; green is used
+// here). Every other club is "approximate": a conventional goalkeeper colour
+// chosen to stand apart from that club's own outfield kit, so a keeper is never
+// mistaken for a team-mate. Replace an entry, and its source, once a club's
+// actual goalkeeper shirt is known.
+const SUPERLIG_GOALKEEPER_KITS = {
+  "34": { name: "Galatasaray kaleci", base: "#1FA35C", pattern: "plain", alt: "#0E6B3A", collar: "#0E6B3A", cuff: "#0E6B3A", print: "#FFFFFF", source: "described" },
+  "88": { name: "Fenerbahçe kaleci", base: "#161616", pattern: "plain", alt: "#E7E852", collar: "#E7E852", cuff: "#E7E852", print: "#E7E852", source: "approximate" },
+  "554": { name: "Beşiktaş kaleci", base: "#B5E61D", pattern: "plain", alt: "#111111", collar: "#111111", cuff: "#111111", print: "#111111", source: "approximate" },
+  "688": { name: "Trabzonspor kaleci", base: "#1A1A1A", pattern: "plain", alt: "#9DBCE4", collar: "#9DBCE4", cuff: "#9DBCE4", print: "#9DBCE4", source: "approximate" },
+  "2811": { name: "Samsunspor kaleci", base: "#3A3F45", pattern: "plain", alt: "#CC1620", collar: "#CC1620", cuff: "#CC1620", print: "#FFFFFF", source: "approximate" },
+  "2632": { name: "Konyaspor kaleci", base: "#5B2A86", pattern: "plain", alt: "#FFFFFF", collar: "#FFFFFF", cuff: "#FFFFFF", print: "#FFFFFF", source: "approximate" },
+  "286": { name: "Gençlerbirliği kaleci", base: "#19A7CE", pattern: "plain", alt: "#111111", collar: "#111111", cuff: "#111111", print: "#111111", source: "approximate" },
+  "13860": { name: "Kocaelispor kaleci", base: "#F2C500", pattern: "plain", alt: "#111111", collar: "#111111", cuff: "#111111", print: "#111111", source: "approximate" },
+  "13818": { name: "Erzurumspor FK kaleci", base: "#1A1A1A", pattern: "plain", alt: "#9AC0D6", collar: "#9AC0D6", cuff: "#9AC0D6", print: "#FFFFFF", source: "approximate" },
+  "3570": { name: "Amed SK kaleci", base: "#F4C20D", pattern: "plain", alt: "#175A2C", collar: "#175A2C", cuff: "#175A2C", print: "#111111", source: "approximate" },
+  "4192": { name: "Gaziantep F.K. kaleci", base: "#9ED923", pattern: "plain", alt: "#1A1A1A", collar: "#1A1A1A", cuff: "#1A1A1A", print: "#111111", source: "approximate" },
+  "13871": { name: "Çorum FK kaleci", base: "#0FA3A3", pattern: "plain", alt: "#1A1A1A", collar: "#1A1A1A", cuff: "#1A1A1A", print: "#FFFFFF", source: "approximate" },
+  "347": { name: "Alanyaspor kaleci", base: "#1F4FBF", pattern: "plain", alt: "#F65A26", collar: "#F65A26", cuff: "#F65A26", print: "#FFFFFF", source: "approximate" },
+  "3702": { name: "İstanbul Başakşehir kaleci", base: "#8CD43A", pattern: "plain", alt: "#1B3050", collar: "#1B3050", cuff: "#1B3050", print: "#1B3050", source: "approximate" },
+  "3224": { name: "Eyüpspor kaleci", base: "#F07A1A", pattern: "plain", alt: "#1A1A1A", collar: "#1A1A1A", cuff: "#1A1A1A", print: "#111111", source: "approximate" },
+  "1071": { name: "Kasımpaşa kaleci", base: "#E0457B", pattern: "plain", alt: "#23335E", collar: "#23335E", cuff: "#23335E", print: "#FFFFFF", source: "approximate" },
+  "1041": { name: "Çaykur Rizespor kaleci", base: "#F28A1C", pattern: "plain", alt: "#223A86", collar: "#223A86", cuff: "#223A86", print: "#111111", source: "approximate" },
+  "3897": { name: "Göztepe kaleci", base: "#2B2B2B", pattern: "plain", alt: "#DFA30A", collar: "#DFA30A", cuff: "#DFA30A", print: "#DFA30A", source: "approximate" },
+};
+
+const NEUTRAL_GOALKEEPER_KIT = { name: "Kaleci", base: "#2B2B2B", pattern: "plain", alt: "#9ED923", collar: "#9ED923", cuff: "#9ED923", print: "#FFFFFF", source: "approximate" };
+
+const NEUTRAL_KIT = { name: "Bilinmeyen takım", base: "#8C9A8F", pattern: "plain", alt: "#B8C4BA", print: "#20302A", source: "approximate" };
 
 // Back-view silhouette. Every panel below clips to this.
 const SHIRT_PATH = "M31,7 C37,3 44,9 50,9 C56,9 63,3 69,7 L95,23 L86,45 L75,36 L75,101 C63,105 37,105 25,101 L25,36 L14,45 L5,23 Z";
@@ -158,7 +190,8 @@ const KIT_NAME_MIN_SIZE = 84;
 
 let kitInstanceId = 0;
 
-function kitFor(teamId) {
+function kitFor(teamId, goalkeeper = false) {
+  if (goalkeeper) return SUPERLIG_GOALKEEPER_KITS[String(teamId)] || NEUTRAL_GOALKEEPER_KIT;
   return SUPERLIG_KITS[String(teamId)] || NEUTRAL_KIT;
 }
 
@@ -217,7 +250,7 @@ function kitBodyPanels(kit) {
 // Returns an <svg> string for one back-view shirt.
 // options: { size, number, surname, showName, title }
 function shirtSVG(teamId, options = {}) {
-  const kit = kitFor(teamId);
+  const kit = kitFor(teamId, Boolean(options.goalkeeper));
   const id = `k${++kitInstanceId}`;
   const size = options.size || 64;
   const large = options.showName !== undefined ? options.showName : size >= KIT_NAME_MIN_SIZE;
@@ -237,7 +270,7 @@ function shirtSVG(teamId, options = {}) {
     print.push(`<text x="50" y="${surname ? 74 : 68}" font-family="Oswald,Archivo,Impact,sans-serif" font-weight="700" font-size="34" fill="${kit.print}" stroke="${edge}" stroke-width="1.6" paint-order="stroke" text-anchor="middle" style="font-variant-numeric:tabular-nums">${kitEscape(number)}</text>`);
   }
 
-  const label = options.title || `${kit.name} shirt${number ? `, number ${number}` : ""}`;
+  const label = options.title || `${kit.name} forması${number ? `, ${number} numara` : ""}`;
 
   return [
     `<svg width="${size}" height="${Math.round(size * 1.12)}" viewBox="0 0 100 112" role="img" aria-label="${kitEscape(label)}">`,

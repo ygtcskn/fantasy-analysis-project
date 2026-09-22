@@ -25,6 +25,7 @@ from src.points import run as points
 from src.player_projections import run as projections
 from src.tables import common as tables_common
 from src.tables import run as tables
+from src.spider.build_spider_stats import build_season as build_spider_stats
 from src.fetch.build_database import build_database
 
 
@@ -37,7 +38,7 @@ def input_manifest(data_root: Path, rules_path: Path) -> list[dict]:
             continue
         paths.extend(folder / name for name in (
             "download_status.csv", "fixtures.csv", "fixture_scores.csv", "teams.csv",
-            "player_match_stats.csv", "team_sidelined.csv", "fixture_sidelined.csv",
+            "player_match_stats.csv", "team_metrics.csv", "team_sidelined.csv", "fixture_sidelined.csv",
         ))
     return [{"path": str(path.resolve()), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()
              if path.is_file() else "missing"} for path in paths]
@@ -126,6 +127,15 @@ def main(argv=None) -> int:
             raise ValueError(f"{failed} table(s) failed; final files were not published.")
         relative_files.extend(Path("tables") / season / path.name
                               for path in sorted((stage / "tables" / season).glob("*.csv")))
+        # Radar scoring needs the current season and every saved earlier season
+        # prepared before the browser forms a common reference population.
+        spider_seasons = sorted(folder.name for folder in inputs.iterdir() if folder.is_dir()
+                                and (folder / "player_match_stats.csv").is_file()
+                                and (folder / "team_metrics.csv").is_file()
+                                and folder.name <= season)
+        for spider_season in spider_seasons:
+            build_spider_stats(spider_season, inputs, stage / "spider")
+            relative_files.append(Path("spider") / spider_season / "spider_stats.csv")
         marker = Path("fantasy_pipeline") / season / "pipeline_status.csv"
         tff_rows = points.read_csv(tff_csv)
         points.write_csv(stage / marker, [{

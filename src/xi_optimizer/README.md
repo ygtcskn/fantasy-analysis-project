@@ -10,7 +10,11 @@ in `data/final` is modified. Run commands from the analysis project root.
 
 Maximize the sum of next-match expected points over binary player variables:
 
-- Exactly 11 starters, one goalkeeper, no bench or captain multiplier.
+- Exactly 11 starters, one goalkeeper, no captain multiplier. The website's four
+  manually selected substitutes do not score in this objective. Its adapter
+  subtracts their reviewed prices from the budget, removes them from the starter
+  pool, and reserves their club places using `reserved_clubs`. Empty bench slots
+  do not reserve money; the standalone CLI continues to select only a starting XI.
 - At most ₺100M by default, and at most three players from each club.
 - Positions and prices checked against the matched TFF Fantasy CSV using
   Sportmonks IDs. No name matching or position inference.

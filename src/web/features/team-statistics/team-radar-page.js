@@ -1,7 +1,7 @@
 "use strict";
 
 // Page wiring for the two team spider plots on Takım İstatistikleri. The same
-// scoring, reference, principal components, chart, tooltips and detail tables
+// scoring, reference, principal components, chart and tooltips
 // as the player plots, over RadarTeams. Depends on radar.js, on the shared
 // helpers in radar-page.js and on the page helpers ($, element, displayNumber,
 // state).
@@ -27,10 +27,10 @@ async function loadTeamHistory(currentRows) {
       // A season downloaded before team statistics were captured is skipped,
       // not treated as a failure of the whole history.
       const [fixtures, records] = await Promise.all([statisticsHistoryCSV(`${season}/fixtures.csv`),
-        statisticsHistoryCSV(`${season}/team_metrics.csv`).catch(() => null)]);
+        statisticsHistoryCSV(`${season}/spider_stats.csv`).catch(() => null)]);
       if (teamHistory.key !== key) return;
       if (!records) continue;
-      const rows = RadarTeams.rows(records);
+      const rows = spiderRows(records, "team");
       const missing = statisticsUnsupplied(statisticsFillRates(rows, [...reference.rates.keys()]), reference);
       for (const row of rows) for (const column of missing) delete row[column];
       if (missing.length) unsupplied[season] = missing;
@@ -53,13 +53,6 @@ async function loadTeamHistory(currentRows) {
   if (state.view === "team-statistics" && state.seasonSlug === key) renderTeamStatistics();
 }
 
-// Why the population is still this season alone, while it is.
-function teamPoolNote() {
-  if (teamHistory.state === "ready") return "";
-  if (teamHistory.state === "unavailable") return `${teamHistory.message} Yalnızca bu sezonla karşılaştırılıyor. `;
-  return "Önceki sezonlar yükleniyor; şimdilik yalnızca bu sezonla karşılaştırılıyor. ";
-}
-
 // Both wheels share one reference per render, with no settings: the served
 // season and competition, every team that has played at least half as many
 // matches as the busiest, and - once loaded - every earlier season.
@@ -68,8 +61,17 @@ function renderTeamRadars(teamId, rows, names) {
     "team-statistics-radar-details", "team-statistics-detailed-details"];
   const clear = (note) => {
     for (const id of charts) $(id).replaceChildren();
-    for (const id of ["team-statistics-radar-note", "team-statistics-detailed-note"]) $(id).textContent = note;
+    for (const id of ["team-statistics-radar-note", "team-statistics-detailed-note"]) {
+      $(id).textContent = note;
+      $(id).hidden = !note;
+    }
   };
+  if (spiderStatsState.key !== state.seasonSlug) loadSpiderStats();
+  if (spiderStatsState.state !== "ready") {
+    clear(spiderStatsState.state === "unavailable" ? spiderStatsState.message : "Radar verileri yükleniyor…");
+    return;
+  }
+  rows = spiderStatsState.teams;
   const fixtures = state.tables["fixtures.csv"] || [];
   const played = new Set(rows.filter((row) => row.team_id === teamId).map((row) => row.fixture_id));
   const scope = RadarScoring.fixtureScope(fixtures.find((fixture) => played.has(String(fixture.fixture_id))
@@ -91,16 +93,16 @@ function renderTeamRadars(teamId, rows, names) {
     line: "var(--statistics-plot-line)", fill: "var(--statistics-plot-fill)" }];
   const renderChart = (chartId, detailsId, axes, entries, title) => {
     $(chartId).innerHTML = RadarChart.svg(axes, entries, statisticsRadarTooltip, title);
+    $(detailsId).replaceChildren();
     if (!entries.some((item) => item.results.some((result) => Number.isFinite(result.score)))) {
       const notice = element("div", "statistics-radar-empty");
       notice.setAttribute("role", "status");
       notice.append(element("strong", "", "Radar puanı hesaplanamıyor."));
       notice.append(element("p", "", reference.peerCount < reference.config.minimumPeers
         ? `${statisticsBarLabel(config.minimumMinutes, "TEAM")} oynamış ${reference.peerCount} takım var; en az ${reference.config.minimumPeers} gerekli.`
-        : "Ölçütlerde yeterli geçerli veri yok. Eksik değerler sıfır kabul edilmez; nedenler aşağıdaki ölçüt ayrıntılarında gösterilir."));
+        : "Ölçütlerde yeterli geçerli veri yok. Eksik değerler sıfır kabul edilmez."));
       $(chartId).prepend(notice);
     }
-    renderStatisticsRadarDetails(detailsId, axes, entries, reference);
   };
   renderChart("team-statistics-radar-chart", "team-statistics-radar-details", attributes,
     series(models.map((model) => RadarAttributes.evaluate(target, model, reference))),
@@ -108,27 +110,8 @@ function renderTeamRadars(teamId, rows, names) {
   renderChart("team-statistics-detailed-chart", "team-statistics-detailed-details", profile,
     series(profile.map((axis) => RadarScoring.evaluate(target, axis, reference))),
     `${target.name} · ayrıntılı ölçütler`);
-  const shortNote = target.minutes < config.minimumMinutes
-    ? `Küçük örnek: ${target.name} (${displayNumber(target.rows.length)} maç); referans grubuna alınmadı. ` : "";
-  const fitted = models.filter((model) => model.status === "available");
-  const explained = fitted.filter((model) => Number.isFinite(model.explained));
-  $("team-statistics-radar-note").textContent =
-    `${attributes.length} nitelik · ${statisticsReferenceLabel(reference)}. `
-    + "Her nitelik, birbiriyle örtüşen maç başına takım ölçütlerinin ilk temel bileşenidir (PCA); "
-    + "tekrar eden ölçütler tek bir eksende toplanır. "
-    + (explained.length ? `Bileşenler ortak değişimin ortalama %${displayNumber(
-      explained.reduce((sum, model) => sum + model.explained, 0) / explained.length * 100)}'ini açıklıyor. ` : "")
-    + (fitted.length < models.length ? `${models.length - fitted.length} nitelik için yeterli tam kayıtlı emsal yok. ` : "")
-    + (fitted.some((model) => model.dropped.length)
-      ? "Önceki sezonlarda kaydı olmayan, emsallerde değişmeyen veya eksenle ters yönde hareket eden ölçütler o eksenden çıkarılır; hangileri olduğu ölçüt ayrıntılarında yazılıdır. " : "")
-    + shortNote
-    + teamPoolNote()
-    + "Puan, takımın bileşen skorunun aynı emsal grubundaki sırasıdır; — eksik veri veya yetersiz örnek.";
-  $("team-statistics-detailed-note").textContent = `${profile.length} ölçüt · ${statisticsReferenceLabel(reference)}. `
-    + "Maç başına değerler, orta sıra yüzdeliği, sabit 0–100 ölçeği. "
-    + "Yüksek puan daha iyi; italik yazılan ‘bağlam’ ölçütlerinde daha fazla etkinlik anlamına gelir. "
-    + "Çizilen değerler yalnızca bu sezona aittir; önceki sezonlar yalnızca karşılaştırma ölçeğini genişletir. "
-    + teamPoolNote()
-    + shortNote
-    + "— eksik veya yetersiz örnek; nedenini ölçüt ayrıntılarında görebilirsiniz.";
+  for (const id of ["team-statistics-radar-note", "team-statistics-detailed-note"]) {
+    $(id).textContent = "";
+    $(id).hidden = true;
+  }
 }

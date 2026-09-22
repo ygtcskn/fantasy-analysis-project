@@ -7,6 +7,23 @@ fixed wheel of individual statistics. **Takım İstatistikleri**
 (`index.html?view=team-statistics`) draws the same two plots for a team; see
 [Team plots](#team-plots). Everything that builds them lives here.
 
+Both pages first read `data/final/spider/<season>/spider_stats.csv`, prepared
+from the saved player and team match exports by
+`python -m src.spider.build_spider_stats --all-seasons`. Each row is one player
+or team in one fixture. `p_` and `t_` columns keep the two provider feeds
+separate; the browser removes the prefix before calculating rates, reference
+percentiles and principal components. The normal `src/run_pipeline.py` run
+rebuilds and publishes the current and saved earlier seasons after the website tables.
+Earlier-season files widen the reference group but do not change the plotted
+season's own match data. Missing statistics remain blank rather than zero.
+
+When a team match lacks `KEY_PASSES`, the preparer can use the sum of recorded
+player key passes if at least eleven played players have other match statistics
+and at least one has a positive key-pass record. The `t_key_passes_source`
+column distinguishes `team_provider`, `player_sum` and `missing`. Published
+team values take precedence; the two feeds sometimes differ, so a supplemental
+player total is never presented as a provider team value.
+
 | File | Role |
 | --- | --- |
 | `radar.js` | Pure modules: `RadarScoring` (season totals, per-90 rates, peer populations, percentiles), `RadarAttributes` (principal-component attributes), `RadarTeams` (the team catalogue and team-match rows) and `RadarChart` (the SVG). No DOM and no requests, so Node can test them directly. |
@@ -217,15 +234,16 @@ components, `RadarChart` for the wheel. A team-season is treated like a
 player-season whose every match lasts 90 minutes, so a per-90 rate is a
 per-match rate (shown as `/maç`), and every team is one group, `TEAM`.
 
-- **Data:** `team_metrics.csv`, one record per team, match and statistic.
-  `RadarTeams.rows` turns it into one row per team-match with Sportmonks names
-  lower-cased (`SHOTS_TOTAL` becomes `shots_total`), so the coverage and
+- **Data:** the team rows of prepared `spider_stats.csv`, one row per
+  team-match with Sportmonks names lower-cased (`SHOTS_TOTAL` becomes
+  `shots_total`), so the coverage and
   omitted-zero rules read it exactly as they read player rows. What a team
   conceded - goals, shots, shots on target - comes from the opponent's row in
   the same fixture; with only one side saved it stays unknown. xG conceded is the
   provider's own figure, or the opponent's xG when that is blank.
-- **Omitted records:** in this long format an omitted statistic has no record at
-  all, so every row first receives every statistic its file supplies anywhere,
+- **Omitted records:** in the provider's long format an omitted statistic has no
+  record at all, so preparation first gives each team row every statistic its
+  season supplies anywhere,
   left blank. Without that, a match with no goal recorded had no goals column,
   the shared rules read it as unknown rather than none, and one goalless match
   removed a whole team-season from every attack axis (Hücum fitted on 19 teams
@@ -235,9 +253,9 @@ per-match rate (shown as `/maç`), and every team is one group, `TEAM`.
   cards - read a blank on a covered match as none; from 2024-25 Sportmonks
   stops writing zero goals and red cards at all. Volume statistics a team never
   records as zero - passes, possession, shots, tackles - and xG keep a blank
-  unknown. So do key passes and duels won, which have genuine gaps: three
-  2026-27 fixtures have no key-pass value for either side despite 9-19 shots,
-  so six teams currently have no Kilit pas score and no Üretim attribute.
+  unknown. So do key passes and duels won, which have genuine gaps. The
+  preparer checks the player-match feed for a supported key-pass total where
+  the team feed omitted one; any remaining gap stays unknown.
 - **Reference:** the served season's teams that have played at least half as
   many matches as the busiest (after four rounds, two), plus every earlier
   season's team-seasons of the same competition - 18 current and 96 earlier
