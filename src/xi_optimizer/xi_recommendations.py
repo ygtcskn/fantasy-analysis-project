@@ -28,7 +28,7 @@ FIELDS = ["status", "message", "pipeline_run_id", "player_id", "player_name", "t
           "position", "price_million_try", "expected_points", "xi_expected_points",
           "remaining_budget", "risk", "same_club_defensive_pairs",
           "xi_standard_deviation", "completed_xi_expected_points",
-          "points_below_optimal_xi", "rating"]
+          "points_below_optimal_xi", "rating", "so_percent"]
 # Each candidate costs one solve per formation, so the tail is cut. Ranking by
 # own projection first is only a shortlist: the final order is still decided by
 # the completed XI, which can promote a cheaper player over a stronger one.
@@ -80,10 +80,14 @@ def recommendations(season, query):
             names = [r["player_name"] for r in excluded if r["player_id"] in missing]
             raise ValueError("Selected players have no eligible projection: " + ", ".join(names or sorted(missing)))
         bench_cost, reserved_clubs = 0, Counter()
+        records = source.read(source.FINAL / "tff_fantasy" / "tff_players.csv")
+        # TFF's own selection rate (SO%), joined by reviewed Sportmonks ID only.
+        # It is shown to the reader and never enters the objective.
+        ownership = {row["sportmonks_player_id"]: row.get("so_percent", "")
+                     for row in records if row.get("match_status") == "matched"}
         if bench:
             # Price and club come from reviewed TFF data, never browser amounts.
             # A substitute need not have an eligible starting-XI projection.
-            records = source.read(source.FINAL / "tff_fantasy" / "tff_players.csv")
             for pid in bench:
                 matches = [row for row in records if row.get("match_status") == "matched"
                            and row.get("sportmonks_player_id") == pid]
@@ -126,11 +130,12 @@ def recommendations(season, query):
                          position=row["position"], price_million_try=row["price_million_try"],
                          expected_points=row["expected_points"], rating=row["rating"],
                          completed_xi_expected_points=row["completed_xi_expected_points"],
-                         points_below_optimal_xi=row["points_below_optimal_xi"])
+                         points_below_optimal_xi=row["points_below_optimal_xi"],
+                         so_percent=ownership.get(row["player_id"], ""))
                     for row in candidates] or [base]
         return [dict(base, player_id=p.id, player_name=p.name, team_id=p.team, position=p.position,
                      price_million_try=p.price / 1_000_000, expected_points=p.points,
-                     rating=p.rating)
+                     rating=p.rating, so_percent=ownership.get(p.id, ""))
                 for p in sorted(result.players, key=lambda p: (-p.points, p.id)) if p.id not in locked] or [base]
     except ImportError:
         return [{"status": "unavailable", "message": "Optimizer dependencies missing. Install src/xi_optimizer/requirements.txt in the website server environment."}]

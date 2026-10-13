@@ -12,15 +12,17 @@
 // feed-availability rule is the player plots' rule: a column an earlier season
 // clearly did not supply - xG before 2024-25, for one - is unknown there, not
 // zero.
-const teamHistory = { key: null, state: "idle", teams: [], seasons: [], unsupplied: {}, message: "" };
+// Like the player history, earlier seasons are cut to the rounds the served
+// season has reached, so seven matches are compared with seven matches.
+const teamHistory = { key: null, rounds: null, state: "idle", teams: [], seasons: [], unsupplied: {}, message: "" };
 
 async function loadTeamHistory(currentRows) {
-  const key = state.seasonSlug;
+  const served = state.seasonSlug, key = statisticsHistoryKey(), rounds = statisticsHistoryRounds();
   if (!key || teamHistory.key === key) return;
-  Object.assign(teamHistory, { key, state: "loading", teams: [], seasons: [], unsupplied: {}, message: "" });
+  Object.assign(teamHistory, { key, rounds, state: "loading", teams: [], seasons: [], unsupplied: {}, message: "" });
   try {
     const seasons = (await statisticsHistoryCSV("seasons.csv")).map((row) => row.season)
-      .filter((season) => /^\d{4}-\d{4}$/.test(season) && season < key);
+      .filter((season) => /^\d{4}-\d{4}$/.test(season) && season < served);
     const reference = statisticsFillRates(currentRows, RadarTeams.columns());
     const metrics = Object.values(RadarTeams.metrics), teams = [], used = [], unsupplied = {};
     for (const season of seasons) {
@@ -34,8 +36,9 @@ async function loadTeamHistory(currentRows) {
       const missing = statisticsUnsupplied(statisticsFillRates(rows, [...reference.rates.keys()]), reference);
       for (const row of rows) for (const column of missing) delete row[column];
       if (missing.length) unsupplied[season] = missing;
-      for (const scope of RadarScoring.scopes(fixtures)) {
-        for (const team of RadarTeams.entities(rows, fixtures, scope)) {
+      const windowed = RadarScoring.throughRound(fixtures, rounds);
+      for (const scope of RadarScoring.scopes(windowed)) {
+        for (const team of RadarTeams.entities(rows, windowed, scope)) {
           teams.push({ ...team, id: `${season}:${team.id}`, teamId: team.id, season, rows: [],
             tallies: new Map(metrics.map((metric) => [metric.id, RadarScoring.tally(team, metric)])) });
         }
@@ -50,7 +53,7 @@ async function loadTeamHistory(currentRows) {
         ? "Sunucu önceki sezonları henüz sunmuyor; src/web/serve.py'yi yeniden başlatın."
         : "Önceki sezonlar okunamadı." });
   }
-  if (state.view === "team-statistics" && state.seasonSlug === key) renderTeamStatistics();
+  if (state.view === "team-statistics" && statisticsHistoryKey() === key) renderTeamStatistics();
 }
 
 // Both wheels share one reference per render, with no settings: the served
@@ -83,16 +86,18 @@ function renderTeamRadars(teamId, rows, names) {
     return;
   }
   const config = { minimumMinutes: statisticsSuggestedMinutes(entities) };
-  if (teamHistory.key !== state.seasonSlug) loadTeamHistory(rows);
-  const pool = teamHistory.state === "ready" ? teamHistory.teams : [];
+  if (teamHistory.key !== statisticsHistoryKey()) loadTeamHistory(rows);
+  const historyReady = teamHistory.state === "ready" && teamHistory.key === statisticsHistoryKey();
+  const pool = historyReady ? teamHistory.teams : [];
   const profile = RadarTeams.axes();
   const reference = RadarScoring.createReference(entities, target, profile, config, pool);
+  reference.historyRounds = historyReady ? teamHistory.rounds : null;
   const attributes = RadarTeams.attributes();
   const models = attributes.map((attribute) => RadarAttributes.fit(attribute, reference));
   const series = (results) => [{ name: target.name, results,
     line: "var(--statistics-plot-line)", fill: "var(--statistics-plot-fill)" }];
   const renderChart = (chartId, detailsId, axes, entries, title) => {
-    $(chartId).innerHTML = RadarChart.svg(axes, entries, statisticsRadarTooltip, title);
+    $(chartId).innerHTML = RadarChart.svg(axes, entries, statisticsRadarTooltip, title, statisticsRadarReason);
     $(detailsId).replaceChildren();
     if (!entries.some((item) => item.results.some((result) => Number.isFinite(result.score)))) {
       const notice = element("div", "statistics-radar-empty");
@@ -110,6 +115,7 @@ function renderTeamRadars(teamId, rows, names) {
   renderChart("team-statistics-detailed-chart", "team-statistics-detailed-details", profile,
     series(profile.map((axis) => RadarScoring.evaluate(target, axis, reference))),
     `${target.name} · ayrıntılı ölçütler`);
+  statisticsAlignRadars(["team-statistics-radar-chart", "team-statistics-detailed-chart"]);
   for (const id of ["team-statistics-radar-note", "team-statistics-detailed-note"]) {
     $(id).textContent = "";
     $(id).hidden = true;

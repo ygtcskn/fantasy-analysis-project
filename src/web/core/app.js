@@ -74,10 +74,19 @@ async function loadFiles(files, { replace = false, local = false } = {}) {
     if (previousSeason && incomingSeason && previousSeason !== incomingSeason) resetSquadBuilder();
     state.tables = next;
     state.seasonSlug = local && sourceSeasons.size === 1 ? [...sourceSeasons][0] : "";
+    currentSquad = null;
     resetFantasyData();
     resetMatchweekOdds();
     resetMatchweekResults();
     state.tierCache = null;
+    // New tables may bring new match statistics for the same season. Cleared
+    // here, before render() below starts the radar loads, so one refresh
+    // fetches the spider and history CSVs once rather than twice.
+    if (typeof spiderStatsState !== "undefined") spiderStatsState.key = null;
+    if (typeof statisticsHistory !== "undefined") statisticsHistory.key = null;
+    if (typeof teamHistory !== "undefined") teamHistory.key = null;
+    if (typeof teamMetricsState !== "undefined") teamMetricsState.key = null;
+    if (typeof teamAnalysisExtras !== "undefined") teamAnalysisExtras.key = null;
     state.homeRound = null;
     state.standingsGroup = null;
     resetTierFilters();
@@ -118,17 +127,12 @@ async function loadLocalData() {
     if (failures.length) throw new Error(`Kaydedilen CSV dosyaları okunamadı. ${failures.map((result) => result.reason.message).join("; ")}. Yerel sunucunun çalıştığını ve indirmenin bittiğini kontrol edin.`);
     return results.map((result) => result.value);
   }, { replace: true, local: true });
-  if (loaded) await Promise.allSettled([loadFantasyData(), loadMatchweekOdds()]);
+  if (loaded) await Promise.allSettled([loadFantasyData(), loadMatchweekOdds(), loadCurrentSquads()]);
   else resetFantasyData("Kaydedilen sezon verisi yenilenemediği için fantezi analizi kullanılamıyor.");
   if (state.view === "builder") renderSquadBuilder();
   if (state.view === "matchweek") renderMatchweek();
-  if (typeof spiderStatsState !== "undefined") spiderStatsState.key = null;
-  if (typeof statisticsHistory !== "undefined") statisticsHistory.key = null;
-  if (typeof teamHistory !== "undefined") teamHistory.key = null;
+  if (state.view === "tiers") renderTierList();
   if (state.view === "statistics") renderStatistics();
-  // A refresh may bring new match statistics for the same season.
-  teamMetricsState.key = null;
-  if (typeof teamAnalysisExtras !== "undefined") teamAnalysisExtras.key = null;
   if (state.view === "team-statistics") renderTeamStatistics();
 }
 
@@ -395,6 +399,7 @@ setupHome();
 setupDetailedStandings();
 setupSquadBuilder();
 setupBuilderRecommendations();
+setupBuilderSummary();
 setupStatistics();
 setupTeamStatistics();
 setupMatchweek();

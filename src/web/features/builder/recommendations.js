@@ -53,7 +53,7 @@ function renderBuilderRecommendations(force = false) {
       name.append(element("span", "builder-recommendation-role", `${side === "defensive" ? "Savunma" : "Hücum"}: ${fantasyFixtureDifficulty(projection, side)}`));
     }
     const rating = number(row.rating);
-    if (rating) name.append(element("span", "builder-recommendation-role", `Maç puanı ${ratingText(rating)}`));
+    if (rating) name.append(element("span", "builder-recommendation-role", `Rating ${ratingText(rating)}`));
     const cost = number(row.points_below_optimal_xi);
     if (cost !== null) {
       const label = cost < 0.005 ? "En iyi seçenek" : `En iyi kadroya göre ${displayNumber(cost)} puan eksik`;
@@ -70,15 +70,17 @@ function renderBuilderRecommendations(force = false) {
       if (target) placeBuilderPlayer(player.id, target.key);
     });
     action.append(add);
+    // SO% is TFF's selection rate; an older server or an unmatched player sends none.
+    const ownership = number(row.so_percent);
     tr.append(name, element("td", "numeric", `₺${displayNumber(number(row.price_million_try))}M`),
-      element("td", "numeric", displayNumber(number(row.expected_points))), action);
+      element("td", "numeric", ownership === null ? "—" : `${displayNumber(ownership)}%`),
+      element("td", "numeric", displayNumber(number(row.expected_points)?.toFixed(2))), action);
     body.append(tr);
   }
   $("builder-recommendations-body").replaceChildren(body);
   $("builder-recommendations-note").textContent = builderRecommendations.message
-    + (activeRole && builderRecommendations.rows.length
-      ? ` Oyuncunun kendi puanına göre değil, tamamladığı kadronun gücüne göre sıralanır.`
-      : " Bir mevkinin tüm adaylarını karşılaştırmak için boş bir mevki seçin.");
+    || (activeRole && builderRecommendations.rows.length
+      ? "Oyuncunun kendi puanına göre değil, tamamladığı kadronun gücüne göre sıralanır." : "");
 }
 
 async function requestBuilderRecommendations(key, selected, generation, risk, position, bench = []) {
@@ -96,14 +98,8 @@ async function requestBuilderRecommendations(key, selected, generation, risk, po
     if (first.status !== "complete") throw new Error(first.message || "Kurallara uygun kadro bulunamadı.");
     if (first.pipeline_run_id !== generation) throw new Error("Analiz değişti. Sayfayı yenileyin.");
     builderRecommendations.rows = parsed.records;
-    const spread = number(first.xi_standard_deviation);
-    const pairs = number(first.same_club_defensive_pairs);
-    // Expected points are unchanged by correlation; only the spread moves,
-    // so both numbers are shown rather than one implying the other.
-    builderRecommendations.message = `₺${displayNumber(number(first.remaining_budget))}M left · Optimized XI: ${displayNumber(number(first.xi_expected_points))} expected points`
-      + (spread === null ? "" : `, spread ±${displayNumber(spread)}`)
-      + (pairs === null ? "" : ` from ${pairs} same-club defensive pair${pairs === 1 ? "" : "s"}`)
-      + ". Seçili yedekler dahil ₺100M ve takım başına 3 oyuncu sınırı uygulanır. Boş yedek yerleri için bütçe ayrılmaz.";
+    // A successful solve needs no note; only problems are explained.
+    builderRecommendations.message = "";
   } catch (error) {
     if (key !== builderRecommendations.key || builderRecommendations.controller !== controller) return;
     builderRecommendations.rows = [];

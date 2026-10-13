@@ -137,15 +137,14 @@ infer a fantasy season; use the local server for fantasy outputs.
 
 Expanded rows show expected points, starting/scoring
 probabilities, price, opponent, expected minutes and injury availability.
-The points per match column comes from the current season's reconstructed points summary
-and remains visible when a next-match projection is unavailable. Uncertain availability has blank
+Uncertain availability has blank
 forecast numbers; fixture-confirmed absences show zero. The panel suppresses
 projections after the round deadline or when fixture details no longer match.
 The original rating column remains a descriptive Sportmonks rating.
 
 **Fantasy XI Builder** appears in the shared sidebar. Direct URL: `http://127.0.0.1:8000/index.html?view=builder`. The editable pitch sits beside the player pool. Clicking a name expands fantasy statistics beneath that row; Match history opens the existing provider-statistics dialog. Players join by Sportmonks ID, never name. Search matches player and club names and the club selector filters the pool.
 
-The player pool includes points per match beside Rating. Sort by either metric, always descending with missing values last. Opponents appear as club logos with a home/away marker; healthy-status and kickoff notes are hidden.
+The player pool lists only players in a club's current Sportmonks squad (`current_squads.csv`), so players who left after appearing this season cannot be selected. The same rule drops them from Oyuncu Listesi and Oyuncu İstatistikleri (leader cards, player list, profile and the current-season radar peers); their rows stay only in past match records, lineups and the match-history dialog. An export without that file, or missing a club, shows the whole season squad. The pool shows Rating (the player's Sportmonks match-rating average) and Beklenen FP (next-match expected fantasy points from the published projection, under the same deadline and availability checks as the player's details). Sort by either, always descending with missing values last. The recommendation table shows Fiyat, SO% (TFF's selection rate, joined by reviewed Sportmonks ID; the server must be restarted after updating) and Beklenen FP. A successful load or solve shows no note; only problems are explained. Opponents appear as club logos with a home/away marker; healthy-status and kickoff notes are hidden.
 
 **Maç Haftası** appears under Fantezi, above Fantasy XI Builder, at `index.html?view=matchweek`. It shows saved fixtures in the current Tuesday–Monday calendar window, using Europe/Istanbul dates and kickoff times. The window updates while the page is open and when the tab becomes visible again. Empty weeks remain empty rather than jumping to a future round.
 
@@ -179,6 +178,21 @@ stay on the bench when the formation changes. All selected players share the
 ₺100M budget and three-per-club cap; unknown prices prevent a new selection.
 The displayed spend uses the published projection prices, including sidelined
 players. A substitute can be unavailable without blocking starting-XI suggestions.
+
+## Squad expectation
+
+A full-width **Kadro beklentisi** panel beneath the pitch and player pool sums
+the starting XI's next-match projections: expected points, goals, assists,
+yellow cards, red cards (a second yellow counts as a dismissal) and minutes.
+Substitutes do not score, so their expected points are shown separately. Totals
+use the same current-projection and deadline checks as a player's details: a
+player without a current forecast, or whose forecast is suppressed for an
+uncertain absence, is left out and the total is starred as partial. Confirmed
+absences count as zero. Card totals need `expected_yellow_cards` and
+`expected_red_cards`, which older projection files lack; they show a dash until
+the projections are rebuilt. Below the totals, **Takımlara göre** lists each
+club in the 15-player squad with its logo and player count, using the same club
+the three-per-club rule counts.
 
 Recommendations optimize only the starting XI. Selected bench players are removed
 from its candidate pool; their reviewed TFF prices and club counts reduce the

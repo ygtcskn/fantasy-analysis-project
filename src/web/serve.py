@@ -22,9 +22,11 @@ CSV_NAMES = {
     "player_match_stats.csv", "standings.csv", "fixture_scores.csv",
 }
 # team_metrics.csv, events.csv, fixture_pressure.csv and fixture_periods.csv feed
-# the team pages; older exports may lack them, so they are optional.
+# the team pages; current_squads.csv tells Kadro Kur who is still in the league.
+# Older exports may lack them, so they are optional.
 OPTIONAL_CSV_NAMES = {"fixture_formations.csv", "download_status.csv", "team_metrics.csv",
-                      "events.csv", "fixture_pressure.csv", "fixture_periods.csv"}
+                      "events.csv", "fixture_pressure.csv", "fixture_periods.csv",
+                      "current_squads.csv"}
 # Earlier seasons are read only to widen the radar's reference population; the
 # player's own plotted values always come from the served season.
 HISTORY_NAMES = {"fixtures.csv", "player_match_stats.csv", "squads.csv", "team_metrics.csv", "spider_stats.csv"}

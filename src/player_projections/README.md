@@ -60,6 +60,10 @@ estimates of the same quantity.
 All scoring constants come from the reviewed
 `config/tff_scoring_rules.csv`; the rules and their confirmation flags are unchanged.
 
+`expected_yellow_cards` and `expected_red_cards` are the expected card counts
+behind `points_cards`: the player's decayed per-90 rates times expected minutes,
+without fixture scaling. Red cards are dismissals, so a second yellow counts.
+
 Expected points sum appearances, goals, assists, clean sheets, saves, penalties,
 conceded penalties, cards, own goals and historical bonus expectations. Poisson
 scoring probability is conditional on appearing and cannot exceed playing chance.

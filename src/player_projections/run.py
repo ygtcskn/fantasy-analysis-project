@@ -40,7 +40,8 @@ OUTPUT_COLUMNS = [
     "chance_60_minutes", "chance_60_minutes_percent", "chance_scoring",
     "chance_scoring_percent", "expected_minutes", "team_expected_goals",
     "opponent_expected_goals", "team_goals_source", "team_clean_sheet_probability",
-    "expected_player_goals", "expected_player_assists", "points_appearance",
+    "expected_player_goals", "expected_player_assists", "expected_yellow_cards",
+    "expected_red_cards", "points_appearance",
     "points_goals", "points_assists", "points_clean_sheet", "points_saves",
     "points_penalty_saved", "points_penalty_missed", "points_goals_conceded",
     "points_cards", "points_own_goal", "points_bonus", "current_starts",
@@ -52,7 +53,8 @@ OUTPUT_COLUMNS += CONTEXT_COLUMNS
 FORECAST_FIELDS = [name for name in OUTPUT_COLUMNS
                    if name.startswith("chance_") or name.startswith("points_")
                    or name in {"expected_points", "expected_minutes", "expected_player_goals",
-                               "expected_player_assists"}]
+                               "expected_player_assists", "expected_yellow_cards",
+                               "expected_red_cards"}]
 OUTPUT_COLUMNS += AVAILABILITY_COLUMNS + [f"baseline_{name}" for name in FORECAST_FIELDS]
 TEAM_COLUMNS = ["season", "fixture_id", "matchweek", "kickoff_utc", "home_team_id",
                 "home_team_name", "away_team_id", "away_team_name", "home_expected_goals",
@@ -381,7 +383,8 @@ def main(argv=None) -> int:
         tid = row.get("sportmonks_team_id", "")
         position = row.get("position", "")
         reasons = []
-        if row.get("match_status") != "matched" or not pid.isdigit(): reasons.append("unreviewed_or_missing_player_id")
+        if row.get("match_status") == "left_league": reasons.append("left_league")
+        elif row.get("match_status") != "matched" or not pid.isdigit(): reasons.append("unreviewed_or_missing_player_id")
         if not tid.isdigit(): reasons.append("missing_team_id")
         if position not in POSITIONS: reasons.append("invalid_fantasy_position")
         if tid not in target_by_team: reasons.append("no_target_fixture")
@@ -555,6 +558,9 @@ def main(argv=None) -> int:
                                                 position_rates[position]["rating"], 4.0)
         player_goal_lambda = rates["goals"] * expected_minutes / 90 * attack_scale
         player_assist_lambda = rates["assists"] * expected_minutes / 90 * attack_scale
+        # Card counts carry no fixture scaling, unlike goals and assists.
+        yellow_lambda = rates["yellow_cards"] * expected_minutes / 90
+        red_lambda = rates["dismissals"] * expected_minutes / 90
         # Mixture: no appearance means no goal. Conditional Poisson scoring
         # ensures scoring probability never exceeds playing probability.
         chance_score = chance_play * (1 - math.exp(-max(0.0, player_goal_lambda) / chance_play)) if chance_play else 0.0
@@ -568,7 +574,7 @@ def main(argv=None) -> int:
             "points_penalty_saved": rates["penalties_saved"] * expected_minutes / 90 * rules.penalty_saved,
             "points_penalty_missed": rates["penalties_missed"] * expected_minutes / 90 * rules.penalty_missed,
             "points_goals_conceded": 0.0,
-            "points_cards": expected_minutes / 90 * (rates["yellow_cards"] * rules.yellow_card + rules.red_card * rates["dismissals"]),
+            "points_cards": yellow_lambda * rules.yellow_card + red_lambda * rules.red_card,
             "points_own_goal": expected_minutes / 90 * rates["own_goals"] * rules.own_goal,
             "points_bonus": chance_play * bonus_per_play,
         }
@@ -601,6 +607,7 @@ def main(argv=None) -> int:
             "opponent_expected_goals": opponent_xg, "team_goals_source": team_goals_source,
             "team_clean_sheet_probability": clean_probability,
             "expected_player_goals": player_goal_lambda, "expected_player_assists": player_assist_lambda,
+            "expected_yellow_cards": yellow_lambda, "expected_red_cards": red_lambda,
             **component, **context, "current_starts": starts, "current_appearances": appearances,
             "current_team_matches": games, "history_matches": len(recent), "history_minutes": history_minutes,
             "effective_history_minutes": effective_minutes,

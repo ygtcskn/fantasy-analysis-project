@@ -250,6 +250,7 @@ def export(args, sync_playwright):
                 temp_tff_dir / "tff_player_match_report.csv",
                 temp_tff_dir / "tff_player_match_candidates.csv")
             print(f"Updated canonical table: {total} rows, {matched} matched, "
+                  f"{total - matched - unresolved} left the league, "
                   f"{unresolved} awaiting review: {canonical.resolve()}")
         finally:
             browser.close()

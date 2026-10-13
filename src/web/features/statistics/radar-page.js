@@ -11,7 +11,18 @@ const STATISTICS_RADAR_STATUS = {
   invalid_value: "Geçersiz değer", insufficient_attempts: "Yetersiz deneme sayısı",
   insufficient_peers: "En az iki geçerli emsal gerekli", no_positive_peers: "Pozitif değerli emsal yok",
   incompatible_group: "Sezon, lig veya mevki grubu uyuşmuyor", available: "Kullanılabilir",
+  no_attempts: "Hiç deneme yok; oran hesaplanamaz",
 };
+// The same reasons in a few words, drawn under a blank axis on the chart.
+const STATISTICS_RADAR_SHORT = {
+  missing: "veri yok", partial_coverage: "eksik maç verisi", invalid_ratio: "geçersiz oran",
+  invalid_minutes: "dakika yok", invalid_value: "geçersiz değer", insufficient_attempts: "az deneme",
+  insufficient_peers: "az emsal", no_positive_peers: "pozitif emsal yok", incompatible_group: "farklı grup",
+  no_attempts: "deneme yok",
+};
+function statisticsRadarReason(result) {
+  return STATISTICS_RADAR_SHORT[result?.status] || "";
+}
 
 // Both wheels read the same prepared season CSV. Player and team metric names
 // are prefixed in that file so a column absent from one feed stays absent here.
@@ -60,7 +71,17 @@ async function loadSpiderStats() {
 // season is reduced straight to its tallies so the raw rows can be released.
 // Only seasons before the served one are used: a reference should not know
 // about football that had not been played yet.
-const statisticsHistory = { key: null, state: "idle", players: [], seasons: [], message: "" };
+const statisticsHistory = { key: null, rounds: null, state: "idle", players: [], seasons: [], message: "" };
+
+// Earlier seasons are cut to the rounds the served season has reached (see
+// RadarScoring.playedRounds), so the loaded history belongs to that point: a
+// new round in a refresh reloads it.
+function statisticsHistoryRounds() {
+  return RadarScoring.playedRounds(state.tables["fixtures.csv"] || []);
+}
+function statisticsHistoryKey() {
+  return state.seasonSlug ? `${state.seasonSlug}|${statisticsHistoryRounds() ?? "all"}` : null;
+}
 
 async function statisticsHistoryCSV(path) {
   const controller = new AbortController();
@@ -135,12 +156,12 @@ function statisticsHistorySeason(season, fixtures, rows, squads, reference) {
 }
 
 async function loadStatisticsHistory() {
-  const key = state.seasonSlug;
+  const served = state.seasonSlug, key = statisticsHistoryKey(), rounds = statisticsHistoryRounds();
   if (!key || statisticsHistory.key === key) return;
-  Object.assign(statisticsHistory, { key, state: "loading", players: [], seasons: [], unsupplied: {}, message: "" });
+  Object.assign(statisticsHistory, { key, rounds, state: "loading", players: [], seasons: [], unsupplied: {}, message: "" });
   try {
     const seasons = (await statisticsHistoryCSV("seasons.csv")).map((row) => row.season)
-      .filter((season) => /^\d{4}-\d{4}$/.test(season) && season < key);
+      .filter((season) => /^\d{4}-\d{4}$/.test(season) && season < served);
     const reference = statisticsFillRates(spiderStatsState.players, statisticsRadarColumns());
     const players = [], unsupplied = {};
     for (const season of seasons) {
@@ -149,7 +170,9 @@ async function loadStatisticsHistory() {
         statisticsHistoryCSV(`${season}/spider_stats.csv`),
         statisticsHistoryCSV(`${season}/squads.csv`).catch(() => [])]);
       if (statisticsHistory.key !== key) return;
-      const loaded = statisticsHistorySeason(season, fixtures, spiderRows(records, "player"), squads, reference);
+      // Feed availability is judged on the whole season; only the tallies are cut.
+      const loaded = statisticsHistorySeason(season, RadarScoring.throughRound(fixtures, rounds),
+        spiderRows(records, "player"), squads, reference);
       players.push(...loaded.players);
       if (loaded.unsupplied.length) unsupplied[season] = loaded.unsupplied;
     }
@@ -161,7 +184,7 @@ async function loadStatisticsHistory() {
         ? "Sunucu önceki sezonları henüz sunmuyor; src/web/serve.py'yi yeniden başlatın."
         : "Önceki sezonlar okunamadı." });
   }
-  if (state.view === "statistics" && state.seasonSlug === key) renderStatistics();
+  if (state.view === "statistics" && statisticsHistoryKey() === key) renderStatistics();
 }
 
 // Why the population is still this season alone, while it is.
@@ -198,11 +221,28 @@ function statisticsUnit(metric) {
 }
 
 function statisticsReferenceLabel(reference) {
-  const seasons = reference.historySeasons, earlier = seasons.length
-    ? ` + ${reference.historyPeers} önceki sezon (${seasons[0]}${seasons.length > 1 ? ` – ${seasons.at(-1)}` : ""})` : "";
+  const seasons = reference.historySeasons, cut = reference.historyRounds ? `, ilk ${reference.historyRounds} hafta` : "";
+  const earlier = seasons.length
+    ? ` + ${reference.historyPeers} önceki sezon (${seasons[0]}${seasons.length > 1 ? ` – ${seasons.at(-1)}` : ""}${cut})` : "";
   return `${statisticsScopeLabel(reference.scope)} · ${RadarScoring.positionLabels[reference.position] || reference.position}`
     + ` · ${statisticsBarLabel(reference.config.minimumMinutes, reference.position)} · ${reference.seasonPeers} bu sezon${earlier}`
     + `${earlier ? ` = ${reference.peerCount}` : ""} emsal`;
+}
+
+// The small-sample adjustment in the reader's words: the observed figure, the
+// adjusted one that is ranked, the group mean it is pulled toward, how much
+// evidence that mean counts as, and how much of the result is the player's own.
+function statisticsAdjustmentText(result) {
+  const prior = result.prior;
+  if (!prior) return "";
+  const metric = result.metric, unit = statisticsUnit(metric);
+  const scale = metric.transform === "percentage" ? 100 : 90;
+  const weight = prior.unit === "attempts" ? `${displayNumber(Math.round(prior.weight))} deneme`
+    : result.position === "TEAM" ? `${displayNumber(Math.round(prior.weight / 90))} maç`
+      : `${displayNumber(Math.round(prior.weight))} dk`;
+  return `Gözlenen ${displayNumber(result.observedValue)} ${unit} → düzeltilmiş ${displayNumber(result.value)} ${unit}`
+    + ` · emsal ortalaması ${displayNumber(prior.mean * scale)} ${unit}, ağırlığı ${weight}`
+    + ` · ${result.position === "TEAM" ? "takımın" : "oyuncunun"} kendi payı %${displayNumber(Math.round(result.reliability * 100))}`;
 }
 
 function statisticsScoreLabel(result) {
@@ -252,14 +292,17 @@ function statisticsRadarTooltip(entry, result) {
   const unit = statisticsUnit(metric);
   const lines = [entry.name, `${RadarScoring.categories[metric.category]} · ${metric.label}`,
     `Ham toplam (${metric.rawLabel || metric.label}): ${displayNumber(result.rawValue)}`,
-    `Dönüştürülmüş değer: ${displayNumber(result.value)} ${unit}`,
+    `${result.prior ? "Sıralanan (düzeltilmiş) değer" : "Dönüştürülmüş değer"}: ${displayNumber(result.value)} ${unit}`,
+    ...(result.prior ? [`Küçük örnek düzeltmesi: ${statisticsAdjustmentText(result)}`] : []),
     `${statisticsScoreLabel(result)}: ${displayNumber(result.score)} / 100`,
     `${group} · ${statisticsBarLabel(result.minimumMinutes, result.position)}`,
     `Geçerli ölçüt örneği N = ${result.sampleSize} (${result.peerCount} emsal içinden)`,
     `Maç kapsamı: ${result.supplied}/${result.records}${result.position === "TEAM" ? "" : ` · dakika: ${displayNumber(result.minutes)}`}`];
   if (metric.sumColumns) lines.push(`Toplanan sütunlar: ${metric.sumColumns.join(" + ")}`);
-  if (metric.transform === "percentage") lines.push(`Deneme: ${displayNumber(result.attempts)} · gereken: ${result.required}`
-    + ` (tam sezon karşılığı ${metric.minimumAttempts}) · deneme kapsamı: ${result.attemptsSupplied}/${result.records} maç`);
+  if (metric.transform === "percentage") lines.push(`Deneme: ${displayNumber(result.attempts)} · `
+    + (result.required <= 1 ? "en az 1 deneme yeterli; az deneme emsal ortalamasına çekilir"
+      : `gereken: ${result.required} (tam sezon karşılığı ${metric.minimumAttempts})`)
+    + ` · deneme kapsamı: ${result.attemptsSupplied}/${result.records} maç`);
   if (result.zeroApplied) lines.push(`Sıfır oranı: %${displayNumber(result.zeroShare * 100)} · pozitif N = ${result.positiveN}. Pozitif değerler yalnızca pozitif emsallere göre sıralanır.`);
   if (metric.direction === "lower_better") lines.push("Düşük ham değer daha iyi; puan ters çevrilir.");
   if (metric.direction === "context") lines.push("Bağlam ölçütü: yüksek puan daha fazla etkinliktir; tek başına kalite değildir.");
@@ -268,57 +311,28 @@ function statisticsRadarTooltip(entry, result) {
   return lines.join("\n");
 }
 
-function renderStatisticsRadarDetails(containerId, axes, series, reference) {
-  const details = element("details", "statistics-metric-details");
-  details.append(element("summary", "", "Ham değerler ve hesaplama ayrıntıları"));
-  details.append(element("p", "builder-rating-note", statisticsReferenceLabel(reference)));
-  const scroll = element("div", "statistics-metric-scroll");
-  scroll.tabIndex = 0;
-  scroll.setAttribute("role", "region");
-  scroll.setAttribute("aria-label", "Radar ölçüt ayrıntıları");
-  const table = element("table", "statistics-metric-table");
-  table.append(element("caption", "sr-only", "Radarın ham değerleri, puanları ve örnek kapsamı"));
-  const head = element("thead"), heading = element("tr");
-  for (const label of ["Ölçüt / oyuncu", "Ham toplam", "Değer", "Puan / 100", "Örnek / durum"]) {
-    const cell = element("th", "", label); cell.scope = "col"; heading.append(cell);
+// The radars carry no explanatory text: their notes appear only when a plot
+// cannot be drawn, and say why. Scores, raw values and the adjustment are in
+// each axis's tooltip.
+// RadarChart crops each wheel to its own labels, so a six-axis wheel came out
+// shorter than its sixteen-axis neighbour and sat higher in its panel. Side
+// by side they share one frame instead: the same viewBox, so both circles have
+// the same radius, the same centre line and the same height.
+function statisticsAlignRadars(chartIds) {
+  const svgs = chartIds.map((id) => $(id).querySelector(":scope > svg")).filter(Boolean);
+  const boxes = svgs.map((svg) => svg.getAttribute("viewBox")?.split(/\s+/).map(Number))
+    .filter((box) => box?.length === 4 && box.every(Number.isFinite));
+  if (boxes.length !== svgs.length || svgs.length < 2) return;
+  const top = Math.min(...boxes.map((box) => box[1])), bottom = Math.max(...boxes.map((box) => box[1] + box[3]));
+  const left = Math.min(...boxes.map((box) => box[0])), right = Math.max(...boxes.map((box) => box[0] + box[2]));
+  for (const svg of svgs) svg.setAttribute("viewBox", `${left} ${top} ${right - left} ${bottom - top}`);
+}
+
+function statisticsRadarNote(note = "") {
+  for (const id of ["statistics-radar-note", "statistics-detailed-note"]) {
+    $(id).textContent = note;
+    $(id).hidden = !note;
   }
-  head.append(heading);
-  const body = element("tbody");
-  axes.forEach((axis, index) => {
-    for (const entry of series) {
-      const result = entry.results[index], row = element("tr"), pca = axis.transform === "pca";
-      const name = element("th", "", axis.label); name.scope = "row";
-      name.append(element("small", "", `${RadarScoring.categories[axis.category]} · ${entry.name}`));
-      const raw = element("td", "numeric", pca ? "—" : displayNumber(result.rawValue));
-      if (pca) raw.append(element("small", "", `${result.loadings?.length || 0} ölçüt`));
-      else if (axis.rawLabel) raw.append(element("small", "", axis.rawLabel));
-      const unit = statisticsUnit(axis);
-      const value = element("td", "numeric", pca
-        ? `${displayNumber(result.value)} sd` : `${displayNumber(result.value)} ${unit}`);
-      const score = element("td", "numeric", RadarChart.display(result.score));
-      score.append(element("small", "", statisticsScoreLabel(result)));
-      const sample = element("td", "", `N = ${result.sampleSize}`);
-      if (pca) {
-        if (Number.isFinite(result.explained)) sample.append(element("small", "", `Ortak değişimin %${displayNumber(result.explained * 100)}'i`));
-        if (result.loadings?.length) sample.append(element("small", "", statisticsLoadingText(result)));
-        if (result.dropped?.length) sample.append(element("small", "", `Çıkarıldı: ${statisticsDroppedText(result)}`));
-      } else {
-        if (result.zeroApplied) sample.append(element("small", "", `Pozitif N = ${result.positiveN}`));
-        sample.append(element("small", "", `${result.supplied}/${result.records} maç`
-          + (result.position === "TEAM" ? "" : ` · ${displayNumber(result.minutes)} dk`)));
-        if (axis.transform === "percentage") sample.append(element("small", "", `${displayNumber(result.attempts)} deneme / en az ${result.required} · ${result.attemptsSupplied}/${result.records} maç`));
-      }
-      if (result.status !== "available") sample.append(element("small", "", STATISTICS_RADAR_STATUS[result.status]));
-      if (result.smallSample) sample.append(element("small", "", "Küçük örnek; referans dışında"));
-      if (axis.direction === "context") sample.append(element("small", "", "Etkinlik / bağlam; kalite puanı değil"));
-      row.title = statisticsRadarTooltip(entry, result);
-      row.append(name, raw, value, score, sample); body.append(row);
-    }
-  });
-  table.append(head, body); scroll.append(table); details.append(scroll);
-  const wasOpen = $(containerId).querySelector("details")?.open;
-  details.open = Boolean(wasOpen);
-  $(containerId).replaceChildren(details);
 }
 
 // Both wheels share one reference per render, and it has no settings: the
@@ -331,8 +345,7 @@ function renderStatisticsRadars(selected, players) {
     for (const id of ["statistics-radar-chart", "statistics-detailed-chart",
       "statistics-radar-details", "statistics-detailed-details"]) $(id).replaceChildren();
     const note = spiderStatsState.state === "unavailable" ? spiderStatsState.message : "Radar verileri yükleniyor…";
-    $("statistics-radar-note").textContent = note;
-    $("statistics-detailed-note").textContent = note;
+    statisticsRadarNote(note);
     return { note, reference: null };
   }
   const fixtures = state.tables["fixtures.csv"] || [], scopes = RadarScoring.scopes(fixtures);
@@ -363,30 +376,31 @@ function renderStatisticsRadars(selected, players) {
       "statistics-radar-details", "statistics-detailed-details"]) $(id).replaceChildren();
     const note = !scope ? "Radar için fikstürlerde sezon ve lig kimliği gerekli."
       : "Mevki bilinmiyor veya eşit süreli birden fazla mevki var; grup tahmin edilmedi.";
-    $("statistics-radar-note").textContent = note;
-    $("statistics-detailed-note").textContent = note;
+    statisticsRadarNote(note);
     return { note, reference: null };
   }
   const profile = RadarScoring.axes(player.position);
-  if (statisticsHistory.key !== state.seasonSlug) loadStatisticsHistory();
-  const pool = statisticsHistory.state === "ready" ? statisticsHistory.players : [];
+  if (statisticsHistory.key !== statisticsHistoryKey()) loadStatisticsHistory();
+  const historyReady = statisticsHistory.state === "ready" && statisticsHistory.key === statisticsHistoryKey();
+  const pool = historyReady ? statisticsHistory.players : [];
   const reference = RadarScoring.createReference(prepared, player, profile, config, pool);
+  reference.historyRounds = historyReady ? statisticsHistory.rounds : null;
   const attributes = RadarAttributes.forPosition(player.position);
   const models = attributes.map((attribute) => RadarAttributes.fit(attribute, reference));
   const series = (results) => [{ name: player.name, results,
     line: "var(--statistics-plot-line)", fill: "var(--statistics-plot-fill)" }];
   const renderChart = (chartId, detailsId, axes, entries, title) => {
-    $(chartId).innerHTML = RadarChart.svg(axes, entries, statisticsRadarTooltip, title);
+    $(detailsId).replaceChildren();
+    $(chartId).innerHTML = RadarChart.svg(axes, entries, statisticsRadarTooltip, title, statisticsRadarReason);
     if (!entries.some((item) => item.results.some((result) => Number.isFinite(result.score)))) {
       const notice = element("div", "statistics-radar-empty");
       notice.setAttribute("role", "status");
       notice.append(element("strong", "", "Radar puanı hesaplanamıyor."));
       notice.append(element("p", "", reference.peerCount < reference.config.minimumPeers
         ? `${config.minimumMinutes}+ dakika oynayan ${reference.peerCount} emsal var; en az ${reference.config.minimumPeers} gerekli.`
-        : "Ölçütlerde yeterli geçerli veri yok. Eksik değerler sıfır kabul edilmez; nedenler aşağıdaki ölçüt ayrıntılarında gösterilir."));
+        : "Ölçütlerde yeterli geçerli veri yok. Eksik değerler sıfır kabul edilmez; nedenler eksenlerin altında yazılıdır."));
       $(chartId).prepend(notice);
     }
-    renderStatisticsRadarDetails(detailsId, axes, entries, reference);
   };
   renderChart("statistics-radar-chart", "statistics-radar-details", attributes,
     series(models.map((model) => RadarAttributes.evaluate(player, model, reference))),
@@ -394,30 +408,8 @@ function renderStatisticsRadars(selected, players) {
   const results = profile.map((axis) => RadarScoring.evaluate(player, axis, reference));
   renderChart("statistics-detailed-chart", "statistics-detailed-details", profile, series(results),
     `${player.name} · ayrıntılı ölçütler`);
-  const shortNote = !(player.minutes > 0) || player.minutes < config.minimumMinutes
-    ? `Küçük veya belirsiz örnek: ${player.name} (${displayNumber(player.minutes)} dk); referans grubuna alınmadı. ` : "";
-  const fitted = models.filter((model) => model.status === "available");
-  const explained = fitted.filter((model) => Number.isFinite(model.explained));
-  $("statistics-radar-note").textContent =
-    `${attributes.length} nitelik · ${statisticsReferenceLabel(reference)}. `
-    + "Her nitelik, birbiriyle örtüşen 90 dakikalık ölçütlerin ilk temel bileşenidir (PCA); "
-    + "tekrar eden ölçütler tek bir eksende toplanır. "
-    + (explained.length ? `Bileşenler ortak değişimin ortalama %${displayNumber(
-      explained.reduce((sum, model) => sum + model.explained, 0) / explained.length * 100)}'ini açıklıyor. ` : "")
-    + (fitted.length < models.length ? `${models.length - fitted.length} nitelik için yeterli tam kayıtlı emsal yok. ` : "")
-    + (fitted.some((model) => model.dropped.length)
-      ? "Önceki sezonlarda kaydı olmayan, emsallerde değişmeyen veya eksenle ters yönde hareket eden ölçütler o eksenden çıkarılır; hangileri olduğu ölçüt ayrıntılarında yazılıdır. " : "")
-    + shortNote
-    + statisticsPoolNote()
-    + "Puan, oyuncunun bileşen skorunun aynı emsal grubundaki sırasıdır; — eksik veri veya yetersiz örnek.";
-  $("statistics-detailed-note").textContent = `${profile.length} ölçüt · ${statisticsReferenceLabel(reference)}. `
-    + "Orta sıra yüzdeliği, sabit 0–100 ölçeği. "
-    + "Yüksek puan daha iyi; italik yazılan ‘bağlam’ ölçütlerinde daha fazla etkinlik anlamına gelir. "
-    + "Çizilen değerler yalnızca bu sezona aittir; önceki sezonlar yalnızca karşılaştırma ölçeğini genişletir. "
-    + statisticsPoolNote()
-    + "Sıfır oranı en az %70 olan ölçütlerde pozitif değerler pozitif emsaller arasında sıralanır. "
-    + shortNote
-    + "— eksik veya yetersiz örnek; nedenini ölçüt ayrıntılarında görebilirsiniz.";
+  statisticsAlignRadars(["statistics-radar-chart", "statistics-detailed-chart"]);
+  statisticsRadarNote();
   // Handed back so other player charts reuse this exact population and score.
   return { player, reference, profile, results, pool: statisticsPoolNote() };
 }

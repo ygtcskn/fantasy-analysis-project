@@ -208,8 +208,10 @@
 :root[data-theme="dark"] .detailed-standings,
 :root[data-theme="dark"] .fixtures-view #workspace,
 :root[data-theme="dark"] .matchweek-standings,
+:root[data-theme="dark"] .matchweek-fixtures-panel,
 :root[data-theme="dark"] .builder-pitch-panel,
 :root[data-theme="dark"] .builder-pool,
+:root[data-theme="dark"] .builder-summary,
 :root[data-theme="dark"] .statistics-card,
 :root[data-theme="dark"] .statistics-players,
 :root[data-theme="dark"] .statistics-reserved,
@@ -334,8 +336,9 @@
 /* Cell spacing: full-width tables use Puan Durumu's spacing, tables inside
    cards and side columns a compact version of it. Cells with a spacing of
    their own (the European-place marker, the builder's detail row, the
-   no-results message) keep it. */
-:root[data-theme="dark"] :is(.home-panel, .detailed-standings, .fixtures-view #workspace, .matchweek-fixtures, .tier-ranking-table, .history-table) :is(th, td):not(.no-results, .matchweek-details-cell, .matchweek-analysis *) {
+   no-results message, Maç Haftası's fixtures, which share their width with
+   the standings column) keep it. */
+:root[data-theme="dark"] :is(.home-panel, .detailed-standings, .fixtures-view #workspace, .tier-ranking-table, .history-table) :is(th, td):not(.no-results) {
   padding: var(--cell-pad);
 }
 :root[data-theme="dark"] :is(.statistics-table, .statistics-metric-table, .builder-table, .builder-recommendations table, .matchweek-standings table) :is(th, td):not(.no-results) {

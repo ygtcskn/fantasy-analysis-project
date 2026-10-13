@@ -112,6 +112,28 @@ function playerHasTierRole(player, role) {
   return !role || [...player.positions].some((position) => tierRoleForPosition(position) === role);
 }
 
+// One role per player for lists that show a single icon. The radar's rule: the
+// match position he has played the most minutes in this season, else his
+// registered squad position. Sportmonks registers Salah as a midfielder, but
+// he plays - and is compared on the radar - as an attacker.
+function playerPrimaryRole(player) {
+  const minutes = new Map();
+  for (const row of player.matches) {
+    const role = tierRoleForPosition(row.position), played = number(row.minutes_played) ?? 0;
+    if (role && played > 0) minutes.set(role, (minutes.get(role) || 0) + played);
+  }
+  return [...minutes].sort((a, b) => b[1] - a[1])[0]?.[0]
+    || tierRoleForPosition(player.squadPosition)
+    || [...player.positions].map(tierRoleForPosition).find(Boolean) || "";
+}
+
+const TIER_ROLE_LABELS = { goalkeeper: "Kaleci", defender: "Defans", midfielder: "Orta saha", attacker: "Forvet" };
+
+// A role's name for a table cell.
+function playerRoleLabel(role) {
+  return TIER_ROLE_LABELS[role] || "—";
+}
+
 function tierPositionLabel(position) {
   const labels = { goalkeeper: "Kaleci", defender: "Defans", midfielder: "Orta Saha", attacker: "Forvet" };
   return labels[tierRoleForPosition(position)] || position;
@@ -184,9 +206,10 @@ function buildTierPlayers() {
   const players = new Map();
   const ensure = (id, name) => {
     if (!id) return null;
-    if (!players.has(id)) players.set(id, { id, name: profiles.get(id)?.display_name || profiles.get(id)?.name || name || `Oyuncu ${id}`, teams: new Set(), positions: new Set(), matches: [] });
+    // Sportmonks pads some display names ("Victor Osimhen ").
+    if (!players.has(id)) players.set(id, { id, name: profiles.get(id)?.display_name?.trim() || profiles.get(id)?.name?.trim() || name?.trim() || `Oyuncu ${id}`, teams: new Set(), positions: new Set(), matches: [] });
     const player = players.get(id);
-    if (name && player.name === `Oyuncu ${id}`) player.name = name;
+    if (name?.trim() && player.name === `Oyuncu ${id}`) player.name = name.trim();
     return player;
   };
   for (const profile of profiles.values()) ensure(profile.id, profile.name);
@@ -196,14 +219,23 @@ function buildTierPlayers() {
     if (row.team_id) player.teams.add(row.team_id);
     if (row.team_id) player.squadTeam = row.team_id;
     if (row.jersey_number) player.jersey = row.jersey_number;
-    if (row["position.name"]) player.positions.add(row["position.name"]);
+    if (row["position.name"]) {
+      player.positions.add(row["position.name"]);
+      player.squadPosition = row["position.name"];
+    }
   }
+  // Lineups arrive before kickoff, so a fixture with an unfinished state is not
+  // an appearance. One without any state is kept, as before.
+  const finished = (fixture) => {
+    const status = String(fixture?.["state.developer_name"] || fixture?.state || "").trim().toUpperCase();
+    return !status || ["FT", "AET", "FT_PEN", "AWARDED", "WO"].includes(status);
+  };
   for (const row of state.tables["player_match_stats.csv"] || []) {
     const player = ensure(row.player_id, row.name);
     if (!player) continue;
     if (row.team_id) player.teams.add(row.team_id);
     if (row.position) player.positions.add(row.position);
-    player.matches.push(row);
+    if (finished(fixtures.get(row.fixture_id))) player.matches.push(row);
   }
   for (const player of players.values()) {
     player.teamNames = [...player.teams].map((id) => teamName(id, teams));
@@ -214,6 +246,37 @@ function buildTierPlayers() {
   }
   state.tierCache = { players: [...players.values()], teams, fixtures };
   return state.tierCache;
+}
+
+// Players still in the league, from Sportmonks' current domestic squads. The
+// season squad also keeps players who left after appearing (Talisca, for one);
+// they are dropped from every player list, leader card and the builder, and
+// stay only in past match records. Null means the export predates current
+// squads or misses a club, and then nobody is filtered out.
+let currentSquad = null;
+let leaguePlayersCache = { source: null, current: null, result: null };
+
+async function loadCurrentSquads() {
+  currentSquad = null;
+  if (!state.seasonSlug) return;
+  try {
+    const rows = await readFantasyCSV("current_squads.csv", ["team_id", "player_id"], state.seasonSlug, true);
+    const clubs = new Set((rows || []).map((row) => row.team_id));
+    const covered = rows && (state.tables["teams.csv"] || []).every((team) => clubs.has(team.id));
+    currentSquad = covered ? new Set(rows.map((row) => row.player_id)) : null;
+  } catch {
+    currentSquad = null;
+  }
+}
+
+function leaguePlayers() {
+  const source = buildTierPlayers();
+  if (leaguePlayersCache.source !== source || leaguePlayersCache.current !== currentSquad) {
+    leaguePlayersCache = { source, current: currentSquad, result: currentSquad
+      ? { ...source, players: source.players.filter((player) => currentSquad.has(player.id)) }
+      : source };
+  }
+  return leaguePlayersCache.result;
 }
 
 function resetTierFilters() {
@@ -230,7 +293,7 @@ function resetTierFilters() {
 }
 
 function renderTierList() {
-  const { players, teams } = buildTierPlayers();
+  const { players, teams } = leaguePlayers();
   const teamIds = [...new Set(players.flatMap((player) => [...player.teams]))];
   options($("tier-team"), teamIds.map((id) => [id, teamName(id, teams)]).sort((a, b) => a[1].localeCompare(b[1])), "Tüm takımlar");
   const query = $("tier-search").value.toLocaleLowerCase().trim();

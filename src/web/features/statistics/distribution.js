@@ -133,6 +133,7 @@ function renderPlayerDistribution(radar, selected) {
     return { label: metric.label, unit: statisticsUnit(metric), values, value: Number.isFinite(result.value) ? result.value : null,
       score: result.score, direction: metric.direction,
       detail: `${player.name} · ${metric.label}: ${displayNumber(result.value)} ${statisticsUnit(metric)}`
+        + (result.prior ? ` (gözlenen ${displayNumber(result.observedValue)}, kendi payı %${displayNumber(Math.round(result.reliability * 100))})` : "")
         + ` · yüzdelik ${Number.isFinite(result.score) ? RadarChart.display(result.score) : "—"} · ${values.length} emsal değeri` };
   });
   $("statistics-distribution-chart").innerHTML = PlayerDistribution.chart(rows, RadarChart.display);
@@ -140,6 +141,7 @@ function renderPlayerDistribution(radar, selected) {
     + "Her satırda eğri emsallerin o ölçütteki dağılımı, kesikli çizgi oyuncunun değeri, renkli bölüm geride bıraktığı emsaller, "
     + "sağdaki sayı yüzdeliği; Ayrıntılı Ölçütler radarıyla aynı emsaller ve aynı puan. Renk yüzdeliği gösterir: turuncu düşük, "
     + "nötr orta, lacivert yüksek. Düşük değerin iyi olduğu ölçütlerde (ör. yenilen gol) renkli bölüm oyuncunun değerinden yukarı uzanır. "
+    + "Değerler ve eğriler az dakikalı oranlar emsal ortalamasına çekildikten sonraki değerlerdir; gözlenen değer satırın üzerinde bekleyince görünür. "
     + (radar.pool || "");
 }
 

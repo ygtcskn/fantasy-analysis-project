@@ -48,12 +48,25 @@ function builderBudget(selection = builderState.selected) {
   return { spent, bench, missing, remaining: 100_000_000 - spent };
 }
 
+// Only players still in the league are selectable (see leaguePlayers).
 function builderData() {
-  return buildTierPlayers();
+  return leaguePlayers();
 }
 
 function builderPlayer(id) {
   return builderData().players.find((player) => player.id === id);
+}
+
+// The club the three-per-club rule counts: the fantasy game's own team first.
+function builderPlayerClub(playerId) {
+  return fantasyState.projections.get(playerId)?.[0]?.team_id || builderPlayer(playerId)?.squadTeam || null;
+}
+
+// The player's position in the TFF fantasy game (KL, DEF, OS, FOR), taken from
+// the reviewed TFF row behind the projection. Never inferred from Sportmonks.
+function builderTffRole(playerId) {
+  if (fantasyState.season !== state.seasonSlug) return null;
+  return fantasyState.projections.get(playerId)?.[0]?.position || null;
 }
 
 function builderPlayerRoles(player) {
@@ -146,7 +159,7 @@ function placeBuilderPlayer(playerId, targetKey = builderState.activeSlot) {
   }
   const clubs = new Map();
   for (const id of next.values()) {
-    const club = fantasyState.projections.get(id)?.[0]?.team_id || builderPlayer(id)?.squadTeam;
+    const club = builderPlayerClub(id);
     if (club) clubs.set(club, (clubs.get(club) || 0) + 1);
   }
   if ([...clubs.values()].some((count) => count > 3)) {
@@ -255,10 +268,7 @@ function builderPlayerDetails(player, teams) {
       ["Fiyat", number(projection.price_million_try) === null ? "—" : `₺${displayNumber(Number(projection.price_million_try).toFixed(1))}M`],
       ["Rakip", opponent],
       ["Beklenen dakika", displayNumber(fantasyProjectionNumber(projection, "expected_minutes"))],
-      ["Hücum zorluğu", fantasyFixtureDifficulty(projection, "attacking")],
-      ["Savunma zorluğu", fantasyFixtureDifficulty(projection, "defensive")],
     ]);
-    next.append(element("p", "builder-player-details-note", "Maç zorluğu: 1 en kolay, 5 en zor. Rakip ve saha için deneysel değerlendirmedir; beklenen puan bu eşleşmeyi zaten içerir."));
     if (projection.strength_context_status === "league_average_fallback") next.append(element("p", "builder-player-details-note", "Takım geçmişinin bir kısmı eksik; lig ortalaması güç kullanıldı."));
     if (projection.availability_status !== "no_reported_absence") {
       const availability = element("p", `builder-availability builder-availability-${["out", "expected_out", "doubtful"].includes(projection.availability_status) ? "caution" : "neutral"}`, fantasyAvailability(projection));
@@ -342,11 +352,12 @@ function renderBuilderPool(players, teams) {
     const role = { KL: "GK", DEF: "DEF", OS: "MID", FOR: "FWD" }[position];
     return role ? role === builderState.role : builderPlayerRoles(player).has(builderState.role);
   };
-  const pointsPerMatch = (player) => fantasyState.season && fantasyState.season === state.seasonSlug
-    ? number(fantasyState.summaries.get(player.id)?.points_per_match) : null;
-  const sortValue = $("builder-sort").value === "points" ? pointsPerMatch : (player) => player.average;
-  const visible = players.filter((player) => matchesRole(player) && (!team || player.teams.has(team)) && (!query || `${player.name} ${player.teamNames.join(" ")}`.toLocaleLowerCase().includes(query)))
-    .sort((a, b) => (sortValue(b) ?? -Infinity) - (sortValue(a) ?? -Infinity) || b.ratings.length - a.ratings.length || a.name.localeCompare(b.name));
+  const filtered = players.filter((player) => matchesRole(player) && (!team || player.teams.has(team)) && (!query || `${player.name} ${player.teamNames.join(" ")}`.toLocaleLowerCase().includes(query)));
+  // Next-match expected fantasy points, under the same deadline and availability
+  // checks as the player's details. Looked up once per render, not per comparison.
+  const expected = new Map(filtered.map((player) => [player.id, fantasyProjectionNumber(builderFantasyData(player).projection, "expected_points")]));
+  const sortValue = $("builder-sort").value === "expected" ? (player) => expected.get(player.id) : (player) => player.average;
+  const visible = filtered.sort((a, b) => (sortValue(b) ?? -Infinity) - (sortValue(a) ?? -Infinity) || b.ratings.length - a.ratings.length || a.name.localeCompare(b.name));
   $("builder-result-count").textContent = `${visible.length} oyuncu`;
   const body = document.createDocumentFragment();
   for (const player of visible) {
@@ -365,7 +376,7 @@ function renderBuilderPool(players, teams) {
     const toggle = element("button", "builder-player-button builder-player-toggle", player.name);
     toggle.id = `builder-player-toggle-${player.id}`;
     toggle.type = "button";
-    toggle.title = `${[...player.positions].join(" / ") || "Mevki bilgisi yok"} · ${player.ratings.length} geçerli maç puanı`;
+    toggle.title = `${[...player.positions].join(" / ") || "Mevki bilgisi yok"} · ${player.ratings.length} maçta Sportmonks rating`;
     toggle.setAttribute("aria-expanded", String(expanded));
     toggle.setAttribute("aria-controls", `builder-player-details-${player.id}`);
     toggle.setAttribute("aria-label", `${player.name} fantezi istatistiklerini ${expanded ? "gizle" : "göster"}`);
@@ -377,16 +388,18 @@ function renderBuilderPool(players, teams) {
     nameRow.append(toggle, add);
     nameCell.append(nameRow);
     const rating = element("td", "numeric builder-pool-rating", ratingText(player.average));
-    rating.title = `${player.ratings.length} geçerli maç puanı`;
-    rating.setAttribute("aria-label", player.average === null ? "Maç puanı yok" : `Ortalama maç puanı ${ratingText(player.average)}`);
-    const points = element("td", "numeric builder-pool-rating", displayNumber(pointsPerMatch(player)));
-    points.title = "Bu sezon oynadığı maç başına ortalama fantezi puanı";
-    tr.append(logoCell, nameCell, rating, points);
+    rating.title = `${player.ratings.length} maçın Sportmonks rating ortalaması`;
+    rating.setAttribute("aria-label", player.average === null ? "Rating yok" : `Ortalama Sportmonks rating ${ratingText(player.average)}`);
+    const expectedPoints = expected.get(player.id);
+    const points = element("td", "numeric builder-pool-rating", expectedPoints === null ? "—" : displayNumber(expectedPoints.toFixed(2)));
+    points.title = "Sonraki maç için beklenen fantezi puanı";
+    points.setAttribute("aria-label", expectedPoints === null ? "Beklenen fantezi puanı yok" : `Beklenen fantezi puanı ${displayNumber(expectedPoints.toFixed(2))}`);
+    tr.append(logoCell, nameCell, element("td", "builder-pool-role", builderTffRole(player.id) || "—"), rating, points);
     body.append(tr);
     if (expanded) {
       const detailsRow = element("tr", `builder-player-details-row${selected ? " builder-player-selected" : ""}`);
       const detailsCell = element("td");
-      detailsCell.colSpan = 4;
+      detailsCell.colSpan = 5;
       detailsCell.id = `builder-player-details-${player.id}`;
       const details = builderPlayerDetails(player, teams);
       details.setAttribute("role", "region");
@@ -398,7 +411,7 @@ function renderBuilderPool(players, teams) {
   }
   if (!visible.length) {
     const tr = element("tr"), cell = element("td", "no-results", players.length ? "Bu filtrelerle eşleşen oyuncu yok." : "Oyuncu havuzunu görmek için oyuncu, kadro ve maç CSV dosyalarını yükleyin.");
-    cell.colSpan = 4; tr.append(cell); body.append(tr);
+    cell.colSpan = 5; tr.append(cell); body.append(tr);
   }
   $("builder-player-list").replaceChildren(body);
 }
@@ -412,10 +425,12 @@ function renderSquadBuilder() {
   $("builder-budget").textContent = budget.missing ? "— / 100" : `${displayNumber(budget.spent / 1_000_000)} / 100`;
   $("builder-budget").title = budget.missing ? "Oyuncu fiyatı eksik; bütçe hesaplanamadı." : `Yedekler ₺${displayNumber(budget.bench / 1_000_000)}M · Kalan ₺${displayNumber(budget.remaining / 1_000_000)}M`;
   $("builder-budget").classList.toggle("error", Boolean(budget.missing || budget.remaining < 0));
-  $("builder-fantasy-note").textContent = fantasyState.note;
+  // Only a failed or missing fantasy load needs explaining; a successful one is silent.
+  $("builder-fantasy-note").textContent = fantasyState.season && fantasyState.season === state.seasonSlug ? "" : fantasyState.note;
   renderBuilderPitch(playersById);
   renderBuilderPool(players, teams);
   renderBuilderRecommendations();
+  renderBuilderSummary(playersById, teams);
 }
 
 function resetSquadBuilder() {

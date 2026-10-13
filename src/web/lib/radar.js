@@ -10,7 +10,7 @@
 
 // Pure scoring pipeline. No DOM, provider requests, exports, or hidden fallbacks.
 const RadarScoring = (() => {
-  const defaults = Object.freeze({ minimumMinutes: 900, minimumPeers: 2, zeroShareThreshold: 0.7 });
+  const defaults = Object.freeze({ minimumMinutes: 900, minimumPeers: 2, zeroShareThreshold: 0.7, shrinkage: true });
   // Only supplied role names are mapped. Broad roles remain broad; numeric
   // detailed_position_id values need a reviewed provider mapping before use.
   const positionGroups = {
@@ -145,6 +145,28 @@ const RadarScoring = (() => {
   function scopes(fixtures) {
     return [...new Map(fixtures.map(fixtureScope).filter(Boolean).map((scope) => [scope.key, scope])).values()];
   }
+  // Earlier seasons are compared at the same point of the season. Seven rounds
+  // in, a current per-90 rests on 330-630 minutes while a full earlier season
+  // rests on 2000+, so the noisier current rates crowded both ends of the
+  // pooled scale. Cutting every earlier season to the rounds the served season
+  // has reached compares like with like; once the served season is complete
+  // there is no cut.
+  function roundNumber(fixture) {
+    const value = Number(String(fixture?.["round.name"] ?? "").trim());
+    return Number.isInteger(value) && value > 0 ? value : null;
+  }
+  // The highest round with a finished fixture, or null - no cut - when every
+  // fixture is finished, none is, or rounds are not numbered.
+  function playedRounds(fixtures) {
+    const scoped = fixtures.filter((fixture) => fixtureScope(fixture));
+    if (!scoped.length || scoped.every(finished)) return null;
+    const rounds = scoped.filter(finished).map(roundNumber);
+    return rounds.length && rounds.every((round) => round !== null) ? Math.max(...rounds) : null;
+  }
+  function throughRound(fixtures, rounds) {
+    if (!rounds) return fixtures;
+    return fixtures.filter((fixture) => { const round = roundNumber(fixture); return round !== null && round <= rounds; });
+  }
   // Sportmonks omits minutes_played for an unused substitute exactly as it
   // omits every other zero: of 19,270 blank-minute rows across 2021-2027, all
   // but 36 were not started and carry no statistic or rating. Those are bench
@@ -159,12 +181,21 @@ const RadarScoring = (() => {
     if (minutes !== null || !blank(row.minutes_played)) return false;
     return !covered(row) && blank(row.rating) && !(numeric(row.started) > 0);
   }
+  // Sportmonks publishes a lineup before kickoff, so an unplayed fixture can
+  // carry started=1 rows with blank minutes. Read as appearances, one upcoming
+  // round made every starter's minutes unknown and emptied the reference. A
+  // fixture without any state is kept, as before.
+  const finishedStates = new Set(["FT", "AET", "FT_PEN", "AWARDED", "WO"]);
+  function finished(fixture) {
+    const state = String(fixture?.["state.developer_name"] || fixture?.state || "").trim().toUpperCase();
+    return !state || finishedStates.has(state);
+  }
   function preparePlayers(players, fixtures, scope, groups = positionGroups) {
     const byFixture = new Map(fixtures.map((fixture) => [fixture.fixture_id, fixture]));
     return players.map((player) => {
       const rows = player.matches.filter((row) => {
         const fixture = byFixture.get(row.fixture_id);
-        return scope && fixtureScope(fixture)?.key === scope.key
+        return scope && fixtureScope(fixture)?.key === scope.key && finished(fixture)
           && (!row.season_id || String(row.season_id) === scope.seasonId)
           && (!row.league_id || String(row.league_id) === scope.competitionId)
           && !unplayed(row);
@@ -265,15 +296,34 @@ const RadarScoring = (() => {
     } else if (valid.length !== player.rows.length) {
       result.status = valid.length ? "partial_coverage" : "missing"; return result;
     }
+    // The match-to-match sums the small-sample adjustment measures noise from:
+    // events against minutes, or successes against attempts.
+    if (metric.transform === "per90" || metric.transform === "percentage") {
+      const exposure = (row, index) => (metric.transform === "percentage"
+        ? nonnegative(row[metric.attemptsColumn]) ?? (supplied[index] === 0 ? 0 : null)
+        : nonnegative(row.minutes_played));
+      const pairs = player.rows.map((row, index) => [supplied[index], exposure(row, index)])
+        .filter(([value, weight]) => value !== null && weight > 0);
+      if (pairs.length === player.rows.filter((row, index) => exposure(row, index) !== 0).length) {
+        result.moments = pairs.reduce((sums, [value, weight]) => ({ n: sums.n + 1, sx: sums.sx + value,
+          sm: sums.sm + weight, sx2: sums.sx2 + value * value, sxm: sums.sxm + value * weight,
+          sm2: sums.sm2 + weight * weight }), { n: 0, sx: 0, sm: 0, sx2: 0, sxm: 0, sm2: 0 });
+      }
+    }
     result.status = "counted";
     return result;
   }
-  function observation(player, metric, config = defaults) {
+  // `required` defaults to the scaled attempt minimum. Where a small-sample
+  // prior exists, adjusted() passes 1 instead: the prior already discounts a
+  // 1-of-1 ratio to almost the group mean, so a hard minimum would only blank
+  // low-volume passers such as strikers.
+  function observation(player, metric, config = defaults, required = requiredAttempts(metric, config)) {
     const counted = tally(player, metric);
-    const result = { ...counted, value: null, minutes: player.minutes, required: requiredAttempts(metric, config) };
+    const result = { ...counted, value: null, minutes: player.minutes, required };
     if (counted.status !== "counted") return result;
     if (metric.transform === "percentage") {
-      if (!(result.attempts > 0) || result.attempts < result.required) {
+      if (!(result.attempts > 0)) { result.status = "no_attempts"; return result; }
+      if (result.attempts < result.required) {
         result.status = "insufficient_attempts"; return result;
       }
       result.value = result.rawValue / result.attempts * 100;
@@ -357,14 +407,83 @@ const RadarScoring = (() => {
       && player.scope?.competitionId && player.scope.competitionId === target.scope?.competitionId
       && player.scope.seasonId !== target.scope?.seasonId);
     const peers = [...current, ...earlier];
-    return { config, position: target.position, scope: target.scope, peers, peerCount: peers.length,
+    const reference = { config, position: target.position, scope: target.scope, peers, peerCount: peers.length,
       seasonPeers: current.length, historyPeers: earlier.length,
-      historySeasons: [...new Set(earlier.map((player) => player.season))].sort(),
-      metrics: new Map(selectedAxes.map((metric) => [metric.id,
-        peers.map((player) => observation(player, metric, config).value).filter(Number.isFinite)])) };
+      historySeasons: [...new Set(earlier.map((player) => player.season))].sort(), priors: new Map() };
+    reference.metrics = new Map(selectedAxes.map((metric) => [metric.id,
+      peers.map((player) => adjusted(player, metric, reference).value).filter(Number.isFinite)]));
+    return reference;
+  }
+  // Small samples are pulled toward their group (empirical Bayes). The spread
+  // of the peers' observed rates is true differences plus sampling noise. The
+  // noise is measured, not assumed: each peer's own match-to-match variation
+  // around his season rate (a ratio estimator over his matches, kept in the
+  // season tally so earlier seasons carry it too). That is what makes xG -
+  // not a count, and far steadier than a Poisson count of the same mean - and
+  // pass volume - steadier still, but with team-driven swings - come out
+  // right. A peer with fewer than two matches falls back to the counting
+  // model: Poisson for a per-90, binomial for a percentage. What is left is
+  // the true spread, and the prior weight is how much evidence the group
+  // average is worth - the noise per minute of evidence over the true spread:
+  //   adjusted = (events + mean x weight) / (minutes + weight) x 90,
+  // with attempts in place of minutes for a percentage. Weight is small where
+  // players really differ and large where most of the spread is luck. A
+  // metric whose spread is all noise gets the cap: thirty full matches, or ten
+  // times the ten-match attempt requirement. Fewer than ten valid peers, or a
+  // group mean of zero, leaves the observed value unchanged.
+  const shrinkage = Object.freeze({ minimumPeers: 10, maximumMinutes: 2700, attemptMultiple: 10 });
+  function sampleVariance(moments) {
+    if (!moments || moments.n < 2 || !(moments.sm > 0)) return null;
+    const rate = moments.sx / moments.sm;
+    const residual = moments.sx2 - 2 * rate * moments.sxm + rate * rate * moments.sm2;
+    return Math.max(0, residual) / (moments.sm * moments.sm) * moments.n / (moments.n - 1);
+  }
+  function estimatePrior(metric, seen) {
+    const percentage = metric.transform === "percentage";
+    if (!percentage && metric.transform !== "per90") return null;
+    const rows = seen.map((entry) => ({ events: entry.rawValue, exposure: percentage ? entry.attempts : entry.minutes,
+      variance: sampleVariance(entry.moments) }))
+      .filter((row) => Number.isFinite(row.events) && row.events >= 0 && row.exposure > 0);
+    if (rows.length < shrinkage.minimumPeers) return null;
+    const mean = rows.reduce((sum, row) => sum + row.events, 0) / rows.reduce((sum, row) => sum + row.exposure, 0);
+    if (!(mean > 0) || (percentage && !(mean < 1))) return null;
+    const unit = percentage ? mean * (1 - mean) : mean;
+    const spread = rows.reduce((sum, row) => sum + (row.events / row.exposure - mean) ** 2, 0) / rows.length;
+    const variance = (row) => row.variance ?? unit / row.exposure;
+    const noise = rows.reduce((sum, row) => sum + variance(row), 0) / rows.length;
+    // Noise of one minute (or attempt): a rate over m minutes varies by about
+    // dispersion / m. Poisson would make it the mean; measured, it is not.
+    const dispersion = rows.reduce((sum, row) => sum + variance(row) * row.exposure, 0) / rows.length;
+    const signal = spread - noise;
+    const cap = percentage ? metric.minimumAttempts * shrinkage.attemptMultiple : shrinkage.maximumMinutes;
+    const weight = signal > 0 ? Math.min(cap, dispersion / signal) : cap;
+    return { mean, weight, signal, peers: rows.length, unit: percentage ? "attempts" : "minutes" };
+  }
+  function priorFor(reference, metric) {
+    if (!reference.priors) reference.priors = new Map();
+    if (!reference.priors.has(metric.id)) {
+      reference.priors.set(metric.id, estimatePrior(metric, reference.peers
+        .map((peer) => observation(peer, metric, reference.config)).filter((entry) => entry.status === "available")));
+    }
+    return reference.priors.get(metric.id);
+  }
+  // The observation with the group prior applied. `observedValue` keeps the
+  // raw rate for the details; `reliability` is the share of the adjusted value
+  // that is the player's own evidence.
+  // The prior is fitted on peers that meet the full attempt minimum, so it is
+  // stable; it is then applied to every player with at least one attempt.
+  function adjusted(player, metric, reference) {
+    const prior = reference.config.shrinkage === false ? null : priorFor(reference, metric);
+    const observed = observation(player, metric, reference.config,
+      prior && metric.transform === "percentage" ? 1 : undefined);
+    if (!prior || observed.status !== "available") return { ...observed, observedValue: observed.value, prior: null, reliability: null };
+    const percentage = metric.transform === "percentage";
+    const exposure = percentage ? observed.attempts : observed.minutes;
+    const value = (observed.rawValue + prior.mean * prior.weight) / (exposure + prior.weight) * (percentage ? 100 : 90);
+    return { ...observed, observedValue: observed.value, value, prior, reliability: exposure / (exposure + prior.weight) };
   }
   function evaluate(player, metric, reference) {
-    const observed = observation(player, metric, reference.config);
+    const observed = adjusted(player, metric, reference);
     const ranked = score(observed.value, reference.metrics.get(metric.id) || [], metric, reference.config);
     const sameGroup = player.position === reference.position && player.scope?.key === reference.scope?.key;
     return { ...observed, metric, score: sameGroup ? ranked.score : null,
@@ -375,9 +494,9 @@ const RadarScoring = (() => {
       smallSample: !(player.minutes > 0) || player.minutes < reference.config.minimumMinutes };
   }
   return { defaults, positionGroups, positionLabels, categories, metrics, profiles, axes,
-    numeric, nonnegative, groupFor, positionFor, fixtureScope, scopes, preparePlayers,
-    covered, unplayed, matchValue, requiredAttempts, tally, observation, settings, percentile, distribution, score,
-    createReference, evaluate };
+    numeric, nonnegative, groupFor, positionFor, fixtureScope, scopes, finished, roundNumber, playedRounds,
+    throughRound, preparePlayers, covered, unplayed, matchValue, requiredAttempts, tally, observation, settings,
+    percentile, distribution, score, createReference, shrinkage, sampleVariance, estimatePrior, priorFor, adjusted, evaluate };
 })();
 
 
@@ -476,8 +595,9 @@ const RadarAttributes = (() => {
       loadings: null, dropped: [], active: null, explained: null };
     // An unknown value must stay unknown: in JavaScript null * 1 is 0.
     const signed = (value, metric) => (value === null ? NaN : value * sign(metric));
+    // Members are the same small-sample-adjusted rates the wheel ranks.
     const values = reference.peers.map((peer) => members.map((metric) =>
-      signed(RadarScoring.observation(peer, metric, reference.config).value, metric)));
+      signed(RadarScoring.adjusted(peer, metric, reference).value, metric)));
     // A component needs every member for every peer it is fitted on, but not
     // every season supplies every member: chances created is effectively
     // missing before 2024-25. A member stays unless requiring it would cut the
@@ -546,7 +666,7 @@ const RadarAttributes = (() => {
     if (player.position !== reference.position || player.scope?.key !== reference.scope?.key) {
       return { ...result, status: "incompatible_group" };
     }
-    const own = members.map((metric) => RadarScoring.observation(player, metric, reference.config));
+    const own = members.map((metric) => RadarScoring.adjusted(player, metric, reference));
     // Only the members the component kept are needed from the player.
     const needed = model.active || members.map((_, index) => index);
     result.supplied = needed.length ? Math.min(...needed.map((index) => own[index].supplied)) : 0;
@@ -685,6 +805,7 @@ const RadarChart = (() => {
   // the circle gives up some radius to type that stays near 10-11px on screen.
   const width = 640, centre = 320, radius = 150, labelGap = 24;
   const labelSize = 18, lineHeight = 20, scoreSize = 16, scoreHeight = 18, ascent = 19, wrapAt = 14;
+  const reasonSize = 13, reasonHeight = 16;
   // 0 and 100 appear only where a rule puts them there - an observed zero on a
   // zero-heavy axis, or the ends of a min-max scale. A rank inside a group,
   // however large, reads 1-99, so a 99.8 among 300 peers does not round to 100.
@@ -701,7 +822,9 @@ const RadarChart = (() => {
     }
     return lines;
   }
-  function svg(axes, series, tooltip, title = "Oyuncu radarı") {
+  // `reason(result)` may return a few words for an axis without a score; they
+  // sit under its "—" so a blank axis says why without a hover.
+  function svg(axes, series, tooltip, title = "Oyuncu radarı", reason = () => "") {
     if (axes.length < 5 || axes.length > 18) return "";
     const at = (index, distance) => {
       const angle = 2 * Math.PI * index / axes.length - Math.PI / 2;
@@ -744,13 +867,16 @@ const RadarChart = (() => {
       const [x, y] = at(index, radius + labelGap);
       const anchor = Math.abs(x - centre) < 14 ? "middle" : x > centre ? "start" : "end";
       const lines = wrap(axis.label);
-      const height = lines.length * lineHeight + scoreHeight;
+      const why = series.length === 1 && !Number.isFinite(series[0].results[index].score)
+        ? String(reason(series[0].results[index]) || "") : "";
+      const height = lines.length * lineHeight + scoreHeight + (why ? reasonHeight : 0);
       // The whole label and score block stays outside the ring: above the
       // anchor in the top half, below it in the bottom half, centred at the sides.
       const startY = y < centre - 20 ? y - height + ascent - 6 : y > centre + 20 ? y + ascent + 4 : y - height / 2 + ascent;
-      const span = Math.max(...lines.map((line) => line.length * glyph), (series.length * 4 + 4) * scoreGlyph);
+      const span = Math.max(...lines.map((line) => line.length * glyph), (series.length * 4 + 4) * scoreGlyph,
+        why.length * reasonSize * 0.56);
       const left = anchor === "middle" ? x - span / 2 : anchor === "start" ? x : x - span;
-      return { axis, index, x, y, anchor, lines, height, startY, left, right: left + span };
+      return { axis, index, x, y, anchor, lines, why, height, startY, left, right: left + span };
     });
     // Sixteen labels round a circle crowd each other just off the vertical
     // axis, where neighbours are stacked rather than side by side. Push the
@@ -758,7 +884,8 @@ const RadarChart = (() => {
     // viewBox below grows to follow it, so nothing is clipped.
     // Measured extent: capitals with Turkish dots rise a full ascent above the
     // first baseline, and the score line's descenders fall about 4 below it.
-    const box = (block) => [block.startY - ascent - 1, block.startY + block.lines.length * lineHeight + 8];
+    const box = (block) => [block.startY - ascent - 1,
+      block.startY + block.lines.length * lineHeight + 8 + (block.why ? reasonHeight : 0)];
     for (let pass = 0; pass < 8; pass += 1) {
       let moved = false;
       blocks.forEach((block, index) => {
@@ -774,10 +901,10 @@ const RadarChart = (() => {
       if (!moved) break;
     }
     let top = centre - radius, bottom = centre + radius;
-    for (const { axis, index, x, anchor, lines, startY } of blocks) {
+    for (const { axis, index, x, anchor, lines, why, startY } of blocks) {
       const scoreY = startY + lines.length * lineHeight + 2;
       top = Math.min(top, startY - ascent - 4);
-      bottom = Math.max(bottom, scoreY + 6);
+      bottom = Math.max(bottom, scoreY + 6 + (why ? reasonHeight : 0));
       const unit = axis.unit ?? (axis.transform === "per90" ? " /90" : axis.transform === "percentage" ? " %" : "");
       // Context axes are italic: more activity, not better quality. The
       // tooltip and details table spell that out in words.
@@ -790,6 +917,7 @@ const RadarChart = (() => {
       parts.push(`<g tabindex="0" role="img" aria-label="${detail}"><title>${detail}</title>`);
       parts.push(`<text x="${x}" y="${startY}" text-anchor="${anchor}" font-size="${labelSize}" fill="var(--ink)"${style}>${lines.map((line, lineIndex) => `<tspan x="${x}" dy="${lineIndex ? lineHeight : 0}">${escape(line)}</tspan>`).join("")}</text>`);
       parts.push(`<text x="${x}" y="${scoreY}" text-anchor="${anchor}" font-size="${scoreSize}" font-weight="650">${scores}<tspan fill="var(--muted)" font-size="12" font-weight="400">${escape(unit)}</tspan></text>`);
+      if (why) parts.push(`<text data-radar-reason="${index}" x="${x}" y="${scoreY + reasonHeight}" text-anchor="${anchor}" font-size="${reasonSize}" font-style="italic" fill="var(--muted)">${escape(why)}</text>`);
       parts.push("</g>");
     }
     // Crop to what was drawn, so a six-axis wheel is not padded to the height

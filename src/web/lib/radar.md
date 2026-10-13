@@ -48,8 +48,11 @@ The plots have no settings. Every render uses the same definition:
   has managed, rounded to a third of a match and capped at 900 - because ten
   full matches is unreachable in September and an unreachable bar leaves the
   plots with no peers at all (after four rounds of 2026/2027 it is 180);
-- this season's peers plus every earlier Süper Lig season;
-- the mid-rank percentile, with the zero-heavy rule below.
+- this season's peers plus every earlier Süper Lig season, each cut to the
+  rounds this season has reached;
+- small samples pulled toward their group (empirical Bayes), below;
+- the mid-rank percentile, with the zero-heavy rule below where no adjustment
+  applies.
 
 There is no comparison overlay. Search, club and list sorting filters never
 change the reference.
@@ -60,15 +63,24 @@ change the reference.
   who reach the minute bar.
 - **Earlier seasons:** every earlier Süper Lig season in
   `data/final/sportmonks`, one entry per player-season, under the same role and
-  bar. With the 2021/2022-2025/2026 folders that is 2,977 player-seasons; a
-  2026/2027 forward at 180 minutes is ranked among 22 current and 361 earlier
-  forwards. **Only the scale widens: every plotted value is the player's
+  bar. **Only the scale widens: every plotted value is the player's
   current-season figure.** Seasons after the served one are never used, and
   another competition never is. The browser reads the earlier seasons in the
   background (a few seconds) through the read-only `/local-data/history/` route
   in `serve.py`, reduces each player-season to its totals and releases the raw
-  rows. Until they arrive, or if the route is unavailable, both notes say the
-  comparison is current-season only.
+  rows. Until they arrive, or if the route is unavailable, the distribution
+  panel's note says the comparison is current-season only.
+- **Same point of the season:** while the served season is under way, every
+  earlier season is cut to the rounds it has reached - the highest round with a
+  finished fixture, read from `round.name`. Seven rounds in, a current per-90
+  rests on 330-630 minutes and a full earlier season on 2,000+, so the noisier
+  current rates crowded both ends of the pooled scale; cut, seven rounds are
+  compared with seven rounds. The cut applies to the tallies only - feed
+  availability is still judged on the whole earlier season - and the history
+  reloads when a refresh brings a new round. A complete served season, one
+  with no finished fixture, or unnumbered rounds are not cut. The distribution
+  panel's note says `ilk N hafta`. After seven rounds of 2026/2027 a forward is
+  ranked among 18 current and 98 earlier forwards (317 without the cut).
 - **Position:** the supplied match position with the most recorded minutes in
   the season and competition. An exact tie is unresolved. If match roles are
   absent, a single unambiguous supplied squad role can be used. Fantasy
@@ -101,7 +113,7 @@ change the reference.
   those stay unknown, because reading them as ninety minutes of nothing would
   understate every rate the player has. A column absent from the export, or a
   nonfinite or negative count, remains unavailable. An incomplete season metric
-  keeps its observed subtotal and match coverage in the details, but gets no
+  keeps its observed subtotal and match coverage in the tooltip, but gets no
   rate or score.
 - **Bench rows:** rows explicitly showing zero minutes are excluded, and so are
   blank-minute rows that record nothing else: of 19,270 blank-minute rows across
@@ -130,14 +142,59 @@ change the reference.
   appear as won-per-90 instead.
 
   Each requirement below states a ten-match sample. It is scaled down with the
-  minute bar and never falls below twenty attempts, so a striker who reaches 58
-  passes in four rounds is still ranked on pass completion while a one-of-one
-  ratio is not.
+  minute bar and never falls below twenty attempts. **It applies only where the
+  small-sample adjustment cannot run** (fewer than ten valid peers, or the
+  adjustment switched off). Where it runs, one attempt is enough: the prior is
+  fitted on peers that meet the full requirement and then pulls every
+  percentage toward the group mean by its attempts, so a one-of-one ratio lands
+  almost exactly on the mean instead of at 100%, and a low-volume passer is
+  ranked rather than blanked - Victor Osimhen's 29 of 33 passes after seven
+  rounds of 2026/2027 is ranked as 78% instead of being left empty under a
+  37-attempt minimum. Zero attempts stays unavailable (`no_attempts`).
 
 | Percentage metric | Minimum attempts (ten matches) |
 | --- | ---: |
 | Pass completion | 100 |
 | All duels, long-pass completion | 30 |
+
+## Small-sample adjustment
+
+Before ranking, each per-90 and percentage is pulled toward its peer group in
+proportion to how little evidence it rests on (empirical Bayes):
+
+```
+adjusted = (events + mean × weight) / (minutes + weight) × 90
+```
+
+with attempts in place of minutes for a percentage. `mean` is the pooled group
+rate. `weight` is how many minutes (or attempts) of evidence that mean is worth:
+the noise of one minute divided by the true spread between players.
+
+- **True spread** is the spread of the peers' observed rates minus their
+  sampling noise.
+- **Noise is measured, not assumed.** Each season tally keeps match-level sums,
+  so a player's own match-to-match variation around his season rate gives his
+  sampling variance (a ratio estimator, `n / (n - 1)` corrected). Earlier
+  seasons keep these sums in their stored tallies. A peer with fewer than two
+  matches falls back to the counting model: Poisson for a per-90, binomial for
+  a percentage. This matters: xG is not a count and is far steadier than a
+  Poisson count of the same mean, and pass volume swings with team context.
+- A metric whose spread is all noise gets the cap: 2,700 minutes (thirty full
+  matches), or ten times the ten-match attempt requirement. Fewer than ten
+  valid peers, or a group mean of zero, leaves the observed value unchanged.
+- The prior is fitted on the same reference the wheel ranks against, so every
+  peer and the selected player are adjusted the same way. The principal
+  components and the distribution panel use the adjusted values too.
+
+After seven rounds of 2026/2027 among forwards: passes carry about 100 minutes
+of weight (the player's own share 84% at 560 minutes), shots about 730, xG about
+620, shots on target and goal contributions about 1,300, and big chances
+created the cap, meaning those differences are still mostly luck.
+
+The tooltips show the observed value, the adjusted value that
+is ranked, the group mean, the weight and the player's own share,
+`minutes / (minutes + weight)`. Because adjusted values are rarely exactly zero,
+the zero-heavy rule below now matters mainly where no adjustment applies.
 
 ## Scores
 
@@ -160,12 +217,12 @@ of an event (metric metadata can force this on or off), an observed zero scores
 are reversed after this, so zero errors score 100. All-zero valid populations
 remain 0 for positive metrics and 100 for negative ones. A positive target with
 no positive peers is unavailable; a single positive contributor sits in the
-middle of the positive group, at 50. These scores are labelled in the details
+middle of the positive group, at 50. These scores are labelled in the tooltip
 because they are not literal percentiles of all peers.
 
 **Direction and context:** negative events such as possession losses, fouls,
 cards and errors use `100 - score`, with positive display labels and the
-original event label in the details. Context axes, such as touches, passes and
+original event label in the tooltip. Context axes, such as touches, passes and
 defensive action volumes, indicate greater activity rather than better quality;
 they are set in italics on the chart and labelled in words in the tooltip and
 details. No overall rating or average polygon score is calculated.
@@ -206,7 +263,7 @@ and are not invented.
   that load negatively leave the axis, most negative first, and the component
   is refitted until the survivors agree. Every member that left - for missing
   coverage, for being constant, or for moving against the axis - is named with
-  its reason in the tooltip and the details table.
+  its reason in the tooltip.
 - The component is oriented so higher is always better, then the player's
   projection is ranked against the peers' projections with the same mid-rank
   percentile. The share of the surviving members' variance it explains is
@@ -273,9 +330,11 @@ per-match rate (shown as `/maç`), and every team is one group, `TEAM`.
 ## Drawing
 
 Both plots have fixed rings at 0, 20, 40, 60, 80 and 100. Missing scores have no
-point; neighbouring segments are not connected across missing axes, and an
+point, and the axis says why in a few muted italic words under its dash - veri
+yok, eksik maç verisi, deneme yok, az emsal and so on - so a blank axis needs no
+hover; neighbouring segments are not connected across missing axes, and an
 incomplete polygon is not filled. An observed zero is plotted at the actual
-centre. Keyboard-focusable tooltips and expandable tables show the observed
+centre. Keyboard-focusable tooltips show the observed
 total, rate or percentage, score rule, reference definition, metric-specific N,
 positive-only N when applicable, attempts, minutes, coverage and any
 unavailable reason. When no metric can be scored, the plot says whether the
@@ -285,20 +344,61 @@ The plots sit side by side whenever the profile panel is at least 740px wide -
 from a 1366px window up - and stack below that, where each would drop under
 ~330px. The chart is proportioned for that half-width: labels render at 9-11px,
 blocks that would collide just off the vertical axis are pushed outward, and the
-viewBox is cropped to what was drawn, so a six-axis wheel is not padded to a
-sixteen-axis one's height.
+viewBox is cropped to what was drawn. The two plots of a page then share one
+frame - the union of both viewBoxes (`statisticsAlignRadars` in
+`radar-page.js`) - so the attribute wheel and the metric wheel always have
+the same radius, centre line and height side by side.
 
 ## Limitations
 
-Small current samples are not shrunk. Early in a season that matters: four-match
-per-90 rates spread wider than full-season ones, so current players are
-over-represented at both ends of the pooled scale - 14 of the top 37 defender
-shot rates, against their 8% share of the population.
+Early in a season, small current samples used to put current players at both
+ends of the pooled scale - 14 of the top 37 defender shot rates, against their
+8% share of the population. The same-point cut and the small-sample adjustment
+above address this; `src/spider/radar_reliability.py` measures how well it
+works (see [Reliability report](#reliability-report)). What remains:
+
+- Positions are the provider's broad roles, so wingers share a group with
+  strikers, holding midfielders with attacking ones, and centre-backs with
+  full-backs.
+- Team style is not adjusted for: touches, passes and defensive volumes follow
+  possession. Those axes are marked as context, but they still feed attributes.
+- Five seasons are pooled; feed availability is handled, but a provider change
+  of definition (for example a new xG model) is not.
+- The cut reduces the earlier peers to those who had reached the minute bar by
+  the same round, so early in a season the reference is smaller.
 
 The legacy `player_reference/reference_*.csv` exports from `build_reference.py`
 are not read; earlier seasons are aggregated in the browser from the saved match
 rows with exactly the same scoping, missingness and position rules as the
 current season, so no reference build or new downloader is required.
+
+## Reliability report
+
+`python -m src.spider.radar_reliability` writes
+`data/temp/radar_reliability.csv`. For every completed saved season it compares
+each player's figure over the first N rounds (default 4, 7, 10 and 15) with the
+same figure over the rest of that season, which never overlaps the early window,
+so the test is out of sample. The rules mirror the browser: finished fixtures,
+unused-substitute rows dropped, the omitted-zero and feed-availability rules,
+broad position by most minutes, the seeded minute bar, scaled attempt
+requirements and the same prior. The rest of the season needs at least 900
+minutes and a full attempt requirement to be an answer key.
+
+One row per window, position and metric:
+
+| Column | Meaning |
+| --- | --- |
+| `players`, `seasons` | Player-seasons scored and the seasons they came from |
+| `early_minutes_median` | Median minutes in the early window |
+| `prior_mean`, `prior_weight`, `prior_unit` | The fitted prior, per 90 or per cent |
+| `own_share_median` | Median share of the adjusted value that is the player's own |
+| `spearman_observed`, `spearman_adjusted` | Rank correlation of the early figure with the rest of the season |
+| `percentile_error_observed`, `percentile_error_adjusted` | Mean gap, in percentile points, between early and later standing |
+| `reading` | From `spearman_adjusted`: strong (0.7+), moderate (0.5+), weak (0.3+), noise |
+
+An axis reading noise at the current round is one to ignore for now. If
+`spearman_adjusted` is not above `spearman_observed`, the adjustment is not
+helping that axis.
 
 ## Running
 
@@ -309,6 +409,8 @@ built-in test runner. Run them yourself when desired:
 
 ```powershell
 node --test tests/test_radar.cjs
+python -m unittest tests.test_radar_reliability
+python -m src.spider.radar_reliability
 ```
 
 These checks were written but not run, following `AGENTS.md`.

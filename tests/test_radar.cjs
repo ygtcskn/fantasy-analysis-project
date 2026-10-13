@@ -283,6 +283,112 @@ test("unplayed bench rows do not create false missing metrics; missing minutes e
   assert.equal(radar.unplayed({ minutes_played: "oops" }), false);
 });
 
+test("a lineup published before kickoff is not an appearance", () => {
+  const fixtures = [{ fixture_id: "1", season_id: "1", league_id: "600", state: "FT" },
+    { fixture_id: "2", season_id: "1", league_id: "600", state: "NS" }];
+  const source = { id: "a", name: "A", positions: new Set(["Attacker"]), matches: [
+    { fixture_id: "1", minutes_played: 900, goals: 2 },
+    { fixture_id: "2", minutes_played: "", started: "1", rating: "" },
+  ] };
+  const [prepared] = radar.preparePlayers([source], fixtures, scope);
+  assert.equal(prepared.rows.length, 1);
+  assert.equal(prepared.minutes, 900);
+  fixtures[1].state = "FT";
+  assert.equal(radar.preparePlayers([source], fixtures, scope)[0].minutes, null);
+});
+
+test("earlier seasons are cut to the rounds the served season has reached", () => {
+  const fixture = (id, round, state) => ({ fixture_id: id, season_id: "1", league_id: "600", "round.name": String(round), state });
+  const served = [fixture("1", 1, "FT"), fixture("2", 2, "FT"), fixture("3", 3, "NS"), fixture("4", 2, "POSTPONED")];
+  assert.equal(radar.playedRounds(served), 2);
+  // A complete season, an unstarted one and unnumbered rounds are not cut.
+  assert.equal(radar.playedRounds(served.map((item) => ({ ...item, state: "FT" }))), null);
+  assert.equal(radar.playedRounds([fixture("1", 1, "NS")]), null);
+  assert.equal(radar.playedRounds([fixture("1", "Final", "FT"), fixture("2", 2, "NS")]), null);
+  const earlier = [fixture("a", 1, "FT"), fixture("b", 2, "FT"), fixture("c", 3, "FT"), fixture("d", "x", "FT")];
+  assert.deepEqual(radar.throughRound(earlier, 2).map((item) => item.fixture_id), ["a", "b"]);
+  assert.equal(radar.throughRound(earlier, null), earlier);
+});
+
+test("small samples are pulled toward the group by measured noise", () => {
+  // Twenty peers: true rates differ (0.1 to 0.29 goals per 90), each seen over
+  // ten steady matches, so most of the spread is real and the weight is small.
+  const steady = [...Array(20)].map((_, index) => {
+    const rows = [...Array(10)].map(() => ({ minutes_played: "90", touches: "40", goals: String(0.1 + index * 0.01) }));
+    return { id: `s${index}`, name: `s${index}`, rows, minutes: 900, position: "FW", scope };
+  });
+  const reference = radar.createReference(steady, steady[0], [radar.metrics.goals]);
+  const prior = reference.priors.get("goals");
+  close(prior.mean * 90, 0.195);
+  // No match-to-match noise at all: the weight is zero and nothing moves.
+  close(prior.weight, 0);
+  const top = radar.evaluate(steady[19], radar.metrics.goals, reference);
+  close(top.value, top.observedValue);
+  close(top.reliability, 1);
+  // The same spread produced by luck - every peer scoring in one match of ten
+  // and a different number of goals - is mostly noise, so the weight is large
+  // and a short hot streak is pulled hard toward the mean.
+  const lucky = [...Array(20)].map((_, index) => {
+    const rows = [...Array(10)].map((__, match) => ({ minutes_played: "90", touches: "40", goals: match === 0 ? String(1 + (index % 3)) : "" }));
+    return { id: `l${index}`, name: `l${index}`, rows, minutes: 900, position: "FW", scope };
+  });
+  const noisy = radar.createReference(lucky, lucky[0], [radar.metrics.goals]);
+  assert.ok(noisy.priors.get("goals").weight > 900);
+  const hot = { id: "hot", name: "hot", position: "FW", scope, minutes: 180,
+    rows: [{ minutes_played: "90", touches: "40", goals: "2" }, { minutes_played: "90", touches: "40", goals: "1" }] };
+  const result = radar.evaluate(hot, radar.metrics.goals, noisy);
+  close(result.observedValue, 1.5);
+  assert.ok(result.value < 0.5 && result.value > noisy.priors.get("goals").mean * 90);
+  assert.ok(result.reliability < 0.2);
+  // Below ten peers, or switched off, the observed value is ranked unchanged.
+  assert.equal(radar.createReference(lucky.slice(0, 9), lucky[0], [radar.metrics.goals]).priors.get("goals"), null);
+  const off = radar.createReference(lucky, lucky[0], [radar.metrics.goals], { shrinkage: false });
+  close(radar.evaluate(hot, radar.metrics.goals, off).value, 1.5);
+});
+
+test("with a prior, a percentage needs one attempt instead of the scaled minimum", () => {
+  // Twelve peers clear the 100-attempt minimum; a striker who made 9 of 10.
+  const peers = [...Array(12)].map((_, index) => player(`p${index}`,
+    { touches: "40", accurate_passes: String(140 + index * 5), passes: "200" }));
+  const striker = player("striker", { touches: "40", accurate_passes: "9", passes: "10" });
+  const reference = radar.createReference(peers, peers[0], [radar.metrics.pass_accuracy]);
+  const result = radar.evaluate(striker, radar.metrics.pass_accuracy, reference);
+  assert.equal(result.status, "available");
+  assert.equal(result.required, 1);
+  close(result.observedValue, 90);
+  // Ten attempts barely move a group mean of about 83.75%.
+  assert.ok(result.value < 90 && result.value > reference.priors.get("pass_accuracy").mean * 100);
+  assert.ok(Number.isFinite(result.score));
+  // The prior itself is fitted only on peers meeting the full minimum.
+  assert.equal(reference.priors.get("pass_accuracy").peers, 12);
+  // Without a prior the old minimum still applies, and no attempts stays blank.
+  const off = radar.createReference(peers, peers[0], [radar.metrics.pass_accuracy], { shrinkage: false });
+  assert.equal(radar.evaluate(striker, radar.metrics.pass_accuracy, off).status, "insufficient_attempts");
+  const none = player("none", { touches: "40", accurate_passes: "", passes: "" });
+  assert.equal(radar.evaluate(none, radar.metrics.pass_accuracy, reference).status, "no_attempts");
+});
+
+test("a blank axis says why under its dash", () => {
+  const axes = Object.values(radar.metrics).slice(0, 6);
+  const results = axes.map((_, index) => (index === 2 ? { score: null, status: "no_attempts" } : { score: 50, status: "available" }));
+  const svg = chart.svg(axes, [{ name: "A", results, line: "red", fill: "pink" }], () => "", "t",
+    (result) => (result.status === "no_attempts" ? "deneme yok" : ""));
+  assert.equal((svg.match(/data-radar-reason="2"/g) || []).length, 1);
+  assert.ok(svg.includes(">deneme yok</text>"));
+  // Without a reason callback the chart is unchanged.
+  assert.ok(!chart.svg(axes, [{ name: "A", results, line: "red", fill: "pink" }], () => "").includes("data-radar-reason"));
+});
+
+test("match-level sums in a tally give the ratio estimator's variance", () => {
+  const player = { rows: [{ minutes_played: "90", touches: "40", goals: "2" }, { minutes_played: "45", touches: "20", goals: "" }] };
+  const counted = radar.tally(player, radar.metrics.goals);
+  assert.deepEqual(counted.moments, { n: 2, sx: 2, sm: 135, sx2: 4, sxm: 180, sm2: 10125 });
+  // rate 2/135 per minute; residuals 2 - 90r and -45r; two matches, n/(n-1) = 2.
+  const rate = 2 / 135;
+  close(radar.sampleVariance(counted.moments), ((2 - 90 * rate) ** 2 + (45 * rate) ** 2) / 135 ** 2 * 2);
+  assert.equal(radar.sampleVariance({ ...counted.moments, n: 1 }), null);
+});
+
 test("position mapping preserves broad roles and leaves tied roles unresolved", () => {
   assert.equal(radar.groupFor("Defender"), "DEF");
   assert.equal(radar.groupFor("Centre-back"), "CB");
@@ -362,7 +468,7 @@ test("an omitted percentage denominator is only zero attempts when nothing was m
   // blank denominator beside a positive numerator has to stay unknown.
   const both = player("a", { touches: "40", duels_won: "", total_duels: "" });
   assert.equal(radar.observation(both, radar.metrics.duel_pct).attempts, 0);
-  assert.equal(radar.observation(both, radar.metrics.duel_pct).status, "insufficient_attempts");
+  assert.equal(radar.observation(both, radar.metrics.duel_pct).status, "no_attempts");
   const made = player("b", { touches: "40", duels_won: "3", total_duels: "" });
   assert.equal(radar.observation(made, radar.metrics.duel_pct).status, "partial_coverage");
   const full = player("c", { touches: "40", duels_won: "20", total_duels: "40" });

@@ -33,7 +33,7 @@ If your normal Python command is unavailable, replace `python` in the commands b
 ```
 
 ## Match probability research
-
+fa
 The separate research area is documented in [src/odds/README.md](src/odds/README.md).
 It audits existing season CSVs and supports chronological comparisons of frequency,
 Poisson, and Dixon-Coles models. Research reports are saved in unique run folders
@@ -369,6 +369,17 @@ That command uses the newest raw `players_<timestamp>.csv`. Pass
 Sportmonks squad candidate, refresh the Sportmonks season CSVs first and then
 rerun the updater. The canonical file is replaced atomically and exposes
 `match_status`, so website/database joins can require `match_status = matched`.
+
+Names are compared with Sportmonks' legal first and last names first, then with
+its `display_name` (the known-as name, such as "Talisca" or "Fabinho"); the
+display name only rescues rows the legal names leave unmatched. The downloader
+also saves each club's current domestic squad as `current_squads.csv`. When it
+covers every league club, only players still at the club are match candidates:
+a TFF row whose name matches only a player who has since left gets
+`match_status = left_league`, is excluded everywhere a match is required, and
+is not added to the override template for review. An override pointing at a
+departed player is refused the same way. Older exports without the file fall
+back to the whole season squad and say so.
 
 The number 509 comes from the supplied screenshot; update `--expected-rows` when
 the catalogue changes, or omit it to use the site's displayed total. All rows

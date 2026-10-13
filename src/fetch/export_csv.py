@@ -109,6 +109,12 @@ def export_tables(folder, fixtures, resources):
                            "type_id": m.get("type_id"), "name": (m.get("type") or {}).get("developer_name")}
                     row.update(scalar_fields(m.get("value"), "value"))
                     tables["player_season_metrics"].append(row)
+        if name.startswith("current-squad-"):
+            # Written only when downloaded, so an older export never reads as
+            # "everyone left". Readers also require every league team to appear.
+            team_id = name.removeprefix("current-squad-")
+            for squad in data or []:
+                tables["current_squads"].append(scalar_fields({**squad, "team_id": squad.get("team_id") or team_id}))
         if name.startswith("team-statistics-"):
             for statistic in data.get("statistics") or []:
                 for m in statistic.get("details") or []:

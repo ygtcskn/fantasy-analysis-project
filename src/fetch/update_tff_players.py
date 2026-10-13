@@ -68,6 +68,8 @@ MATCH_PRIORITY = {
     "exact_lastname_component": 3,
     "exact_firstname": 3,
     "exact_firstname_component": 3,
+    "exact_display_name": 3,
+    "exact_display_name_component": 3,
     "unique_name_prefix": 2,
     "unique_name_one_edit": 1,
 }
@@ -128,7 +130,9 @@ def field_forms(player, field):
 def player_name_variants(player):
     first_full, first_components = field_forms(player, "firstname")
     last_full, last_components = field_forms(player, "lastname")
-    return first_full | first_components | last_full | last_components
+    display_full, display_components = field_forms(player, "display_name")
+    return (first_full | first_components | last_full | last_components
+            | display_full | display_components)
 
 
 def tff_name_forms(value):
@@ -181,6 +185,7 @@ def name_match(tff_value, candidates, players):
     full_query, final_query = tff_name_forms(tff_value)
     queries = {full_query, final_query} - {""}
     exact_full, exact_component, prefixes, one_edit = [], [], [], []
+    display_full_matches, display_component_matches = [], []
     full_methods, component_methods = {}, {}
     for player_id in candidates:
         first_full, first_components = field_forms(players[player_id], "firstname")
@@ -198,6 +203,15 @@ def name_match(tff_value, candidates, players):
         elif final_query and final_query in first_components:
             exact_component.append(player_id)
             component_methods[player_id] = "exact_firstname_component"
+        # The provider's known-as name, e.g. "Talisca" for Anderson Souza
+        # Conceição. Consulted only after legal names fail, so it can rescue an
+        # unmatched row but never change one the legal names already decide.
+        display_full, display_components = field_forms(players[player_id], "display_name")
+        if full_query and full_query in display_full:
+            display_full_matches.append(player_id)
+        if final_query and final_query in display_components:
+            display_component_matches.append(player_id)
+        names |= display_full | display_components
         if any(len(query) >= 4 and len(name) >= 4 and
                (name.startswith(query) or query.startswith(name))
                for query in queries for name in names):
@@ -211,6 +225,17 @@ def name_match(tff_value, candidates, players):
         return result
     result = unique_exact_match(
         exact_component, component_methods, "ambiguous_exact_name_component")
+    if result:
+        return result
+    result = unique_exact_match(
+        display_full_matches, dict.fromkeys(display_full_matches, "exact_display_name"),
+        "ambiguous_exact_display_name")
+    if result:
+        return result
+    result = unique_exact_match(
+        display_component_matches,
+        dict.fromkeys(display_component_matches, "exact_display_name_component"),
+        "ambiguous_display_name_component")
     if result:
         return result
     for method, matches in (("unique_name_prefix", prefixes),
@@ -250,6 +275,26 @@ def catalog(sportmonks_dir):
     return by_id, team_ids, team_names, squad_index
 
 
+def current_squads(sportmonks_dir, team_names, players):
+    """Who is still at each club, from Sportmonks' current domestic squads.
+
+    Returns None when the export predates current squads or misses a league
+    team, so an incomplete download never reads as "everyone left".
+    """
+    path = sportmonks_dir / "current_squads.csv"
+    if not path.exists():
+        return None
+    rows = read_table(path)
+    if rows:
+        require_columns(rows, {"team_id", "player_id"}, "Sportmonks current_squads.csv")
+    index = {}
+    for row in rows:
+        # A new signing without a name record cannot be name-matched anyway.
+        if row["player_id"] in players:
+            index.setdefault(row["team_id"], set()).add(row["player_id"])
+    return index if set(team_names) <= set(index) else None
+
+
 def resolve_team(tff_name, team_ids):
     key = normalized(tff_name)
     target = TEAM_ALIASES.get(key, key)
@@ -285,13 +330,23 @@ def ranked_candidates(row_number, row, candidate_ids, players, team_id,
     } for rank, player_id in enumerate(ranked, 1)]
 
 
-def match_snapshot(snapshot_rows, players, team_ids, team_names, squad_index, overrides):
+def match_snapshot(snapshot_rows, players, team_ids, team_names, squad_index, overrides,
+                   current=None):
+    """Match TFF rows to Sportmonks players.
+
+    With ``current`` (team id -> player ids still at the club), only current
+    players are candidates. A row whose name only matches a season-squad
+    player who has since left is reported as ``left_league``, not as awaiting
+    review, and an override pointing at a departed player is refused the same way.
+    """
     matches, reports, candidate_rows = [], [], []
     for row_number, row in enumerate(snapshot_rows, 1):
         position = row["position"].strip().upper()
         team_id, team_method = resolve_team(row["team_name"], team_ids)
         team_name = team_names.get(team_id, "")
-        candidate_ids = sorted(squad_index.get(team_id, set())) if team_id else []
+        season_ids = squad_index.get(team_id, set()) if team_id else set()
+        current_ids = current.get(team_id, set()) if current is not None and team_id else None
+        candidate_ids = sorted(season_ids if current_ids is None else current_ids)
         override = overrides.get(override_key(row["player_name"], row["team_name"], position), "")
         player_id = method = ""
         if override:
@@ -305,7 +360,15 @@ def match_snapshot(snapshot_rows, players, team_ids, team_names, squad_index, ov
         else:
             player_id, method, status = name_match(
                 row["player_name"], candidate_ids, players)
-        if status != "matched":
+        if current_ids is not None:
+            if status == "matched" and player_id not in current_ids:
+                player_id, status = "", "left_league"
+            elif status != "matched" and season_ids - current_ids:
+                departed, departed_method, departed_status = name_match(
+                    row["player_name"], sorted(season_ids - current_ids), players)
+                if departed_status == "matched":
+                    method, status = departed_method, "left_league"
+        if status not in ("matched", "left_league"):
             candidate_rows.extend(ranked_candidates(
                 row_number, row, candidate_ids, players, team_id,
                 team_name, team_method))
@@ -371,7 +434,9 @@ def write_override_template(path, reports):
         override_key(row["tff_player_name"], row["tff_team_name"], row["tff_position"])
         for row in rows
     }
-    unresolved = [report for report in reports if report["match_status"] != "matched"]
+    # Players who have left the league need no review.
+    unresolved = [report for report in reports
+                  if report["match_status"] not in ("matched", "left_league")]
     added = False
     for report in unresolved:
         key = override_key(
@@ -400,12 +465,16 @@ def update_from_snapshot(snapshot, sportmonks_dir, canonical, overrides_path,
             f"{snapshot.name} uses reserved canonical columns: "
             f"{', '.join(sorted(collisions))}")
     players, team_ids, team_names, squad_index = catalog(sportmonks_dir)
+    current = current_squads(sportmonks_dir, team_names, players)
+    if current is None:
+        print("Current squads unavailable; matching against the whole season squad, "
+              "so players who have left may still match. Rerun the downloader.")
     overrides = load_overrides(overrides_path)
     matches, reports, candidates = match_snapshot(
-        snapshot_rows, players, team_ids, team_names, squad_index, overrides)
+        snapshot_rows, players, team_ids, team_names, squad_index, overrides, current)
     write_table(report_path, reports, REPORT_COLUMNS)
     write_table(candidates_path, candidates, CANDIDATE_COLUMNS)
-    unresolved = [row for row in reports if row["match_status"] != "matched"]
+    unresolved = [row for row in reports if row["match_status"] not in ("matched", "left_league")]
     if unresolved:
         write_override_template(overrides_path, reports)
     assigned_ids = [row["sportmonks_player_id"] for row in reports
@@ -432,7 +501,8 @@ def update_from_snapshot(snapshot, sportmonks_dir, canonical, overrides_path,
             "updated_at_utc": updated,
         })
     write_table(canonical, canonical_rows, [*CANONICAL_PREFIX, *snapshot_rows[0].keys()])
-    return len(canonical_rows), len(canonical_rows) - len(unresolved), len(unresolved)
+    matched = sum(row["match_status"] == "matched" for row in reports)
+    return len(canonical_rows), matched, len(unresolved)
 
 
 def main():
@@ -457,7 +527,8 @@ def main():
         total, matched, unresolved = update_from_snapshot(
             snapshot, sportmonks_dir, args.canonical, args.overrides, report, candidates)
         print(f"Updated {args.canonical.resolve()}: {total} rows, "
-              f"{matched} matched, {unresolved} awaiting review.")
+              f"{matched} matched, {total - matched - unresolved} left the league, "
+              f"{unresolved} awaiting review.")
     except (ValueError, OSError) as exc:
         cli.exit(1, f"Error: {exc}\n")
 

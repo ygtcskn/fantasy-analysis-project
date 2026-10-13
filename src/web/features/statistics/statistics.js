@@ -6,7 +6,7 @@
 // Season leaders and a searchable player list, built from the same aggregation
 // the tier list uses so a player's totals never disagree between two pages.
 
-const statisticsState = { search: "", team: "", sort: "rating", limit: 10, selected: null };
+const statisticsState = { search: "", team: "", role: "", sort: "rating", limit: 10, selected: null };
 
 const STATISTICS_SORTS = [
   ["goals", "Gol", (player) => player.totals.goals.value],
@@ -96,8 +96,10 @@ function renderStatisticsList(players, teams) {
   const team = $("statistics-team").value;
   const [, , accessor] = STATISTICS_SORTS.find(([key]) => key === $("statistics-sort").value)
     || STATISTICS_SORTS[0];
+  const role = statisticsState.role;
   const visible = players
     .filter((player) => (!team || player.teams.has(team))
+      && (!role || playerPrimaryRole(player) === role)
       && (!query || `${player.name} ${player.teamNames.join(" ")}`.toLocaleLowerCase("tr").includes(query)))
     .sort((a, b) => (accessor(b) ?? -Infinity) - (accessor(a) ?? -Infinity)
       || a.name.localeCompare(b.name, "tr"));
@@ -119,6 +121,7 @@ function renderStatisticsList(players, teams) {
     identity.append(club);
     if (player.id === statisticsState.selected) row.classList.add("statistics-row-selected");
     row.append(identity);
+    row.append(element("td", "statistics-role", playerRoleLabel(playerPrimaryRole(player))));
     row.append(element("td", "numeric", displayNumber(player.totals.minutes_played.value)));
     row.append(element("td", "numeric", ratingText(player.average)));
     row.append(element("td", "numeric", displayNumber(statisticsFantasyPoints(player.id))));
@@ -126,7 +129,7 @@ function renderStatisticsList(players, teams) {
   }
   if (!visible.length) {
     const row = element("tr"), cell = element("td", "no-results", "Bu filtrelerle oyuncu bulunamadı.");
-    cell.colSpan = 4;
+    cell.colSpan = 5;
     row.append(cell);
     body.append(row);
   }
@@ -134,7 +137,7 @@ function renderStatisticsList(players, teams) {
 }
 
 function renderStatistics() {
-  const { players, teams } = buildTierPlayers();
+  const { players, teams } = leaguePlayers();
   renderStatisticsCard("statistics-scorers-body", "statistics-scorers-note", players, teams,
     (player) => player.totals.goals.value, (value) => displayNumber(value),
     "Kayıtlı gol bulunamadı.");
@@ -158,6 +161,12 @@ function setupStatistics() {
   $("statistics-search").addEventListener("input", renderStatistics);
   $("statistics-team").addEventListener("change", renderStatistics);
   $("statistics-sort").addEventListener("change", renderStatistics);
+  document.querySelectorAll("[data-statistics-role]").forEach((button) => button.addEventListener("click", () => {
+    statisticsState.role = button.dataset.statisticsRole;
+    document.querySelectorAll("[data-statistics-role]").forEach((other) =>
+      other.setAttribute("aria-pressed", String(other === button)));
+    renderStatistics();
+  }));
   if (typeof ResizeObserver !== "undefined") {
     const observer = new ResizeObserver(() => requestAnimationFrame(statisticsListLayout));
     observer.observe($("statistics-ratings-chart").closest(".statistics-ratings"));
@@ -198,90 +207,148 @@ function renderStatisticsFacts(player) {
   $("statistics-facts-list").replaceChildren(list);
 }
 
-function statisticsTimelineSvg(rows) {
-  const width = 640, height = 220, left = 40, right = 16, top = 18, bottom = 32;
-  const values = rows.map((row) => row.points);
-  const high = Math.max(4, ...values), low = Math.min(0, ...values);
-  const x = (index) => left + (rows.length === 1 ? (width - left - right) / 2
-    : (index / (rows.length - 1)) * (width - left - right));
-  const y = (value) => height - bottom - ((value - low) / (high - low || 1)) * (height - top - bottom);
+// The fantasy timeline and the Sportmonks rating bars below share one frame -
+// size, margins, plot area, fonts and six evenly spaced gridlines - so a match
+// sits at the same x in both and the two read as one pair. The rating axis is
+// the provider's fixed 0-10; fantasy points use 0-10 too unless a player's
+// points leave it, and then the smallest round step (1, 2 or 5 x 10^k) that
+// keeps six gridlines and covers every match.
+const STATISTICS_PROFILE_PLOT = { width: 640, height: 250, left: 34, right: 62, top: 14, bottom: 40 };
+
+function statisticsTicks(low, high, intervals = 5) {
+  for (let power = 1; power <= 1e6; power *= 10) {
+    for (const step of [power, 2 * power, 5 * power]) {
+      const start = Math.floor(low / step) * step;
+      if (start + step * intervals >= high) return Array.from({ length: intervals + 1 }, (_, index) => start + index * step);
+    }
+  }
+  return [low, high];
+}
+
+// Both match charts share one x axis: every match with a valid Sportmonks
+// rating or recorded fantasy points, in kickoff order, labelled from
+// fixtures.csv. A match therefore sits in the same column in both charts; a
+// chart with no value for it leaves the column empty rather than closing up.
+function statisticsMatchSlots(player) {
+  const { teams } = buildTierPlayers();
+  const fixtures = new Map((state.tables["fixtures.csv"] || []).map((fixture) => [fixture.fixture_id, fixture]));
+  const fantasy = fantasyState.season === state.seasonSlug ? fantasyState.matches.get(player.id) || [] : [];
+  const ratings = new Map(), points = new Map(), sides = new Map(), spares = new Map();
+  for (const row of player.matches) {
+    sides.set(row.fixture_id, row.team_id);
+    const rating = validMatchRating(row);
+    if (rating !== null) ratings.set(row.fixture_id, { rating, minutes: number(row.minutes_played) });
+  }
+  for (const row of fantasy) {
+    points.set(row.fixture_id, number(row.points_total) ?? 0);
+    if (!sides.has(row.fixture_id)) sides.set(row.fixture_id, row.team_id);
+    spares.set(row.fixture_id, row);
+  }
+  return [...new Set([...ratings.keys(), ...points.keys()])].map((id) => {
+    const fixture = fixtures.get(id), team = sides.get(id), spare = spares.get(id);
+    const home = fixture ? team === fixture.home_team_id : spare ? spare.venue === "home" : null;
+    const opponent = fixture ? (home ? fixture.away_team_id : fixture.home_team_id) : spare?.opponent_id ?? null;
+    const time = fixture ? fantasyKickoff(fixture) : fantasyTime(spare?.kickoff_utc);
+    return { fixture_id: id, time, round: fixture?.["round.name"] || spare?.round || "",
+      date: Number.isFinite(time) ? fantasyDate(new Date(time).toISOString()) : "",
+      opponent: teamName(opponent, teams),
+      code: (teams.get(opponent)?.short_code || teamName(opponent, teams)) + (home === null ? "" : home ? " (İ)" : " (D)"),
+      rating: ratings.get(id)?.rating ?? null, minutes: ratings.get(id)?.minutes ?? null,
+      points: points.has(id) ? points.get(id) : null };
+  }).sort((a, b) => (Number.isFinite(a.time) ? a.time : Infinity) - (Number.isFinite(b.time) ? b.time : Infinity));
+}
+
+// The shared frame's horizontal parts: one column per match, values over the
+// marks while there is room, round and opponent under each column thinned to
+// about twelve labels so a full season never collides.
+function statisticsMatchColumns(slots) {
+  const { width, left, right } = STATISTICS_PROFILE_PLOT;
+  const slot = (width - left - right) / slots.length;
+  return { slot, x: (index) => left + slot * index + slot / 2, showValues: slot >= 30,
+    every: Math.max(1, Math.ceil(slots.length / 12)) };
+}
+
+function statisticsMatchLabels(parts, slots, columns) {
+  const { height, bottom } = STATISTICS_PROFILE_PLOT;
+  slots.forEach((entry, index) => {
+    if (index % columns.every && index !== slots.length - 1) return;
+    const centre = columns.x(index).toFixed(1);
+    if (entry.round) parts.push(`<text x="${centre}" y="${height - bottom + 15}" text-anchor="middle" font-size="10" fill="var(--ink)">${statisticsEscape(`${entry.round}. hf`)}</text>`);
+    parts.push(`<text x="${centre}" y="${height - bottom + 28}" text-anchor="middle" font-size="9" fill="var(--muted)">${statisticsEscape(entry.code)}</text>`);
+  });
+}
+
+function statisticsTimelineSvg(slots, average) {
+  const { width, height, left, right, top, bottom } = STATISTICS_PROFILE_PLOT;
+  const values = slots.map((entry) => entry.points).filter((value) => value !== null);
+  const ticks = statisticsTicks(Math.min(0, ...values), Math.max(10, ...values));
+  const low = ticks[0], high = ticks.at(-1), columns = statisticsMatchColumns(slots), x = columns.x;
+  const y = (value) => height - bottom - ((value - low) / (high - low)) * (height - top - bottom);
   const parts = [];
-  for (let step = 0; step <= 4; step += 1) {
-    const value = low + ((high - low) * step) / 4;
-    parts.push(`<line x1="${left}" y1="${y(value).toFixed(1)}" x2="${width - right}" y2="${y(value).toFixed(1)}" stroke="var(--line)" stroke-width="1"/>`);
-    parts.push(`<text x="${left - 6}" y="${(y(value) + 4).toFixed(1)}" text-anchor="end" font-size="10" fill="var(--muted)">${Math.round(value)}</text>`);
+  for (const tick of ticks) {
+    parts.push(`<line x1="${left}" y1="${y(tick).toFixed(1)}" x2="${width - right}" y2="${y(tick).toFixed(1)}" stroke="var(--line)" stroke-width="1"/>`);
+    parts.push(`<text x="${left - 6}" y="${(y(tick) + 4).toFixed(1)}" text-anchor="end" font-size="10" fill="var(--muted)">${tick}</text>`);
   }
   if (low < 0) {
     parts.push(`<line x1="${left}" y1="${y(0).toFixed(1)}" x2="${width - right}" y2="${y(0).toFixed(1)}" stroke="var(--muted)" stroke-width="1" stroke-dasharray="3 3"/>`);
   }
-  if (rows.length > 1) {
-    const path = rows.map((row, index) => `${x(index).toFixed(1)},${y(row.points).toFixed(1)}`).join(" ");
-    parts.push(`<polyline points="${path}" fill="none" stroke="var(--statistics-plot-line)" stroke-width="2"/>`);
-  }
-  rows.forEach((row, index) => {
-    parts.push(`<circle cx="${x(index).toFixed(1)}" cy="${y(row.points).toFixed(1)}" r="3.5" fill="var(--statistics-plot-line)"><title>${row.label}: ${row.points}</title></circle>`);
+  // The line breaks across a match without fantasy points.
+  let run = [];
+  const flush = () => {
+    if (run.length > 1) parts.push(`<polyline points="${run.join(" ")}" fill="none" stroke="var(--statistics-plot-line)" stroke-width="2"/>`);
+    run = [];
+  };
+  slots.forEach((entry, index) => {
+    if (entry.points === null) flush();
+    else run.push(`${x(index).toFixed(1)},${y(entry.points).toFixed(1)}`);
   });
-  // Only a handful of date labels, so they never collide over a full season.
-  const every = Math.max(1, Math.ceil(rows.length / 8));
-  rows.forEach((row, index) => {
-    if (index % every && index !== rows.length - 1) return;
-    parts.push(`<text x="${x(index).toFixed(1)}" y="${height - 10}" text-anchor="middle" font-size="9" fill="var(--muted)">${row.label}</text>`);
+  flush();
+  slots.forEach((entry, index) => {
+    if (entry.points === null) return;
+    const centre = x(index).toFixed(1);
+    const detail = statisticsEscape(`${entry.round ? `${entry.round}. hafta · ` : ""}${entry.date ? `${entry.date} · ` : ""}`
+      + `${entry.opponent} · ${displayNumber(entry.points)} fantezi puanı`);
+    parts.push(`<circle cx="${centre}" cy="${y(entry.points).toFixed(1)}" r="3.5" fill="var(--statistics-plot-line)"><title>${detail}</title></circle>`);
+    if (columns.showValues) parts.push(`<text x="${centre}" y="${(y(entry.points) - 8).toFixed(1)}" text-anchor="middle" font-size="10" fill="var(--muted)">${displayNumber(entry.points)}</text>`);
   });
-  return `<svg viewBox="0 0 ${width} ${height}" width="100%" role="img" aria-label="Fantezi puanı zaman grafiği">${parts.join("")}</svg>`;
+  statisticsMatchLabels(parts, slots, columns);
+  const mean = y(average).toFixed(1);
+  parts.push(`<line data-timeline-average="${average}" x1="${left}" y1="${mean}" x2="${width - right + 4}" y2="${mean}" stroke="var(--ink)" stroke-width="1.5" stroke-dasharray="4 3"/>`);
+  parts.push(`<text x="${width - right + 8}" y="${(y(average) + 4).toFixed(1)}" font-size="10" font-weight="600" fill="var(--ink)">Ort. ${displayNumber(average)}</text>`);
+  return `<svg viewBox="0 0 ${width} ${height}" width="100%" role="img" aria-label="Maç maç fantezi puanı; ortalama ${displayNumber(average)}">${parts.join("")}</svg>`;
 }
 
-function renderStatisticsTimeline(player) {
+function renderStatisticsTimeline(player, slots = statisticsMatchSlots(player)) {
   if (fantasyState.season !== state.seasonSlug) {
     $("statistics-timeline-chart").replaceChildren();
     $("statistics-timeline-note").textContent = "Fantezi analizi yüklenmedi. Sayfayı yenileyin.";
     return;
   }
-  // fantasyState keeps matches newest first; a timeline reads the other way.
-  const rows = [...(fantasyState.matches.get(player.id) || [])]
-    .sort((a, b) => fantasyTime(a.kickoff_utc) - fantasyTime(b.kickoff_utc))
-    .map((row) => ({ points: number(row.points_total) ?? 0, label: fantasyDate(row.kickoff_utc) }));
-  if (!rows.length) {
+  const scored = slots.filter((entry) => entry.points !== null);
+  if (!scored.length) {
     $("statistics-timeline-chart").replaceChildren();
     $("statistics-timeline-note").textContent = "Bu oyuncu için kayıtlı fantezi puanı yok.";
     return;
   }
-  $("statistics-timeline-chart").innerHTML = statisticsTimelineSvg(rows);
-  const total = rows.reduce((sum, row) => sum + row.points, 0);
+  const total = scored.reduce((sum, entry) => sum + entry.points, 0);
+  $("statistics-timeline-chart").innerHTML = statisticsTimelineSvg(slots, total / scored.length);
   $("statistics-timeline-note").textContent =
-    `${rows.length} maç · toplam ${displayNumber(total)} puan · maç başına ${displayNumber(total / rows.length)}.`;
+    `${scored.length} maç · toplam ${displayNumber(total)} puan · maç başına ${displayNumber(total / scored.length)}.`;
 }
 
 // ---------------------------------------------------------------- match ratings
-// One vertical bar per rated match, in kickoff order from left to right like
-// the timeline above. Bars start at zero on the provider's 0-10 scale, so their
-// heights compare honestly. The dashed line is the player's own average - the
-// same unweighted mean of valid match ratings as "Maç puanı" in the season
-// totals and the tier list - and matches below it are drawn paler.
+// One vertical bar per rated match, in the same columns as the timeline above.
+// Bars start at zero on the provider's 0-10 scale, so their heights compare
+// honestly. The dashed line is the player's own average - the same unweighted
+// mean of valid match ratings as "Maç puanı" in the season totals and the tier
+// list - and matches below it are drawn paler.
 
 const statisticsEscape = (value) => String(value ?? "").replace(/[&<>"']/g,
   (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
 
-function statisticsRatingRows(player, teams) {
-  const fixtures = new Map((state.tables["fixtures.csv"] || []).map((fixture) => [fixture.fixture_id, fixture]));
-  return player.matches.map((row) => {
-    const rating = validMatchRating(row);
-    if (rating === null) return null;
-    const fixture = fixtures.get(row.fixture_id);
-    const home = fixture ? row.team_id === fixture.home_team_id : null;
-    const opponent = fixture ? (home ? fixture.away_team_id : fixture.home_team_id) : null;
-    const time = fixture ? fantasyKickoff(fixture) : NaN;
-    return { rating, time, minutes: number(row.minutes_played), round: fixture?.["round.name"] || "",
-      code: (teams.get(opponent)?.short_code || teamName(opponent, teams)) + (home === null ? "" : home ? " (İ)" : " (D)"),
-      opponent: teamName(opponent, teams),
-      date: Number.isFinite(time) ? fantasyDate(new Date(time).toISOString()) : "" };
-  }).filter(Boolean).sort((a, b) => (Number.isFinite(a.time) ? a.time : Infinity) - (Number.isFinite(b.time) ? b.time : Infinity));
-}
-
-function statisticsRatingsSvg(rows, average) {
-  const width = 640, height = 250, left = 34, right = 62, top = 14, bottom = 40;
-  const plot = width - left - right, slot = plot / rows.length;
-  const bar = Math.min(slot * 0.7, 46);
-  const x = (index) => left + slot * index + slot / 2;
+function statisticsRatingsSvg(slots, average) {
+  const { width, height, left, right, top, bottom } = STATISTICS_PROFILE_PLOT;
+  const columns = statisticsMatchColumns(slots), x = columns.x, bar = Math.min(columns.slot * 0.7, 46);
   const y = (value) => height - bottom - (value / 10) * (height - top - bottom);
   const parts = [];
   for (const tick of [0, 2, 4, 6, 8, 10]) {
@@ -289,20 +356,17 @@ function statisticsRatingsSvg(rows, average) {
     parts.push(`<text x="${left - 6}" y="${(y(tick) + 4).toFixed(1)}" text-anchor="end" font-size="10" fill="var(--muted)">${tick}</text>`);
   }
   // Values sit on the bars only while there is room for them; a full season
-  // keeps them in each bar's tooltip instead. Labels thin out to about twelve,
-  // like the timeline's dates, so they never collide.
-  const showValues = slot >= 30, every = Math.max(1, Math.ceil(rows.length / 12));
-  rows.forEach((entry, index) => {
+  // keeps them in each bar's tooltip instead. A match without a valid rating
+  // keeps its empty column, so the bars stay under the timeline's points.
+  slots.forEach((entry, index) => {
+    if (entry.rating === null) return;
     const below = entry.rating < average, centre = x(index).toFixed(1);
-    // A row can carry its own tooltip; the team page's bars are averages.
-    const detail = statisticsEscape(entry.detail ?? (`${entry.round ? `${entry.round}. hafta · ` : ""}${entry.date ? `${entry.date} · ` : ""}`
-      + `${entry.opponent} · ${entry.minutes === null ? "—" : displayNumber(entry.minutes)} dk · Sportmonks puanı ${ratingText(entry.rating)}`));
+    const detail = statisticsEscape(`${entry.round ? `${entry.round}. hafta · ` : ""}${entry.date ? `${entry.date} · ` : ""}`
+      + `${entry.opponent} · ${entry.minutes === null ? "—" : displayNumber(entry.minutes)} dk · Sportmonks puanı ${ratingText(entry.rating)}`);
     parts.push(`<rect data-rating-bar="${index}" x="${(x(index) - bar / 2).toFixed(1)}" y="${y(entry.rating).toFixed(1)}" width="${bar.toFixed(1)}" height="${(y(0) - y(entry.rating)).toFixed(1)}" rx="2" fill="var(--statistics-plot-line)" fill-opacity="${below ? 0.4 : 0.9}"><title>${detail}</title></rect>`);
-    if (showValues) parts.push(`<text x="${centre}" y="${(y(entry.rating) - 5).toFixed(1)}" text-anchor="middle" font-size="10" fill="var(--muted)">${ratingText(entry.rating)}</text>`);
-    if (index % every && index !== rows.length - 1) return;
-    if (entry.round) parts.push(`<text x="${centre}" y="${height - bottom + 15}" text-anchor="middle" font-size="10" fill="var(--ink)">${statisticsEscape(`${entry.round}. hf`)}</text>`);
-    parts.push(`<text x="${centre}" y="${height - bottom + 28}" text-anchor="middle" font-size="9" fill="var(--muted)">${statisticsEscape(entry.code)}</text>`);
+    if (columns.showValues) parts.push(`<text x="${centre}" y="${(y(entry.rating) - 5).toFixed(1)}" text-anchor="middle" font-size="10" fill="var(--muted)">${ratingText(entry.rating)}</text>`);
   });
+  statisticsMatchLabels(parts, slots, columns);
   // The average runs across every bar and is labelled in the right margin,
   // where no bar can cover it.
   const mean = y(average).toFixed(1);
@@ -311,18 +375,18 @@ function statisticsRatingsSvg(rows, average) {
   return `<svg viewBox="0 0 ${width} ${height}" width="100%" role="img" aria-label="Maç maç Sportmonks puanı; ortalama ${ratingText(average)}">${parts.join("")}</svg>`;
 }
 
-function renderStatisticsRatings(player) {
-  const { teams } = buildTierPlayers();
-  const rows = statisticsRatingRows(player, teams);
-  if (!rows.length) {
+function renderStatisticsRatings(player, slots = statisticsMatchSlots(player)) {
+  const rated = slots.filter((entry) => entry.rating !== null);
+  if (!rated.length) {
     $("statistics-ratings-chart").replaceChildren();
     $("statistics-ratings-note").textContent = "Bu oyuncu için geçerli Sportmonks maç puanı yok.";
     return;
   }
-  const average = rows.reduce((sum, row) => sum + row.rating, 0) / rows.length;
-  $("statistics-ratings-chart").innerHTML = statisticsRatingsSvg(rows, average);
-  const ratings = rows.map((row) => row.rating), unrated = player.matches.length - rows.length;
-  $("statistics-ratings-note").textContent = `${rows.length} puanlı maç · ortalama ${ratingText(average)}`
+  const ratings = rated.map((entry) => entry.rating);
+  const average = ratings.reduce((sum, value) => sum + value, 0) / ratings.length;
+  $("statistics-ratings-chart").innerHTML = statisticsRatingsSvg(slots, average);
+  const unrated = player.matches.length - rated.length;
+  $("statistics-ratings-note").textContent = `${rated.length} puanlı maç · ortalama ${ratingText(average)}`
     + ` (dakikaya göre ağırlıksız) · en yüksek ${ratingText(Math.max(...ratings))} · en düşük ${ratingText(Math.min(...ratings))}. `
     + "Kesikli çizgi oyuncunun ortalamasıdır; altındaki maçlar soluk gösterilir."
     + (unrated > 0 ? ` ${unrated} kayıtta geçerli puan yok (oynamadı veya puan verilmedi).` : "");
@@ -359,11 +423,13 @@ function renderStatisticsProfile(players) {
       "statistics-detailed-details"]) $(id).replaceChildren();
     for (const id of ["statistics-radar-note", "statistics-detailed-note"]) {
       $(id).textContent = "Radar dosyaları yüklenemedi; src/web/serve.py'yi yeniden başlatıp sayfayı yenileyin.";
+      $(id).hidden = false;
     }
   }
   renderStatisticsFacts(selected);
-  renderStatisticsTimeline(selected);
-  renderStatisticsRatings(selected);
+  const slots = statisticsMatchSlots(selected);
+  renderStatisticsTimeline(selected, slots);
+  renderStatisticsRatings(selected, slots);
   // The distribution chart reuses the wheel's reference and scores.
   if (typeof renderPlayerDistribution === "function") renderPlayerDistribution(radar, selected);
 }

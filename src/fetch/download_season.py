@@ -125,6 +125,10 @@ class Download:
         for team in teams:
             tid = team["id"]
             self.resource(f"squad-{tid}", f"squads/seasons/{sid}/teams/{tid}", include="player;position;details.type")
+            # The season squad keeps everyone registered at any point this season,
+            # including players who have since left. The current domestic squad is
+            # what tells the fantasy pages who is still in the league.
+            self.resource(f"current-squad-{tid}", f"squads/teams/{tid}")
             self.resource(f"team-statistics-{tid}", f"teams/{tid}", include="statistics.details.type", filters=f"teamstatisticSeasons:{sid}")
             self.resource(f"team-availability-{tid}", f"teams/{tid}", include="sidelined;coaches")
         played_rounds = {f.get("round_id") for f in self.fixtures.values() if f.get("events")}

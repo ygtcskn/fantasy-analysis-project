@@ -21,7 +21,11 @@ class RecommendationAdapterTests(unittest.TestCase):
         self.model = SimpleNamespace(FORMATIONS={"4-3-3": None},
                                      RISK_PRESETS={"balanced": 0.0, "low": 0.75, "high": -0.75},
                                      optimize=Mock(return_value=solution))
-        self.source = SimpleNamespace(load_pool=Mock(return_value=([self.player, self.next_player], [], "generation", "5")))
+        self.source = SimpleNamespace(load_pool=Mock(return_value=([self.player, self.next_player], [], "generation", "5")),
+                                      FINAL=Path("unused"), read=Mock(return_value=[
+                                          {"sportmonks_player_id": "2", "match_status": "matched", "so_percent": "43.6"},
+                                          {"sportmonks_player_id": "1", "match_status": "unmatched", "so_percent": "12.0"},
+                                      ]))
         self.query = {"locked": ["1"], "formation": ["4-3-3"], "generation": ["generation"],
                       "risk": ["balanced"]}
 
@@ -174,3 +178,26 @@ class RatingPassthroughTests(RecommendationAdapterTests):
         with patch.object(adapter, "modules", return_value=(self.model, self.source)):
             rows = adapter.recommendations("2026-2027", dict(self.query, position=["FOR"]))
         self.assertEqual(rows[0]["rating"], 7.4)
+
+
+class OwnershipPassthroughTests(RecommendationAdapterTests):
+    def test_so_percent_reaches_the_reader_in_both_views(self):
+        with patch.object(adapter, "modules", return_value=(self.model, self.source)):
+            rows = adapter.recommendations("2026-2027", self.query)
+        self.assertEqual(rows[0]["so_percent"], "43.6")
+        self.model.recommend = Mock(return_value=[{
+            "player_id": "2", "player_name": "Two", "position": "FOR", "expected_points": 6,
+            "price_million_try": 7.0, "rating": 7.4, "completed_xi_expected_points": 50,
+            "points_below_optimal_xi": 0.0}])
+        self.model.POSITIONS = ("KL", "DEF", "OS", "FOR")
+        with patch.object(adapter, "modules", return_value=(self.model, self.source)):
+            rows = adapter.recommendations("2026-2027", dict(self.query, position=["FOR"]))
+        self.assertEqual(rows[0]["so_percent"], "43.6")
+
+    def test_unmatched_tff_rows_never_supply_so_percent(self):
+        self.player.id, self.next_player.id = "2", "1"
+        self.query["locked"] = ["2"]
+        with patch.object(adapter, "modules", return_value=(self.model, self.source)):
+            rows = adapter.recommendations("2026-2027", self.query)
+        self.assertEqual(rows[0]["player_id"], "1")
+        self.assertEqual(rows[0]["so_percent"], "")
