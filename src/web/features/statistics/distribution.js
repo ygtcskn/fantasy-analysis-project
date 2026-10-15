@@ -52,8 +52,11 @@ const PlayerDistribution = (() => {
   const bucket = (score) => stops.reduce((best, stop) => (Math.abs(stop - score) < Math.abs(best - score) ? stop : best), 0);
 
   // rows: { label, unit, values (the peers' figures), value (the player's),
-  // score (his percentile, direction already applied), direction, detail }.
-  function chart(rows, display = (score) => String(Math.round(score))) {
+  // score (his percentile, direction already applied), direction, detail,
+  // compare? }. `compare` is a second player { value, score, detail } drawn
+  // as his own marker on the same curve; the fill stays the first player's.
+  // `colours` names the two markers' colours once a second player is drawn.
+  function chart(rows, display = (score) => String(Math.round(score)), colours = null) {
     const width = 640, left = 150, plotRight = 516, rowHeight = 52, top = 8;
     const plot = plotRight - left, legendTop = top + rows.length * rowHeight + 14;
     const height = legendTop + 44;
@@ -69,7 +72,9 @@ const PlayerDistribution = (() => {
         return;
       }
       const own = Number.isFinite(row.value) ? row.value : null;
-      let low = Math.min(...values, own ?? Infinity), high = Math.max(...values, own ?? -Infinity);
+      const other = colours && Number.isFinite(row.compare?.value) ? row.compare.value : null;
+      let low = Math.min(...values, own ?? Infinity, other ?? Infinity);
+      let high = Math.max(...values, own ?? -Infinity, other ?? -Infinity);
       if (high === low) { low -= 0.5; high += 0.5; }
       const x = (value) => left + ((value - low) / (high - low)) * plot;
       const grid = density(values, low, high), peak = Math.max(...grid.map((point) => point.y)) || 1;
@@ -93,20 +98,30 @@ const PlayerDistribution = (() => {
       body.push(`<line x1="${left}" y1="${base}" x2="${plotRight}" y2="${base}" stroke="var(--line)"/>`);
       body.push(`<text x="${left}" y="${base + 17}" font-size="9" fill="var(--muted)">${text(low)}</text>`);
       body.push(`<text x="${plotRight}" y="${base + 17}" text-anchor="end" font-size="9" fill="var(--muted)">${text(high)}</text>`);
-      const detail = escape(row.detail || row.label);
-      if (own === null) {
-        body.push(`<text x="${plotRight + 14}" y="${base - 6}" font-size="11" fill="var(--muted)"><title>${detail}</title>—</text>`);
-        return;
-      }
-      const px = x(own);
-      body.push(`<line x1="${fixed(px)}" y1="${y0 + 2}" x2="${fixed(px)}" y2="${base}" stroke="var(--ink)" stroke-width="1.2" stroke-dasharray="3 2"/>`);
-      body.push(`<path d="M${fixed(px)},${base + 1} l-4,6 h8 Z" fill="var(--ink)"/>`);
-      const shown = Number.isFinite(row.score) ? display(row.score) : "—";
-      body.push(`<g><title>${detail}</title><rect x="${left}" y="${y0}" width="${width - left}" height="${rowHeight - 4}" fill="transparent"/>`
-        + `<text x="${plotRight + 14}" y="${base - 6}" font-size="11" fill="var(--ink)"><tspan font-weight="700">${text(own)}</tspan>`
-        + `<tspan font-size="9" fill="var(--muted)">${escape(row.unit ? ` ${row.unit}` : "")}</tspan></text>`
-        + (Number.isFinite(row.score) ? `<circle cx="${plotRight + 88}" cy="${base - 10}" r="4" style="fill: var(--dist-${bucket(row.score)})"/>` : "")
-        + `<text x="${plotRight + 96}" y="${base - 6}" font-size="11" font-weight="700" fill="var(--ink)">${escape(shown)}</text></g>`);
+      // One marker and one value line per player. Alone, the marker is ink and
+      // the value line sits mid-row; compared, each marker takes its player's
+      // colour, the values stack primary first, and a short bar of that colour
+      // starts each value line.
+      const players = [{ value: own, score: row.score, detail: row.detail || row.label },
+        ...(colours ? [{ value: other, score: row.compare?.score, detail: row.compare?.detail || row.label }] : [])];
+      players.forEach((player, which) => {
+        const detail = escape(player.detail);
+        const textY = colours ? base - 13 + which * 14 : base - 6;
+        if (player.value === null) {
+          body.push(`<text x="${plotRight + 14}" y="${textY}" font-size="11" fill="var(--muted)"><title>${detail}</title>—</text>`);
+          return;
+        }
+        const px = x(player.value), stroke = colours ? colours[which] : "var(--ink)";
+        body.push(`<line data-dist-marker="${which}" x1="${fixed(px)}" y1="${y0 + 2}" x2="${fixed(px)}" y2="${base}" stroke="${stroke}" stroke-width="${colours ? 1.6 : 1.2}" stroke-dasharray="3 2"/>`);
+        body.push(`<path d="M${fixed(px)},${base + 1} l-4,6 h8 Z" fill="${stroke}"/>`);
+        const shown = Number.isFinite(player.score) ? display(player.score) : "—";
+        body.push(`<g><title>${detail}</title><rect x="${left}" y="${y0}" width="${width - left}" height="${rowHeight - 4}" fill="transparent"/>`
+          + (colours ? `<rect x="${plotRight + 6}" y="${textY - 8}" width="3" height="9" rx="1" fill="${stroke}"/>` : "")
+          + `<text x="${plotRight + 14}" y="${textY}" font-size="11" fill="var(--ink)"><tspan font-weight="700">${text(player.value)}</tspan>`
+          + `<tspan font-size="9" fill="var(--muted)">${escape(row.unit ? ` ${row.unit}` : "")}</tspan></text>`
+          + (Number.isFinite(player.score) ? `<circle cx="${plotRight + 88}" cy="${textY - 4}" r="4" style="fill: var(--dist-${bucket(player.score)})"/>` : "")
+          + `<text x="${plotRight + 96}" y="${textY}" font-size="11" font-weight="700" fill="var(--ink)">${escape(shown)}</text></g>`);
+      });
     });
     parts.push(`<linearGradient id="pd-legend" x1="0" y1="0" x2="1" y2="0">${stops.map((stop) => `<stop offset="${stop / 100}" style="stop-color: var(--dist-${stop})"/>`).join("")}</linearGradient></defs>`);
     parts.push(...body);
@@ -127,21 +142,26 @@ function renderPlayerDistribution(radar, selected) {
     $("statistics-distribution-note").textContent = radar?.note || "Dağılım için radar verisi yok.";
     return;
   }
-  const { player, reference, profile, results } = radar;
+  const { player, reference, profile, results, guest } = radar;
+  const detail = (who, metric, result, count) => `${who.name} · ${metric.label}: ${displayNumber(result.value)} ${statisticsUnit(metric)}`
+    + (result.prior ? ` (gözlenen ${displayNumber(result.observedValue)}, kendi payı %${displayNumber(Math.round(result.reliability * 100))})` : "")
+    + ` · yüzdelik ${Number.isFinite(result.score) ? RadarChart.display(result.score) : "—"} · ${count} emsal değeri`;
   const rows = profile.map((metric, index) => {
     const result = results[index], values = reference.metrics.get(metric.id) || [];
+    const other = guest?.results[index];
     return { label: metric.label, unit: statisticsUnit(metric), values, value: Number.isFinite(result.value) ? result.value : null,
-      score: result.score, direction: metric.direction,
-      detail: `${player.name} · ${metric.label}: ${displayNumber(result.value)} ${statisticsUnit(metric)}`
-        + (result.prior ? ` (gözlenen ${displayNumber(result.observedValue)}, kendi payı %${displayNumber(Math.round(result.reliability * 100))})` : "")
-        + ` · yüzdelik ${Number.isFinite(result.score) ? RadarChart.display(result.score) : "—"} · ${values.length} emsal değeri` };
+      score: result.score, direction: metric.direction, detail: detail(player, metric, result, values.length),
+      compare: other ? { value: Number.isFinite(other.value) ? other.value : null, score: other.score,
+        detail: detail(guest.player, metric, other, values.length) } : null };
   });
-  $("statistics-distribution-chart").innerHTML = PlayerDistribution.chart(rows, RadarChart.display);
+  $("statistics-distribution-chart").innerHTML = PlayerDistribution.chart(rows, RadarChart.display,
+    guest ? STATISTICS_SERIES.map((series) => series.line) : null);
   $("statistics-distribution-note").textContent = `${selected?.name || player.name} · ${statisticsReferenceLabel(reference)}. `
     + "Her satırda eğri emsallerin o ölçütteki dağılımı, kesikli çizgi oyuncunun değeri, renkli bölüm geride bıraktığı emsaller, "
     + "sağdaki sayı yüzdeliği; Ayrıntılı Ölçütler radarıyla aynı emsaller ve aynı puan. Renk yüzdeliği gösterir: turuncu düşük, "
     + "nötr orta, lacivert yüksek. Düşük değerin iyi olduğu ölçütlerde (ör. yenilen gol) renkli bölüm oyuncunun değerinden yukarı uzanır. "
     + "Değerler ve eğriler az dakikalı oranlar emsal ortalamasına çekildikten sonraki değerlerdir; gözlenen değer satırın üzerinde bekleyince görünür. "
+    + (guest ? `Mavi çizgi ${guest.player.name}; aynı emsallere göre sıralanır, renkli bölüm ${player.name} içindir. ` : "")
     + (radar.pool || "");
 }
 

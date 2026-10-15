@@ -231,9 +231,18 @@ see past that.
 
 ### Oyuncu Profili
 
-Clicking a name in the list fills the right-hand panel with three views of that
-player. A name in a leader card still opens the per-match dialog, which is what
-a leaderboard click should do; the list drives the profile.
+Clicking a name in the list fills the right-hand panel with that player - the
+primary. Clicking a second name compares the two: the secondary is drawn in a
+sky blue beside the primary's colour on both radars, the season totals, the
+fantasy timeline, the rating bars (side by side in each round) and the
+distribution (a second marker on the primary's curves). The header shows one
+name chip per player, each starting with his colour, and every chart title
+carries the same swatches as a legend. A third pick replaces the secondary;
+clicking the secondary again, or its ×, removes him; clicking the primary
+hands the primary role to the secondary. Compared, the match charts' columns
+are rounds, with each player's opponent under the column in his colour. A name
+in a leader card still opens the per-match dialog, which is what a leaderboard
+click should do; the list drives the profile.
 
 ### Spider plots
 
@@ -247,9 +256,10 @@ the score.
 minutes, goals, assists, shots, key passes, match rating, and the fantasy
 figures where the analysis is loaded.
 
-**Fantasy points over time.** One point per match in kickoff order, with a zero
-line drawn when a player has been sent off or scored an own goal into a negative
-week. Dates thin out to about eight labels so they never collide over a season.
+**Fantasy points over time.** One point per match, in the same columns and on
+the same frame as the rating bars below (matchweek and opponent labels), with a
+zero line drawn when a player has been sent off or scored an own goal into a
+negative week, and the player's average as a dashed line.
 
 **Sportmonks rating per match,** under the timeline. One vertical bar per
 rated match, in kickoff order from left to right like the timeline, labelled
@@ -288,12 +298,24 @@ Put logos in `assets/team-logos/`, using the Sportmonks team ID as the filename:
 
 ## Takım İstatistikleri
 
-`index.html?view=team-statistics`, directly below İstatistikler in the sidebar.
-The page starts with Takım Analizi, followed by a searchable team list and a
-profile of the team clicked in the list or a chart (the league leader until then).
+`index.html?view=team-statistics`, directly below Oyuncu İstatistikleri in the
+sidebar. The page starts with Takım Analizi, followed by a searchable team list
+and a profile of the team clicked in the list or a chart (the league leader
+until then).
 
 - **Team list:** played, goals for and against, and points, sortable by points,
   goals scored, goals conceded (fewest first), goal difference or clean sheets.
+  Sorting by goal difference (AV) or clean sheets (GY) adds that figure as a
+  last column, so the order can be read.
+- **Oyuncu Listesi:** below the team list, the Oyuncu İstatistikleri player
+  list - same rows, search, role buttons, sorting and styles - for the open team
+  only, with figures from that team's matches: rating (the tier list's average),
+  fantasy points per match from the published ledger, goals and assists. A
+  blank goal or assist on a match with statistics counts as none, as on the
+  spider plots; a total with an uncovered match carries an asterisk. A name
+  opens that player's matches. Players who have left the league's squads are
+  left out, as on every player list, and the note says how many. The code is in
+  `features/team-statistics/team-players.js`.
 - **Spider plots:** Genel Nitelikler and Ayrıntılı Ölçütler for teams, built in
   `lib/radar.js` with the same scoring and reference rules as the player plots,
   per match instead of per 90 - see [lib/radar.md](lib/radar.md).
@@ -365,7 +387,7 @@ src/web/
   features/                   One folder per page or panel
     home/  standings/  matchweek/  tier-list/  builder/
     statistics/                 Player page: list, profile, radar page, distribution
-    team-statistics/            Team page: list, profile, radar page, charts page
+    team-statistics/            Team page: list, players, profile, radar page, charts page
     team-page/                  team.html
   styles/
     styles.css                  Global appearance and theme variables

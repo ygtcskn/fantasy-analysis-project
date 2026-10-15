@@ -482,11 +482,16 @@ const RadarScoring = (() => {
     const value = (observed.rawValue + prior.mean * prior.weight) / (exposure + prior.weight) * (percentage ? 100 : 90);
     return { ...observed, observedValue: observed.value, value, prior, reliability: exposure / (exposure + prior.weight) };
   }
-  function evaluate(player, metric, reference) {
+  // `options.guest` ranks a player from another role against this reference -
+  // the comparison overlay, where both players share the primary's scale. The
+  // season and competition must still match.
+  function evaluate(player, metric, reference, options = {}) {
     const observed = adjusted(player, metric, reference);
     const ranked = score(observed.value, reference.metrics.get(metric.id) || [], metric, reference.config);
-    const sameGroup = player.position === reference.position && player.scope?.key === reference.scope?.key;
+    const sameGroup = (player.position === reference.position || Boolean(options.guest))
+      && player.scope?.key === reference.scope?.key;
     return { ...observed, metric, score: sameGroup ? ranked.score : null,
+      guest: Boolean(options.guest) && player.position !== reference.position,
       status: !sameGroup ? "incompatible_group" : observed.status === "available" ? ranked.status : observed.status,
       sampleSize: ranked.sampleSize, positiveN: ranked.positiveN, zeroShare: ranked.zeroShare,
       zeroApplied: ranked.zeroApplied, minimumMinutes: reference.config.minimumMinutes, peerCount: reference.peerCount,
@@ -654,7 +659,7 @@ const RadarAttributes = (() => {
       project, projections: rows.map(project), dropped, active,
       loadings: active.map((index, position) => ({ metric: members[index], weight: component.vector[position] })) };
   }
-  function evaluate(player, model, reference) {
+  function evaluate(player, model, reference, options = {}) {
     const members = model.members;
     const result = { metric: model.attribute, rawValue: null, value: null, attempts: null,
       attemptsSupplied: null, minutes: player.minutes, supplied: 0, records: player.rows.length,
@@ -663,9 +668,10 @@ const RadarAttributes = (() => {
       position: reference.position, scope: reference.scope,
       loadings: model.loadings, dropped: model.dropped, explained: model.explained, status: model.status,
       smallSample: !(player.minutes > 0) || player.minutes < reference.config.minimumMinutes };
-    if (player.position !== reference.position || player.scope?.key !== reference.scope?.key) {
+    if ((player.position !== reference.position && !options.guest) || player.scope?.key !== reference.scope?.key) {
       return { ...result, status: "incompatible_group" };
     }
+    result.guest = Boolean(options.guest) && player.position !== reference.position;
     const own = members.map((metric) => RadarScoring.adjusted(player, metric, reference));
     // Only the members the component kept are needed from the player.
     const needed = model.active || members.map((_, index) => index);
@@ -782,11 +788,14 @@ const RadarTeams = (() => {
     return [...byKey.values()];
   }
   // Team-seasons within one season and competition, ready for createReference.
+  // Only finished fixtures count, as for players: a match the last download
+  // caught in play would otherwise add half its statistics as ninety minutes.
   function entities(teamRows, fixtures, scope) {
     const byFixture = new Map(fixtures.map((fixture) => [String(fixture.fixture_id), fixture]));
     const teams = new Map();
     for (const row of teamRows) {
-      if (!scope || RadarScoring.fixtureScope(byFixture.get(row.fixture_id))?.key !== scope.key) continue;
+      const fixture = byFixture.get(row.fixture_id);
+      if (!scope || RadarScoring.fixtureScope(fixture)?.key !== scope.key || !RadarScoring.finished(fixture)) continue;
       if (!teams.has(row.team_id)) teams.set(row.team_id, { id: row.team_id, name: `Takım ${row.team_id}`, rows: [], position: "TEAM", scope });
       teams.get(row.team_id).rows.push(row);
     }
@@ -839,23 +848,28 @@ const RadarChart = (() => {
       const [x, y] = at(index, radius);
       parts.push(`<line x1="${centre}" y1="${centre}" x2="${x}" y2="${y}" stroke="var(--line)"/>`);
     });
-    for (const entry of series) {
+    // Later series are drawn first, so the first (primary) series sits on top.
+    // A `faded` series - the compared player - recedes: a thinner, partly
+    // transparent outline and softer points over its lighter fill, so two
+    // overlapping shapes stay distinguishable.
+    for (const entry of [...series].reverse()) {
+      const stroke = entry.faded ? 'stroke-width="2" stroke-opacity="0.65" data-radar-faded="true"' : 'stroke-width="3"';
       const valid = entry.results.map((result) => Number.isFinite(result.score) && result.score >= 0 && result.score <= 100);
       if (valid.every(Boolean)) {
         const shape = entry.results.map((result, index) => point(index, result.score / 100)).join(" ");
-        parts.push(`<polygon data-radar-series="complete" points="${shape}" fill="${escape(entry.fill)}" stroke="${escape(entry.line)}" stroke-width="3"/>`);
+        parts.push(`<polygon data-radar-series="complete" points="${shape}" fill="${escape(entry.fill)}" stroke="${escape(entry.line)}" ${stroke}/>`);
       } else {
         // No filled area or connections across a missing axis. Observed zero
         // stays exactly at the centre and remains different from unavailable.
         entry.results.forEach((result, index) => {
           const next = (index + 1) % axes.length;
-          if (valid[index] && valid[next]) parts.push(`<polyline data-radar-series="partial" points="${point(index, result.score / 100)} ${point(next, entry.results[next].score / 100)}" fill="none" stroke="${escape(entry.line)}" stroke-width="3"/>`);
+          if (valid[index] && valid[next]) parts.push(`<polyline data-radar-series="partial" points="${point(index, result.score / 100)} ${point(next, entry.results[next].score / 100)}" fill="none" stroke="${escape(entry.line)}" ${stroke}/>`);
         });
       }
       entry.results.forEach((result, index) => {
         if (!valid[index]) return;
         const [x, y] = at(index, radius * result.score / 100), detail = escape(tooltip(entry, result));
-        parts.push(`<circle data-radar-point="${index}" cx="${x}" cy="${y}" r="5" fill="${escape(entry.line)}" tabindex="0" role="img" aria-label="${detail}"><title>${detail}</title></circle>`);
+        parts.push(`<circle data-radar-point="${index}" cx="${x}" cy="${y}" r="${entry.faded ? 4 : 5}" fill="${escape(entry.line)}"${entry.faded ? ' fill-opacity="0.7"' : ""} tabindex="0" role="img" aria-label="${detail}"><title>${detail}</title></circle>`);
       });
     }
     for (const ring of [0, 20, 40, 60, 80, 100]) {

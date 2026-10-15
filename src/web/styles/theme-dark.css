@@ -133,7 +133,9 @@
 :root[data-theme="dark"] .statistics-players { border-top-color: #e8c33a; }
 :root[data-theme="dark"] .statistics-reserved { border-top-color: #c9c4e6; }
 :root[data-theme="dark"] .statistics-player-button:hover { color: #cba7fa; }
-:root[data-theme="dark"] { --statistics-plot-line: #9c8bf0; --statistics-plot-fill: #9c8bf03d; }
+:root[data-theme="dark"] { --statistics-plot-line: #9c8bf0; --statistics-plot-fill: #9c8bf03d;
+  --statistics-plot-compare: #60c6ff; --statistics-plot-compare-fill: #60c6ff33;
+  --statistics-plot-compare-faded: #60c6ff17; }
 :root[data-theme="dark"] .statistics-profile { border-top-color: #c9c4e6; }
 :root[data-theme="dark"] .statistics-facts { border-top-color: #ff7b73; }
 :root[data-theme="dark"] .statistics-timeline { border-top-color: #e6d5a8; }
@@ -361,7 +363,7 @@
   padding-left: 54px;
   text-align: left;
 }
-:root[data-theme="dark"] #statistics-workspace .statistics-player-list-table :is(th, td):not(.no-results) {
+:root[data-theme="dark"] :is(#statistics-workspace, #team-statistics-workspace) .statistics-player-list-table :is(th, td):not(.no-results) {
   height: 42px;
   padding: 5px 7px;
   border-inline: 0;
@@ -370,6 +372,13 @@
 }
 :root[data-theme="dark"] #statistics-workspace .statistics-player-list-table tbody > tr.statistics-row-selected > td {
   box-shadow: none;
+}
+/* Compared players: a rule in each player's colour marks which row is which. */
+:root[data-theme="dark"] #statistics-workspace .statistics-player-list-table tbody > tr.statistics-row-selected > td:first-child {
+  box-shadow: inset 3px 0 var(--statistics-plot-line);
+}
+:root[data-theme="dark"] #statistics-workspace .statistics-player-list-table tbody > tr.statistics-row-compare > td:first-child {
+  box-shadow: inset 3px 0 var(--statistics-plot-compare);
 }
 :root[data-theme="dark"] #team-statistics-workspace .statistics-team-list-table :is(th, td):not(.no-results) {
   height: 42px;

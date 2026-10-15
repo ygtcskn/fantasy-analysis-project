@@ -24,6 +24,18 @@ function statisticsRadarReason(result) {
   return STATISTICS_RADAR_SHORT[result?.status] || "";
 }
 
+// The player profile compares up to two players: the primary in the plot
+// colour, the secondary in a sky blue validated against it for colour-blind
+// and normal-vision separation on both surfaces (theme variables in
+// panels.css and theme-dark.css). Every profile chart takes its colours here.
+const STATISTICS_SERIES = [
+  { line: "var(--statistics-plot-line)", fill: "var(--statistics-plot-fill)" },
+  // On the spider plots the secondary is faded (see RadarChart.svg) over a
+  // fainter fill than its other charts use, so the primary's shape reads first.
+  { line: "var(--statistics-plot-compare)", fill: "var(--statistics-plot-compare-fill)",
+    radarFill: "var(--statistics-plot-compare-faded)" },
+];
+
 // Both wheels read the same prepared season CSV. Player and team metric names
 // are prefixed in that file so a column absent from one feed stays absent here.
 const spiderStatsState = { key: null, state: "idle", players: [], teams: [], message: "" };
@@ -210,9 +222,10 @@ function statisticsScopeLabel(scope) {
 }
 
 // The minute bar in the reader's unit: minutes for players, matches for teams,
-// whose every match counts as ninety minutes.
+// whose every match counts as ninety minutes. A team's minutes are whole
+// matches, so a bar of 330 minutes means four matches, not 3.67.
 function statisticsBarLabel(minutes, position) {
-  return position === "TEAM" ? `en az ${displayNumber(minutes / 90)} maç` : `en az ${minutes} dakika`;
+  return position === "TEAM" ? `en az ${displayNumber(Math.ceil(minutes / 90))} maç` : `en az ${minutes} dakika`;
 }
 
 // The unit an axis value is reported in.
@@ -286,6 +299,7 @@ function statisticsRadarTooltip(entry, result) {
     if (result.dropped?.length) lines.push(`Çıkarılan ölçütler: ${statisticsDroppedText(result)}`);
     lines.push("Birbirini tekrar eden ölçütler tek bir eksende toplanır; ham sütun değil, ortak eğilimdir.");
     if (result.smallSample) lines.push("Küçük veya belirsiz dakika örneği; referans grubuna alınmadı.");
+    if (result.guest) lines.push(STATISTICS_GUEST_NOTE);
     if (result.status !== "available") lines.push(STATISTICS_RADAR_STATUS[result.status] || result.status);
     return lines.join("\n");
   }
@@ -307,13 +321,14 @@ function statisticsRadarTooltip(entry, result) {
   if (metric.direction === "lower_better") lines.push("Düşük ham değer daha iyi; puan ters çevrilir.");
   if (metric.direction === "context") lines.push("Bağlam ölçütü: yüksek puan daha fazla etkinliktir; tek başına kalite değildir.");
   if (result.smallSample) lines.push("Küçük veya belirsiz dakika örneği; referans grubuna alınmadı.");
+  if (result.guest) lines.push(STATISTICS_GUEST_NOTE);
   if (result.status !== "available") lines.push(STATISTICS_RADAR_STATUS[result.status] || result.status);
   return lines.join("\n");
 }
 
-// The radars carry no explanatory text: their notes appear only when a plot
-// cannot be drawn, and say why. Scores, raw values and the adjustment are in
-// each axis's tooltip.
+// A secondary player from another role is ranked in the primary's group.
+const STATISTICS_GUEST_NOTE = "Karşılaştırma: bu oyuncu kendi mevki grubunda değil, birincil oyuncunun emsal grubunda sıralanır.";
+
 // RadarChart crops each wheel to its own labels, so a six-axis wheel came out
 // shorter than its sixteen-axis neighbour and sat higher in its panel. Side
 // by side they share one frame instead: the same viewBox, so both circles have
@@ -328,6 +343,9 @@ function statisticsAlignRadars(chartIds) {
   for (const svg of svgs) svg.setAttribute("viewBox", `${left} ${top} ${right - left} ${bottom - top}`);
 }
 
+// The radars carry no explanatory text: their notes appear only when a plot
+// cannot be drawn, or a comparison cannot be overlaid, and say why. Scores,
+// raw values and the adjustment are in each axis's tooltip.
 function statisticsRadarNote(note = "") {
   for (const id of ["statistics-radar-note", "statistics-detailed-note"]) {
     $(id).textContent = note;
@@ -339,7 +357,7 @@ function statisticsRadarNote(note = "") {
 // selected player's own season and competition, his role, the seeded minute
 // bar and - once they have loaded - every earlier season. List searches and
 // club filters never touch it.
-function renderStatisticsRadars(selected, players) {
+function renderStatisticsRadars(selected, players, secondary = null) {
   if (spiderStatsState.key !== state.seasonSlug) loadSpiderStats();
   if (spiderStatsState.state !== "ready") {
     for (const id of ["statistics-radar-chart", "statistics-detailed-chart",
@@ -387,8 +405,16 @@ function renderStatisticsRadars(selected, players) {
   reference.historyRounds = historyReady ? statisticsHistory.rounds : null;
   const attributes = RadarAttributes.forPosition(player.position);
   const models = attributes.map((attribute) => RadarAttributes.fit(attribute, reference));
-  const series = (results) => [{ name: player.name, results,
-    line: "var(--statistics-plot-line)", fill: "var(--statistics-plot-fill)" }];
+  // A secondary player is drawn on the primary's wheels and ranked against the
+  // primary's reference, so both share one scale. A goalkeeper and an
+  // outfielder have different wheels and are not overlaid.
+  const guest = secondary ? prepared.find((other) => other.id === secondary.id) || null : null;
+  const keeper = (entry) => entry.position === "GK";
+  const comparable = Boolean(guest) && keeper(guest) === keeper(player);
+  const series = (results, guestResults) => [
+    { name: player.name, results, line: STATISTICS_SERIES[0].line, fill: STATISTICS_SERIES[0].fill },
+    ...(comparable ? [{ name: guest.name, results: guestResults, line: STATISTICS_SERIES[1].line,
+      fill: STATISTICS_SERIES[1].radarFill, faded: true }] : [])];
   const renderChart = (chartId, detailsId, axes, entries, title) => {
     $(detailsId).replaceChildren();
     $(chartId).innerHTML = RadarChart.svg(axes, entries, statisticsRadarTooltip, title, statisticsRadarReason);
@@ -402,14 +428,20 @@ function renderStatisticsRadars(selected, players) {
       $(chartId).prepend(notice);
     }
   };
+  const names = comparable ? `${player.name} ve ${guest.name}` : player.name;
   renderChart("statistics-radar-chart", "statistics-radar-details", attributes,
-    series(models.map((model) => RadarAttributes.evaluate(player, model, reference))),
-    `${player.name} · genel nitelikler`);
+    series(models.map((model) => RadarAttributes.evaluate(player, model, reference)),
+      comparable ? models.map((model) => RadarAttributes.evaluate(guest, model, reference, { guest: true })) : []),
+    `${names} · genel nitelikler`);
   const results = profile.map((axis) => RadarScoring.evaluate(player, axis, reference));
-  renderChart("statistics-detailed-chart", "statistics-detailed-details", profile, series(results),
-    `${player.name} · ayrıntılı ölçütler`);
+  const guestResults = comparable ? profile.map((axis) => RadarScoring.evaluate(guest, axis, reference, { guest: true })) : null;
+  renderChart("statistics-detailed-chart", "statistics-detailed-details", profile, series(results, guestResults),
+    `${names} · ayrıntılı ölçütler`);
   statisticsAlignRadars(["statistics-radar-chart", "statistics-detailed-chart"]);
-  statisticsRadarNote();
+  statisticsRadarNote(secondary && !comparable
+    ? `${secondary.name} ${guest && keeper(guest) ? "kaleci" : "saha oyuncusu"}; kaleci ile saha oyuncusunun radarları farklı olduğu için karşılaştırılamaz.`
+    : "");
   // Handed back so other player charts reuse this exact population and score.
-  return { player, reference, profile, results, pool: statisticsPoolNote() };
+  return { player, reference, profile, results, pool: statisticsPoolNote(),
+    guest: comparable ? { player: guest, results: guestResults } : null };
 }

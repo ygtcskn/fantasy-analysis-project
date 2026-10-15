@@ -38,6 +38,7 @@
   <script src="features/statistics/statistics.js" defer></script>
   <script src="lib/team-analysis.js" defer></script>
   <script src="features/team-statistics/team-charts-page.js" defer></script>
+  <script src="features/team-statistics/team-players.js" defer></script>
   <script src="features/team-statistics/team-statistics.js" defer></script>
   <script src="features/social/social.js" defer></script>
   <script src="core/app.js" defer></script>
@@ -181,7 +182,7 @@
           </table></div>
         </section>
         <section class="statistics-profile" aria-labelledby="statistics-profile-title">
-          <div class="builder-pool-heading"><h3 id="statistics-profile-title">Oyuncu Profili</h3><span id="statistics-profile-name" class="badge">—</span></div>
+          <div class="builder-pool-heading"><h3 id="statistics-profile-title">Oyuncu Profili</h3><div id="statistics-profile-name" class="statistics-profile-players" aria-live="polite">—</div></div>
           <p id="statistics-profile-note" class="builder-rating-note" role="status"></p>
           <div class="statistics-profile-top">
             <section class="statistics-radar" aria-labelledby="statistics-radar-title">
@@ -229,19 +230,19 @@
         <div class="team-analysis-layout">
           <div id="team-analysis-tabs" class="team-analysis-tabs" role="tablist" aria-label="Takım analizi grafikleri"></div>
           <div class="team-analysis-content">
-            <section id="ta-fantasy-panel" class="ta-block" role="tabpanel" aria-labelledby="team-analysis-tab-fantasy" data-analysis-panel="fantasy" tabindex="0">
+            <section id="ta-fantasy-panel" class="ta-block ta-open" role="tabpanel" aria-labelledby="team-analysis-tab-fantasy" data-analysis-panel="fantasy" tabindex="0">
               <h4 id="ta-fantasy-title">Fantezi Puanı · Mevkiye Göre</h4>
               <div id="ta-fantasy-chart" class="ta-chart"></div>
               <div class="ta-legend"><span><i class="ta-square" style="background: var(--ta-kl)"></i>Kaleci</span><span><i class="ta-square" style="background: var(--ta-def)"></i>Defans</span><span><i class="ta-square" style="background: var(--ta-os)"></i>Orta saha</span><span><i class="ta-square" style="background: var(--ta-for)"></i>Forvet</span></div>
               <p id="ta-fantasy-note" class="builder-rating-note"></p>
             </section>
-            <section id="ta-luck-panel" class="ta-block" role="tabpanel" aria-labelledby="team-analysis-tab-luck" data-analysis-panel="luck" tabindex="0" hidden>
+            <section id="ta-luck-panel" class="ta-block" role="tabpanel" aria-labelledby="team-analysis-tab-luck" data-analysis-panel="luck" tabindex="0">
               <h4 id="ta-luck-title">Şans Göstergesi · Sonuç ve Pozisyon Farkı</h4>
               <div id="ta-luck-chart" class="ta-chart"></div>
               <div class="ta-legend"><span><i class="ta-square" style="background: var(--ta-over)"></i>Sonuçlar pozisyonlardan iyi</span><span><i class="ta-square" style="background: var(--ta-under)"></i>Sonuçlar pozisyonlardan kötü</span></div>
               <p id="ta-luck-note" class="builder-rating-note"></p>
             </section>
-            <section id="ta-compare-group" class="ta-block" aria-label="Karşılaştırma grafikleri" hidden>
+            <section id="ta-compare-group" class="ta-block" aria-label="Karşılaştırma grafikleri">
               <p id="ta-compare-note" class="builder-rating-note"></p>
               <div id="ta-compare-chart" class="ta-compare-grid"></div>
             </section>
@@ -249,24 +250,51 @@
         </div>
       </section>
       <div class="statistics-lower">
-        <section class="statistics-players" aria-labelledby="team-statistics-list-title">
-          <div class="builder-pool-heading"><h3 id="team-statistics-list-title">Takım Listesi</h3></div>
-          <div class="builder-filters">
-            <label class="builder-search"><span class="sr-only">Takım ara</span><input id="team-statistics-search" type="search" placeholder="Takım…" autocomplete="off"></label>
-            <label class="builder-sort"><span class="sr-only">Sıralama</span><select id="team-statistics-sort">
-              <option value="points">Puan ↓</option>
-              <option value="scored">Atılan gol ↓</option>
-              <option value="conceded">Yenilen gol ↑</option>
-              <option value="difference">Averaj ↓</option>
-              <option value="cleanSheets">Gol yemeden ↓</option>
-            </select></label>
-          </div>
-          <div class="statistics-list-scroll" tabindex="0" aria-label="Kaydırılabilir takım listesi"><table class="statistics-table statistics-team-list-table">
-            <caption class="sr-only">Takımlar ve sezon toplamları. Bir takıma tıklayarak profilini açın.</caption>
-            <thead><tr><th scope="col">Takım</th><th scope="col" class="numeric">O</th><th scope="col" class="numeric">AG</th><th scope="col" class="numeric">YG</th><th scope="col" class="numeric">P</th></tr></thead>
-            <tbody id="team-statistics-list-body"></tbody>
-          </table></div>
-        </section>
+        <div class="team-statistics-side">
+          <section class="statistics-players" aria-labelledby="team-statistics-list-title">
+            <div class="builder-pool-heading"><h3 id="team-statistics-list-title">Takım Listesi</h3></div>
+            <div class="builder-filters">
+              <label class="builder-search"><span class="sr-only">Takım ara</span><input id="team-statistics-search" type="search" placeholder="Takım…" autocomplete="off"></label>
+              <label class="builder-sort"><span class="sr-only">Sıralama</span><select id="team-statistics-sort">
+                <option value="points">Puan ↓</option>
+                <option value="scored">Atılan gol ↓</option>
+                <option value="conceded">Yenilen gol ↑</option>
+                <option value="difference">Averaj ↓</option>
+                <option value="cleanSheets">Gol yemeden ↓</option>
+              </select></label>
+            </div>
+            <div class="statistics-list-scroll" tabindex="0" aria-label="Kaydırılabilir takım listesi"><table class="statistics-table statistics-team-list-table">
+              <caption class="sr-only">Takımlar ve sezon toplamları. Bir takıma tıklayarak profilini açın.</caption>
+              <thead><tr><th scope="col">Takım</th><th scope="col" class="numeric">O</th><th scope="col" class="numeric">AG</th><th scope="col" class="numeric">YG</th><th scope="col" class="numeric">P</th><th id="team-statistics-sort-column" scope="col" class="numeric" hidden></th></tr></thead>
+              <tbody id="team-statistics-list-body"></tbody>
+            </table></div>
+          </section>
+          <section id="team-statistics-players" class="statistics-players" aria-labelledby="team-statistics-players-title">
+            <div class="builder-pool-heading"><h3 id="team-statistics-players-title">Oyuncu Listesi</h3><span id="team-statistics-players-team" class="badge">—</span></div>
+            <div class="builder-filters">
+              <label class="builder-search"><span class="sr-only">Oyuncu ara</span><input id="team-statistics-players-search" type="search" placeholder="Oyuncu…" autocomplete="off"></label>
+              <div class="builder-role-filters" role="group" aria-label="Mevkiye göre filtrele">
+                <button type="button" data-team-players-role="" aria-label="Tüm mevkiler" title="Tüm mevkiler" aria-pressed="true"><img src="assets/roles/all.svg" alt=""></button>
+                <button type="button" data-team-players-role="goalkeeper" aria-label="Kaleciler" title="Kaleciler" aria-pressed="false"><img src="assets/roles/goalkeeper.svg" alt=""></button>
+                <button type="button" data-team-players-role="defender" aria-label="Defans oyuncuları" title="Defans oyuncuları" aria-pressed="false"><img src="assets/roles/defender.svg" alt=""></button>
+                <button type="button" data-team-players-role="midfielder" aria-label="Orta saha oyuncuları" title="Orta saha oyuncuları" aria-pressed="false"><img src="assets/roles/midfielder.svg" alt=""></button>
+                <button type="button" data-team-players-role="attacker" aria-label="Forvetler" title="Forvetler" aria-pressed="false"><img src="assets/roles/attacker.svg" alt=""></button>
+              </div>
+              <label class="builder-sort"><span class="sr-only">Sıralama</span><select id="team-statistics-players-sort">
+                <option value="rating" selected>Rating ↓</option>
+                <option value="fantasy">Maç başı fantezi ↓</option>
+                <option value="goals">Gol ↓</option>
+                <option value="assists">Asist ↓</option>
+              </select></label>
+            </div>
+            <div class="statistics-list-scroll" tabindex="0" aria-label="Kaydırılabilir oyuncu listesi"><table class="statistics-table statistics-player-list-table">
+              <caption class="sr-only">Seçili takımın bu sezon forma giyen oyuncuları, yalnızca bu takımdaki maçlarından. Bir isme tıklayarak maç istatistiklerini açın.</caption>
+              <thead><tr><th scope="col">Oyuncu</th><th scope="col" class="statistics-role">Mevki</th><th scope="col" class="numeric">Rating</th><th scope="col" class="numeric" title="Maç başı fantezi puanı">FP/Maç</th><th scope="col" class="numeric">Gol</th><th scope="col" class="numeric">Asist</th></tr></thead>
+              <tbody id="team-statistics-players-body"></tbody>
+            </table></div>
+            <p id="team-statistics-players-note" class="builder-rating-note"></p>
+          </section>
+        </div>
         <section id="team-statistics-profile" class="statistics-profile" aria-labelledby="team-statistics-profile-title">
           <div class="builder-pool-heading"><h3 id="team-statistics-profile-title">Takım Profili</h3><span id="team-statistics-profile-name" class="badge">—</span></div>
           <p id="team-statistics-profile-note" class="builder-rating-note" role="status"></p>

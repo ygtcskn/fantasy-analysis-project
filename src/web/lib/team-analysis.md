@@ -45,11 +45,11 @@ as it would beside every other team's.
 ## The charts
 
 Charts 1-4 are on the profile, drawn for the open team; 5-7 are in the Takım
-Analizi section below it, drawn for every team.
+Analizi section above it, drawn for every team.
 
 1. **xG ve xGA · maç maç.** One panel, one point per match: xG
-   conceded across, xG created up, both on the same 0-4 scale (it widens if a
-   match goes past it). Above the dashed diagonal the team out-created its
+   conceded across, xG created up, both on one scale from 0 to at least 3,
+   widened to the league's largest single-match value (0-5 in 2026/27). Above the dashed diagonal the team out-created its
    opponent; the shaded half is where it did not. Grey points are every
    team-match of the season, colour is the result, and the cross is the team's
    own average - with few matches, the most readable summary.
@@ -64,11 +64,15 @@ Analizi section below it, drawn for every team.
    the team's pressure minus its opponent's, averaged per block over its matches.
    The feed numbers minutes continuously through stoppage time (a 45+7 first half
    runs to minute 52), so each minute is first put back on the match clock using
-   the first half's length from `fixture_periods.csv`.
+   the first half's length from `fixture_periods.csv`. A match whose feed lacks
+   either side's pressure is left out of the average, and the note says how
+   many were (Beşiktaş-Erzurumspor in round 5 of 2026/27 has none).
 5. **Fantezi puanı · mevkiye göre.** The published points ledger summed per team
    by the game's positions (KL, DEF, OS, FOR), sorted by total. Shows directly
    whose defence or attack is paying out. Negative position totals are drawn
-   left of zero.
+   left of zero. Until the ledger is ready, this chart and the fantasy
+   comparison show the loader's own note: still reading, older than the match
+   data (run the pipeline), or missing.
 6. **Şans göstergesi.** Goals minus xG, and xG conceded minus goals conceded,
    over the season. Both columns point the same way: right means results were
    better than the chances, which tends not to last; teams on the left are
@@ -115,6 +119,33 @@ Analizi section below it, drawn for every team.
 `fixture_periods.csv` are optional to the server: an export without one of them
 still shows every chart that does not need it, and the missing chart says which
 file it lacks.
+
+## Narrow screens
+
+The Takım Analizi section is its own CSS size container, because from 761px to
+1100px the sidebar keeps 256px of the window. Below 800px of section width the
+tabs move from the left of the chart to above it, wrapping into rows so every
+tab stays visible. Below 600px the 640-unit bar charts and scatters
+keep a 540px minimum width and scroll sideways, so their labels stay legible
+on a phone.
+
+## Tabs
+
+The tabs are Chrome's tabs stood on end, in one colour: the panel purple
+(`--ta-tab`, which is `--panel-rule` in dark). The chart fills its cell like a
+browser page, with a purple left edge. The open tab is solid purple with white
+text, joins that edge and curves into it through two concave corners, as
+Chrome's open tab flares into the toolbar. The other tabs are faded purple
+pills set back from the edge, a little stronger on hover. The tabs stretch to
+the chart's height, so no empty strip is left below them. Below 800px the
+tabs wrap into rows above the chart, and the open one is a solid purple pill.
+
+Changing tabs never moves the page. Every chart is drawn into the same grid
+cell, and only the open one is visible (`.ta-open`); the others keep their
+space but are not seen, read out or focusable. So the section is always as
+tall as its tallest chart at the current width - the luck chart, in practice.
+Every tab uses the same font weight, because a bolder open tab could wrap its
+label onto another line and change the height after all.
 
 ## Limitations
 

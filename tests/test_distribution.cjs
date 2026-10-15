@@ -70,6 +70,26 @@ test("the coloured part covers the peers a player outperforms, in either directi
   assert.ok(svg.includes("fill: var(--dist-75)"), "the percentile swatch uses its colour stop");
 });
 
+test("a compared player gets his own marker and value line; the fill stays the first player's", () => {
+  const rows = [
+    { label: "Gol", unit: "/90", values: peers, value: 0.6, score: 70, direction: "higher_better",
+      compare: { value: 1.4, score: 95 } },
+    { label: "Şut", unit: "/90", values: peers, value: 0.3, score: 30, direction: "higher_better",
+      compare: { value: null, score: null } },
+  ];
+  const svg = distribution.chart(rows, (score) => String(Math.round(score)), ["purple", "blue"]);
+  assert.equal((svg.match(/data-dist-marker="0"/g) || []).length, 2);
+  assert.equal((svg.match(/data-dist-marker="1"/g) || []).length, 1, "no marker for a missing second value");
+  assert.ok(svg.includes('stroke="blue"') && svg.includes('stroke="purple"'));
+  // The fill is clipped to the first player's value only.
+  const [x0, width0] = svg.match(/<clipPath id="pd-clip-0"><rect x="([^"]+)" y="[^"]+" width="([^"]+)"/).slice(1).map(Number);
+  const marker = Number(svg.match(/data-dist-marker="0" x1="([^"]+)"/)[1]);
+  close(x0 + width0, marker, 0.11);
+  // Without colours a compare entry is ignored and the chart is unchanged.
+  const single = distribution.chart(rows, (score) => String(Math.round(score)));
+  assert.ok(!single.includes('data-dist-marker="1"'));
+});
+
 test("the chart is loaded with its feature, before the statistics page that draws it", () => {
   const html = fs.readFileSync(path.join(__dirname, "../src/web/index.html"), "utf8");
   const order = ["features/statistics/distribution.js", "features/statistics/statistics.js"]

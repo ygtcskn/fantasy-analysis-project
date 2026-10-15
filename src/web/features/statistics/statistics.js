@@ -6,7 +6,10 @@
 // Season leaders and a searchable player list, built from the same aggregation
 // the tier list uses so a player's totals never disagree between two pages.
 
-const statisticsState = { search: "", team: "", role: "", sort: "rating", limit: 10, selected: null };
+// `selected` is the primary player, `compare` the secondary; `picked` turns
+// true at the first click, so the default leader is replaced, not compared.
+const statisticsState = { search: "", team: "", role: "", sort: "rating", limit: 10,
+  selected: null, compare: null, picked: false };
 
 const STATISTICS_SORTS = [
   ["goals", "Gol", (player) => player.totals.goals.value],
@@ -113,13 +116,11 @@ function renderStatisticsList(players, teams) {
     open.type = "button";
     open.title = player.name;
     open.setAttribute("aria-label", `${player.name} profilini göster`);
-    open.addEventListener("click", () => {
-      statisticsState.selected = player.id;
-      renderStatistics();
-    });
+    open.addEventListener("click", () => statisticsPick(player.id));
     club.append(open);
     identity.append(club);
     if (player.id === statisticsState.selected) row.classList.add("statistics-row-selected");
+    if (player.id === statisticsState.compare) row.classList.add("statistics-row-selected", "statistics-row-compare");
     row.append(identity);
     row.append(element("td", "statistics-role", playerRoleLabel(playerPrimaryRole(player))));
     row.append(element("td", "numeric", displayNumber(player.totals.minutes_played.value)));
@@ -180,30 +181,103 @@ function setupStatistics() {
 // src/web/lib), his season totals, his fantasy points match by match, his
 // Sportmonks rating match by match, and the distribution of each wheel metric
 // (src/web/features/statistics).
+//
+// The first player picked is the primary. Picking another adds him as the
+// secondary, drawn beside the primary on every chart in the second colour;
+// picking a third replaces the secondary. Picking the secondary again removes
+// him, and picking the primary while comparing hands the primary role to the
+// secondary. The × on each name chip does the same.
 
-function renderStatisticsFacts(player) {
-  const list = document.createDocumentFragment();
-  const current = fantasyState.season === state.seasonSlug;
-  const matches = current ? fantasyState.matches.get(player.id) || [] : [];
-  const summary = current ? fantasyState.summaries.get(player.id) : null;
-  const entries = [
-    ["Maç", displayNumber(player.matches.length)],
-    ["Dakika", displayNumber(player.totals.minutes_played.value)],
-    ["Gol", displayNumber(player.totals.goals.value)],
-    ["Asist", displayNumber(player.totals.assists.value)],
-    ["Şut", displayNumber(player.totals.shots_total.value)],
-    ["Kilit pas", displayNumber(player.totals.key_passes.value)],
-    ["Maç puanı", ratingText(player.average)],
-    ["Fantezi puanı", summary ? displayNumber(number(summary.points_total)) : "—"],
-    ["Maç başına", summary ? displayNumber(number(summary.points_per_match)) : "—"],
-    ["En iyi maç", matches.length
-      ? displayNumber(Math.max(...matches.map((row) => number(row.points_total) ?? 0))) : "—"],
-  ];
-  for (const [label, value] of entries) {
-    const item = element("div");
-    item.append(element("dt", "", label), element("dd", "", value));
-    list.append(item);
+function statisticsPick(id) {
+  const pick = statisticsState;
+  if (!pick.picked) Object.assign(pick, { selected: id, compare: null, picked: true });
+  else if (id === pick.compare) pick.compare = null;
+  else if (id === pick.selected) {
+    if (pick.compare) Object.assign(pick, { selected: pick.compare, compare: null });
+  } else pick.compare = id;
+  renderStatistics();
+}
+
+// One swatch per player at the start of his name chip, and a legend after each
+// chart title while two players are shown.
+function statisticsSwatch(index) {
+  const swatch = element("span", "statistics-swatch");
+  swatch.style.background = STATISTICS_SERIES[index].line;
+  swatch.setAttribute("aria-hidden", "true");
+  return swatch;
+}
+
+function renderStatisticsHeader(profiles) {
+  const chips = profiles.map((player, index) => {
+    const chip = element("span", "statistics-player-chip");
+    chip.append(statisticsSwatch(index), element("strong", "", player.name),
+      element("small", "", player.teamNames[0] || "—"));
+    if (profiles.length > 1) {
+      const remove = element("button", "statistics-chip-remove", "×");
+      remove.type = "button";
+      remove.title = `${player.name} karşılaştırmadan çıkar`;
+      remove.setAttribute("aria-label", remove.title);
+      remove.addEventListener("click", () => statisticsPick(player.id));
+      chip.append(remove);
+    }
+    return chip;
+  });
+  $("statistics-profile-name").replaceChildren(...chips);
+  $("statistics-profile-note").textContent = profiles.length > 1
+    ? "Listeden başka bir oyuncuya tıklayarak ikinci oyuncuyu değiştirin; × ya da listede adına tıklayarak çıkarın. "
+      + "Radarlarda ve dağılımda ikinci oyuncu birincil oyuncunun emsal grubunda sıralanır."
+    : "Karşılaştırmak için listeden ikinci bir oyuncuya tıklayın.";
+}
+
+const STATISTICS_LEGEND_TITLES = ["statistics-radar-title", "statistics-detailed-title", "statistics-facts-title",
+  "statistics-timeline-title", "statistics-ratings-title", "statistics-distribution-title"];
+
+function renderStatisticsLegends(profiles) {
+  for (const id of STATISTICS_LEGEND_TITLES) {
+    $(id).querySelector(".statistics-legend")?.remove();
+    if (profiles.length < 2) continue;
+    const legend = element("span", "statistics-legend");
+    profiles.forEach((player, index) => {
+      const item = element("span", "statistics-legend-item");
+      item.append(statisticsSwatch(index), document.createTextNode(statisticsShortName(player.name)));
+      legend.append(item);
+    });
+    $(id).append(legend);
   }
+}
+
+function renderStatisticsFacts(profiles) {
+  const current = fantasyState.season === state.seasonSlug;
+  const rows = profiles.map((player) => {
+    const matches = current ? fantasyState.matches.get(player.id) || [] : [];
+    const summary = current ? fantasyState.summaries.get(player.id) : null;
+    return [
+      displayNumber(player.matches.length),
+      displayNumber(player.totals.minutes_played.value),
+      displayNumber(player.totals.goals.value),
+      displayNumber(player.totals.assists.value),
+      displayNumber(player.totals.shots_total.value),
+      displayNumber(player.totals.key_passes.value),
+      ratingText(player.average),
+      summary ? displayNumber(number(summary.points_total)) : "—",
+      summary ? displayNumber(number(summary.points_per_match)) : "—",
+      matches.length ? displayNumber(Math.max(...matches.map((row) => number(row.points_total) ?? 0))) : "—",
+    ];
+  });
+  const labels = ["Maç", "Dakika", "Gol", "Asist", "Şut", "Kilit pas", "Maç puanı", "Fantezi puanı", "Maç başına", "En iyi maç"];
+  const list = document.createDocumentFragment();
+  labels.forEach((label, row) => {
+    const item = element("div"), value = element("dd");
+    // Compared, each value follows its player's swatch, primary first.
+    rows.forEach((values, index) => {
+      if (rows.length < 2) { value.textContent = values[row]; return; }
+      const part = element("span", "statistics-fact-value");
+      part.append(statisticsSwatch(index), document.createTextNode(values[row]));
+      value.append(part);
+    });
+    item.append(element("dt", "", label), value);
+    list.append(item);
+  });
   $("statistics-facts-list").replaceChildren(list);
 }
 
@@ -212,8 +286,15 @@ function renderStatisticsFacts(player) {
 // sits at the same x in both and the two read as one pair. The rating axis is
 // the provider's fixed 0-10; fantasy points use 0-10 too unless a player's
 // points leave it, and then the smallest round step (1, 2 or 5 x 10^k) that
-// keeps six gridlines and covers every match.
+// keeps six gridlines and covers every match. Compared, the frame grows by one
+// label line so each player's opponent sits under the column.
 const STATISTICS_PROFILE_PLOT = { width: 640, height: 250, left: 34, right: 62, top: 14, bottom: 40 };
+
+function statisticsFrame(count) {
+  const extra = 12 * Math.max(0, count - 1);
+  return { ...STATISTICS_PROFILE_PLOT, height: STATISTICS_PROFILE_PLOT.height + extra,
+    bottom: STATISTICS_PROFILE_PLOT.bottom + extra };
+}
 
 function statisticsTicks(low, high, intervals = 5) {
   for (let power = 1; power <= 1e6; power *= 10) {
@@ -225,13 +306,9 @@ function statisticsTicks(low, high, intervals = 5) {
   return [low, high];
 }
 
-// Both match charts share one x axis: every match with a valid Sportmonks
-// rating or recorded fantasy points, in kickoff order, labelled from
-// fixtures.csv. A match therefore sits in the same column in both charts; a
-// chart with no value for it leaves the column empty rather than closing up.
-function statisticsMatchSlots(player) {
-  const { teams } = buildTierPlayers();
-  const fixtures = new Map((state.tables["fixtures.csv"] || []).map((fixture) => [fixture.fixture_id, fixture]));
+// One player's matches with a valid Sportmonks rating or recorded fantasy
+// points, labelled from fixtures.csv.
+function statisticsPlayerMatches(player, teams, fixtures) {
   const fantasy = fantasyState.season === state.seasonSlug ? fantasyState.matches.get(player.id) || [] : [];
   const ratings = new Map(), points = new Map(), sides = new Map(), spares = new Map();
   for (const row of player.matches) {
@@ -249,40 +326,93 @@ function statisticsMatchSlots(player) {
     const home = fixture ? team === fixture.home_team_id : spare ? spare.venue === "home" : null;
     const opponent = fixture ? (home ? fixture.away_team_id : fixture.home_team_id) : spare?.opponent_id ?? null;
     const time = fixture ? fantasyKickoff(fixture) : fantasyTime(spare?.kickoff_utc);
-    return { fixture_id: id, time, round: fixture?.["round.name"] || spare?.round || "",
+    return { fixture_id: id, time, round: String(fixture?.["round.name"] || spare?.round || ""),
       date: Number.isFinite(time) ? fantasyDate(new Date(time).toISOString()) : "",
       opponent: teamName(opponent, teams),
       code: (teams.get(opponent)?.short_code || teamName(opponent, teams)) + (home === null ? "" : home ? " (İ)" : " (D)"),
       rating: ratings.get(id)?.rating ?? null, minutes: ratings.get(id)?.minutes ?? null,
       points: points.has(id) ? points.get(id) : null };
-  }).sort((a, b) => (Number.isFinite(a.time) ? a.time : Infinity) - (Number.isFinite(b.time) ? b.time : Infinity));
-}
-
-// The shared frame's horizontal parts: one column per match, values over the
-// marks while there is room, round and opponent under each column thinned to
-// about twelve labels so a full season never collides.
-function statisticsMatchColumns(slots) {
-  const { width, left, right } = STATISTICS_PROFILE_PLOT;
-  const slot = (width - left - right) / slots.length;
-  return { slot, x: (index) => left + slot * index + slot / 2, showValues: slot >= 30,
-    every: Math.max(1, Math.ceil(slots.length / 12)) };
-}
-
-function statisticsMatchLabels(parts, slots, columns) {
-  const { height, bottom } = STATISTICS_PROFILE_PLOT;
-  slots.forEach((entry, index) => {
-    if (index % columns.every && index !== slots.length - 1) return;
-    const centre = columns.x(index).toFixed(1);
-    if (entry.round) parts.push(`<text x="${centre}" y="${height - bottom + 15}" text-anchor="middle" font-size="10" fill="var(--ink)">${statisticsEscape(`${entry.round}. hf`)}</text>`);
-    parts.push(`<text x="${centre}" y="${height - bottom + 28}" text-anchor="middle" font-size="9" fill="var(--muted)">${statisticsEscape(entry.code)}</text>`);
   });
 }
 
-function statisticsTimelineSvg(slots, average) {
-  const { width, height, left, right, top, bottom } = STATISTICS_PROFILE_PLOT;
-  const values = slots.map((entry) => entry.points).filter((value) => value !== null);
+// Both match charts share one x axis: one column per round (two players play
+// different fixtures in the same week), each holding every compared player's
+// match that round, in kickoff order. A chart with no value for a player in a
+// column leaves it empty rather than closing up. A second match in one round
+// for the same player gets a column of its own.
+function statisticsMatchSlots(profiles) {
+  const { teams } = buildTierPlayers();
+  const fixtures = new Map((state.tables["fixtures.csv"] || []).map((fixture) => [fixture.fixture_id, fixture]));
+  const slots = new Map();
+  profiles.forEach((player, which) => {
+    for (const match of statisticsPlayerMatches(player, teams, fixtures)) {
+      let key = match.round ? `r${match.round}` : `f${match.fixture_id}`;
+      if (slots.get(key)?.entries[which]) key += `:${match.fixture_id}`;
+      if (!slots.has(key)) slots.set(key, { round: match.round, time: match.time, entries: profiles.map(() => null) });
+      const slot = slots.get(key);
+      slot.entries[which] = match;
+      if (Number.isFinite(match.time) && !(slot.time <= match.time)) slot.time = match.time;
+    }
+  });
+  const order = (slot) => (Number.isFinite(slot.time) ? slot.time : Infinity);
+  return [...slots.values()].sort((a, b) => order(a) - order(b)
+    || (Number(a.round) || Infinity) - (Number(b.round) || Infinity));
+}
+
+// The shared frame's horizontal parts: one column per round, values over the
+// marks while there is room and only one player is shown, round and each
+// player's opponent under the column, thinned to about twelve columns so a
+// full season never collides.
+function statisticsMatchColumns(slots, frame) {
+  const slot = (frame.width - frame.left - frame.right) / slots.length;
+  return { slot, x: (index) => frame.left + slot * index + slot / 2,
+    showValues: slot >= 30 && (slots[0]?.entries.length ?? 1) < 2,
+    every: Math.max(1, Math.ceil(slots.length / 12)) };
+}
+
+function statisticsMatchLabels(parts, slots, columns, frame) {
+  const compared = (slots[0]?.entries.length ?? 1) > 1;
+  slots.forEach((slot, index) => {
+    if (index % columns.every && index !== slots.length - 1) return;
+    const centre = columns.x(index).toFixed(1), base = frame.height - frame.bottom;
+    if (slot.round) parts.push(`<text x="${centre}" y="${base + 15}" text-anchor="middle" font-size="10" fill="var(--ink)">${statisticsEscape(`${slot.round}. hf`)}</text>`);
+    // One opponent line per player, primary first; compared, each line takes
+    // its player's colour so the column says whose fixture it is.
+    slot.entries.forEach((entry, which) => {
+      if (!entry) return;
+      const fill = compared ? STATISTICS_SERIES[which].line : "var(--muted)";
+      parts.push(`<text x="${centre}" y="${base + 28 + which * 12}" text-anchor="middle" font-size="9" fill="${fill}">${statisticsEscape(entry.code)}</text>`);
+    });
+  });
+}
+
+// Each player's average as a dashed line across the plot, labelled in the
+// right margin; labels closer than a line apart are pushed apart.
+function statisticsAverageLines(parts, averages, y, frame, format, attribute) {
+  const compared = averages.length > 1;
+  const placed = averages.map((entry) => ({ ...entry, at: y(entry.value) })).sort((a, b) => a.at - b.at);
+  placed.forEach((entry, index) => { if (index && entry.at - placed[index - 1].at < 12) entry.at = placed[index - 1].at + 12; });
+  for (const entry of placed) {
+    const stroke = compared ? STATISTICS_SERIES[entry.which].line : "var(--ink)";
+    const mean = y(entry.value).toFixed(1);
+    parts.push(`<line ${attribute}="${entry.value}" x1="${frame.left}" y1="${mean}" x2="${frame.width - frame.right + 4}" y2="${mean}" stroke="${stroke}" stroke-width="1.5" stroke-dasharray="4 3"/>`);
+    parts.push(`<text x="${frame.width - frame.right + 8}" y="${(entry.at + 4).toFixed(1)}" font-size="10" font-weight="600" fill="${stroke}">Ort. ${format(entry.value)}</text>`);
+  }
+}
+
+const statisticsEscape = (value) => String(value ?? "").replace(/[&<>"']/g,
+  (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
+
+function statisticsMatchDetail(entry, tail) {
+  return statisticsEscape(`${entry.round ? `${entry.round}. hafta · ` : ""}${entry.date ? `${entry.date} · ` : ""}${entry.opponent} · ${tail}`);
+}
+
+function statisticsTimelineSvg(slots, averages, names) {
+  const frame = statisticsFrame(slots[0].entries.length);
+  const { width, height, left, right, top, bottom } = frame;
+  const values = slots.flatMap((slot) => slot.entries.map((entry) => entry?.points ?? null)).filter((value) => value !== null);
   const ticks = statisticsTicks(Math.min(0, ...values), Math.max(10, ...values));
-  const low = ticks[0], high = ticks.at(-1), columns = statisticsMatchColumns(slots), x = columns.x;
+  const low = ticks[0], high = ticks.at(-1), columns = statisticsMatchColumns(slots, frame), x = columns.x;
   const y = (value) => height - bottom - ((value - low) / (high - low)) * (height - top - bottom);
   const parts = [];
   for (const tick of ticks) {
@@ -292,104 +422,127 @@ function statisticsTimelineSvg(slots, average) {
   if (low < 0) {
     parts.push(`<line x1="${left}" y1="${y(0).toFixed(1)}" x2="${width - right}" y2="${y(0).toFixed(1)}" stroke="var(--muted)" stroke-width="1" stroke-dasharray="3 3"/>`);
   }
-  // The line breaks across a match without fantasy points.
-  let run = [];
-  const flush = () => {
-    if (run.length > 1) parts.push(`<polyline points="${run.join(" ")}" fill="none" stroke="var(--statistics-plot-line)" stroke-width="2"/>`);
-    run = [];
-  };
-  slots.forEach((entry, index) => {
-    if (entry.points === null) flush();
-    else run.push(`${x(index).toFixed(1)},${y(entry.points).toFixed(1)}`);
-  });
-  flush();
-  slots.forEach((entry, index) => {
-    if (entry.points === null) return;
-    const centre = x(index).toFixed(1);
-    const detail = statisticsEscape(`${entry.round ? `${entry.round}. hafta · ` : ""}${entry.date ? `${entry.date} · ` : ""}`
-      + `${entry.opponent} · ${displayNumber(entry.points)} fantezi puanı`);
-    parts.push(`<circle cx="${centre}" cy="${y(entry.points).toFixed(1)}" r="3.5" fill="var(--statistics-plot-line)"><title>${detail}</title></circle>`);
-    if (columns.showValues) parts.push(`<text x="${centre}" y="${(y(entry.points) - 8).toFixed(1)}" text-anchor="middle" font-size="10" fill="var(--muted)">${displayNumber(entry.points)}</text>`);
-  });
-  statisticsMatchLabels(parts, slots, columns);
-  const mean = y(average).toFixed(1);
-  parts.push(`<line data-timeline-average="${average}" x1="${left}" y1="${mean}" x2="${width - right + 4}" y2="${mean}" stroke="var(--ink)" stroke-width="1.5" stroke-dasharray="4 3"/>`);
-  parts.push(`<text x="${width - right + 8}" y="${(y(average) + 4).toFixed(1)}" font-size="10" font-weight="600" fill="var(--ink)">Ort. ${displayNumber(average)}</text>`);
-  return `<svg viewBox="0 0 ${width} ${height}" width="100%" role="img" aria-label="Maç maç fantezi puanı; ortalama ${displayNumber(average)}">${parts.join("")}</svg>`;
+  // Secondary first, so the primary's line and points sit on top.
+  for (const which of slots[0].entries.map((_, index) => index).reverse()) {
+    const colour = STATISTICS_SERIES[which].line;
+    // The line breaks across a column without this player's fantasy points.
+    let run = [];
+    const flush = () => {
+      if (run.length > 1) parts.push(`<polyline points="${run.join(" ")}" fill="none" stroke="${colour}" stroke-width="2"/>`);
+      run = [];
+    };
+    slots.forEach((slot, index) => {
+      const entry = slot.entries[which];
+      if (entry?.points == null) flush();
+      else run.push(`${x(index).toFixed(1)},${y(entry.points).toFixed(1)}`);
+    });
+    flush();
+    slots.forEach((slot, index) => {
+      const entry = slot.entries[which];
+      if (entry?.points == null) return;
+      const centre = x(index).toFixed(1);
+      const detail = statisticsMatchDetail(entry, `${names[which]} · ${displayNumber(entry.points)} fantezi puanı`);
+      parts.push(`<circle data-timeline-point="${which}" cx="${centre}" cy="${y(entry.points).toFixed(1)}" r="4" fill="${colour}" stroke="var(--surface)" stroke-width="1.5"><title>${detail}</title></circle>`);
+      if (columns.showValues) parts.push(`<text x="${centre}" y="${(y(entry.points) - 8).toFixed(1)}" text-anchor="middle" font-size="10" fill="var(--muted)">${displayNumber(entry.points)}</text>`);
+    });
+  }
+  statisticsMatchLabels(parts, slots, columns, frame);
+  statisticsAverageLines(parts, averages, y, frame, displayNumber, "data-timeline-average");
+  return `<svg viewBox="0 0 ${width} ${height}" width="100%" role="img" aria-label="Maç maç fantezi puanı: ${statisticsEscape(averages.map((entry) => `${names[entry.which]} ortalama ${displayNumber(entry.value)}`).join(", "))}">${parts.join("")}</svg>`;
 }
 
-function renderStatisticsTimeline(player, slots = statisticsMatchSlots(player)) {
+function renderStatisticsTimeline(profiles, slots) {
   if (fantasyState.season !== state.seasonSlug) {
     $("statistics-timeline-chart").replaceChildren();
     $("statistics-timeline-note").textContent = "Fantezi analizi yüklenmedi. Sayfayı yenileyin.";
     return;
   }
-  const scored = slots.filter((entry) => entry.points !== null);
-  if (!scored.length) {
+  const summaries = profiles.map((player, which) => {
+    const scored = slots.map((slot) => slot.entries[which]).filter((entry) => entry?.points != null);
+    const total = scored.reduce((sum, entry) => sum + entry.points, 0);
+    return { player, which, count: scored.length, total, average: scored.length ? total / scored.length : null };
+  });
+  const averages = summaries.filter((entry) => entry.count).map((entry) => ({ which: entry.which, value: entry.average }));
+  if (!averages.length) {
     $("statistics-timeline-chart").replaceChildren();
-    $("statistics-timeline-note").textContent = "Bu oyuncu için kayıtlı fantezi puanı yok.";
+    $("statistics-timeline-note").textContent = profiles.length > 1
+      ? "Bu oyuncular için kayıtlı fantezi puanı yok." : "Bu oyuncu için kayıtlı fantezi puanı yok.";
     return;
   }
-  const total = scored.reduce((sum, entry) => sum + entry.points, 0);
-  $("statistics-timeline-chart").innerHTML = statisticsTimelineSvg(slots, total / scored.length);
-  $("statistics-timeline-note").textContent =
-    `${scored.length} maç · toplam ${displayNumber(total)} puan · maç başına ${displayNumber(total / scored.length)}.`;
+  $("statistics-timeline-chart").innerHTML = statisticsTimelineSvg(slots, averages, profiles.map((player) => player.name));
+  const line = (entry) => (entry.count
+    ? `${entry.count} maç · toplam ${displayNumber(entry.total)} puan · maç başına ${displayNumber(entry.average)}`
+    : "kayıtlı fantezi puanı yok");
+  $("statistics-timeline-note").textContent = profiles.length > 1
+    ? `${summaries.map((entry) => `${entry.player.name}: ${line(entry)}`).join(" · ")}.`
+    : `${line(summaries[0])}.`;
 }
 
 // ---------------------------------------------------------------- match ratings
-// One vertical bar per rated match, in the same columns as the timeline above.
-// Bars start at zero on the provider's 0-10 scale, so their heights compare
-// honestly. The dashed line is the player's own average - the same unweighted
-// mean of valid match ratings as "Maç puanı" in the season totals and the tier
-// list - and matches below it are drawn paler.
+// One vertical bar per rated match, in the same columns as the timeline above;
+// compared, the two players' bars stand side by side in each round. Bars start
+// at zero on the provider's 0-10 scale, so their heights compare honestly. A
+// dashed line is each player's own average - the same unweighted mean of valid
+// match ratings as "Maç puanı" in the season totals and the tier list - and his
+// matches below it are drawn paler.
 
-const statisticsEscape = (value) => String(value ?? "").replace(/[&<>"']/g,
-  (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
-
-function statisticsRatingsSvg(slots, average) {
-  const { width, height, left, right, top, bottom } = STATISTICS_PROFILE_PLOT;
-  const columns = statisticsMatchColumns(slots), x = columns.x, bar = Math.min(columns.slot * 0.7, 46);
+function statisticsRatingsSvg(slots, averages, names) {
+  const count = slots[0].entries.length, frame = statisticsFrame(count);
+  const { width, height, left, right, top, bottom } = frame;
+  const columns = statisticsMatchColumns(slots, frame), x = columns.x;
+  // Side by side with a 2px gap; a lone player keeps the wide bar.
+  const bar = count > 1 ? Math.min(columns.slot * 0.36, 22) : Math.min(columns.slot * 0.7, 46);
+  const offset = (which) => (count > 1 ? (which ? 1 : -1) * (bar / 2 + 1) : 0);
   const y = (value) => height - bottom - (value / 10) * (height - top - bottom);
+  const mean = new Map(averages.map((entry) => [entry.which, entry.value]));
   const parts = [];
   for (const tick of [0, 2, 4, 6, 8, 10]) {
     parts.push(`<line x1="${left}" y1="${y(tick).toFixed(1)}" x2="${width - right}" y2="${y(tick).toFixed(1)}" stroke="var(--line)" stroke-width="1"/>`);
     parts.push(`<text x="${left - 6}" y="${(y(tick) + 4).toFixed(1)}" text-anchor="end" font-size="10" fill="var(--muted)">${tick}</text>`);
   }
-  // Values sit on the bars only while there is room for them; a full season
-  // keeps them in each bar's tooltip instead. A match without a valid rating
-  // keeps its empty column, so the bars stay under the timeline's points.
-  slots.forEach((entry, index) => {
-    if (entry.rating === null) return;
-    const below = entry.rating < average, centre = x(index).toFixed(1);
-    const detail = statisticsEscape(`${entry.round ? `${entry.round}. hafta · ` : ""}${entry.date ? `${entry.date} · ` : ""}`
-      + `${entry.opponent} · ${entry.minutes === null ? "—" : displayNumber(entry.minutes)} dk · Sportmonks puanı ${ratingText(entry.rating)}`);
-    parts.push(`<rect data-rating-bar="${index}" x="${(x(index) - bar / 2).toFixed(1)}" y="${y(entry.rating).toFixed(1)}" width="${bar.toFixed(1)}" height="${(y(0) - y(entry.rating)).toFixed(1)}" rx="2" fill="var(--statistics-plot-line)" fill-opacity="${below ? 0.4 : 0.9}"><title>${detail}</title></rect>`);
-    if (columns.showValues) parts.push(`<text x="${centre}" y="${(y(entry.rating) - 5).toFixed(1)}" text-anchor="middle" font-size="10" fill="var(--muted)">${ratingText(entry.rating)}</text>`);
+  // Values sit on the bars only while there is room and one player is shown;
+  // otherwise they are in each bar's tooltip.
+  slots.forEach((slot, index) => {
+    slot.entries.forEach((entry, which) => {
+      if (entry?.rating == null) return;
+      const centre = x(index) + offset(which), below = entry.rating < mean.get(which);
+      const detail = statisticsMatchDetail(entry, `${names[which]} · ${entry.minutes === null ? "—" : displayNumber(entry.minutes)} dk · Sportmonks puanı ${ratingText(entry.rating)}`);
+      parts.push(`<rect data-rating-bar="${index}" data-rating-player="${which}" x="${(centre - bar / 2).toFixed(1)}" y="${y(entry.rating).toFixed(1)}" width="${bar.toFixed(1)}" height="${(y(0) - y(entry.rating)).toFixed(1)}" rx="2" fill="${STATISTICS_SERIES[which].line}" fill-opacity="${below ? 0.4 : 0.9}"><title>${detail}</title></rect>`);
+      if (columns.showValues) parts.push(`<text x="${centre.toFixed(1)}" y="${(y(entry.rating) - 5).toFixed(1)}" text-anchor="middle" font-size="10" fill="var(--muted)">${ratingText(entry.rating)}</text>`);
+    });
   });
-  statisticsMatchLabels(parts, slots, columns);
-  // The average runs across every bar and is labelled in the right margin,
-  // where no bar can cover it.
-  const mean = y(average).toFixed(1);
-  parts.push(`<line data-rating-average="${average}" x1="${left}" y1="${mean}" x2="${width - right + 4}" y2="${mean}" stroke="var(--ink)" stroke-width="1.5" stroke-dasharray="4 3"/>`);
-  parts.push(`<text x="${width - right + 8}" y="${(y(average) + 4).toFixed(1)}" font-size="10" font-weight="600" fill="var(--ink)">Ort. ${ratingText(average)}</text>`);
-  return `<svg viewBox="0 0 ${width} ${height}" width="100%" role="img" aria-label="Maç maç Sportmonks puanı; ortalama ${ratingText(average)}">${parts.join("")}</svg>`;
+  statisticsMatchLabels(parts, slots, columns, frame);
+  statisticsAverageLines(parts, averages, y, frame, ratingText, "data-rating-average");
+  return `<svg viewBox="0 0 ${width} ${height}" width="100%" role="img" aria-label="Maç maç Sportmonks puanı: ${statisticsEscape(averages.map((entry) => `${names[entry.which]} ortalama ${ratingText(entry.value)}`).join(", "))}">${parts.join("")}</svg>`;
 }
 
-function renderStatisticsRatings(player, slots = statisticsMatchSlots(player)) {
-  const rated = slots.filter((entry) => entry.rating !== null);
-  if (!rated.length) {
+function renderStatisticsRatings(profiles, slots) {
+  const summaries = profiles.map((player, which) => {
+    const ratings = slots.map((slot) => slot.entries[which]?.rating).filter((value) => value != null);
+    return { player, which, ratings, average: ratings.length ? ratings.reduce((sum, value) => sum + value, 0) / ratings.length : null,
+      unrated: player.matches.length - ratings.length };
+  });
+  const averages = summaries.filter((entry) => entry.ratings.length).map((entry) => ({ which: entry.which, value: entry.average }));
+  if (!averages.length) {
     $("statistics-ratings-chart").replaceChildren();
-    $("statistics-ratings-note").textContent = "Bu oyuncu için geçerli Sportmonks maç puanı yok.";
+    $("statistics-ratings-note").textContent = profiles.length > 1
+      ? "Bu oyuncular için geçerli Sportmonks maç puanı yok." : "Bu oyuncu için geçerli Sportmonks maç puanı yok.";
     return;
   }
-  const ratings = rated.map((entry) => entry.rating);
-  const average = ratings.reduce((sum, value) => sum + value, 0) / ratings.length;
-  $("statistics-ratings-chart").innerHTML = statisticsRatingsSvg(slots, average);
-  const unrated = player.matches.length - rated.length;
-  $("statistics-ratings-note").textContent = `${rated.length} puanlı maç · ortalama ${ratingText(average)}`
-    + ` (dakikaya göre ağırlıksız) · en yüksek ${ratingText(Math.max(...ratings))} · en düşük ${ratingText(Math.min(...ratings))}. `
+  $("statistics-ratings-chart").innerHTML = statisticsRatingsSvg(slots, averages, profiles.map((player) => player.name));
+  const line = (entry, weighting = "") => (entry.ratings.length
+    ? `${entry.ratings.length} puanlı maç · ortalama ${ratingText(entry.average)}${weighting}`
+      + ` · en yüksek ${ratingText(Math.max(...entry.ratings))} · en düşük ${ratingText(Math.min(...entry.ratings))}`
+    : "geçerli puan yok");
+  if (profiles.length > 1) {
+    $("statistics-ratings-note").textContent = `${summaries.map((entry) => `${entry.player.name}: ${line(entry)}`).join(" · ")}. `
+      + "Ortalamalar dakikaya göre ağırlıksızdır; kesikli çizgiler oyuncuların ortalamasıdır, altındaki maçlar soluk gösterilir.";
+    return;
+  }
+  const [only] = summaries;
+  $("statistics-ratings-note").textContent = `${line(only, " (dakikaya göre ağırlıksız)")}. `
     + "Kesikli çizgi oyuncunun ortalamasıdır; altındaki maçlar soluk gösterilir."
-    + (unrated > 0 ? ` ${unrated} kayıtta geçerli puan yok (oynamadı veya puan verilmedi).` : "");
+    + (only.unrated > 0 ? ` ${only.unrated} kayıtta geçerli puan yok (oynamadı veya puan verilmedi).` : "");
 }
 
 function renderStatisticsProfile(players) {
@@ -406,18 +559,24 @@ function renderStatisticsProfile(players) {
     }
     for (const id of ["statistics-radar-note", "statistics-detailed-note", "statistics-timeline-note",
       "statistics-ratings-note", "statistics-distribution-note"]) $(id).textContent = "";
+    renderStatisticsLegends([]);
     return;
   }
   statisticsState.selected = selected.id;
-  $("statistics-profile-name").textContent = selected.name;
-  $("statistics-profile-note").textContent =
-    `${selected.teamNames[0] || "—"} · listeden bir oyuncuya tıklayarak profili değiştirin.`;
+  // A secondary who has left the list (filters never do this; a refresh can)
+  // ends the comparison rather than pointing at nobody.
+  const secondary = statisticsState.compare && statisticsState.compare !== selected.id
+    ? players.find((player) => player.id === statisticsState.compare) || null : null;
+  if (!secondary) statisticsState.compare = null;
+  const profiles = secondary ? [selected, secondary] : [selected];
+  renderStatisticsHeader(profiles);
+  renderStatisticsLegends(profiles);
   $("statistics-open-history").onclick = () => openTierPlayer(selected.id);
   // The spider plots are separate assets in src/web/lib. A server started
   // before they moved there answers 404 for them; the rest of the page still
   // renders and says what to do.
   let radar = null;
-  if (typeof renderStatisticsRadars === "function") radar = renderStatisticsRadars(selected, players);
+  if (typeof renderStatisticsRadars === "function") radar = renderStatisticsRadars(selected, players, secondary);
   else {
     for (const id of ["statistics-radar-chart", "statistics-detailed-chart", "statistics-radar-details",
       "statistics-detailed-details"]) $(id).replaceChildren();
@@ -426,10 +585,11 @@ function renderStatisticsProfile(players) {
       $(id).hidden = false;
     }
   }
-  renderStatisticsFacts(selected);
-  const slots = statisticsMatchSlots(selected);
-  renderStatisticsTimeline(selected, slots);
-  renderStatisticsRatings(selected, slots);
-  // The distribution chart reuses the wheel's reference and scores.
+  renderStatisticsFacts(profiles);
+  const slots = statisticsMatchSlots(profiles);
+  renderStatisticsTimeline(profiles, slots);
+  renderStatisticsRatings(profiles, slots);
+  // The distribution chart reuses the wheel's reference and scores; the
+  // secondary is a second marker on the primary's curves.
   if (typeof renderPlayerDistribution === "function") renderPlayerDistribution(radar, selected);
 }

@@ -203,6 +203,22 @@ test("reference uses the same role, season, competition and minute threshold", (
   assert.equal(radar.evaluate(players[3], radar.metrics.goals, ref).status, "incompatible_group");
 });
 
+test("a compared player from another role is ranked on the primary's reference", () => {
+  const a = player("a", { goals: 1 }), b = player("b", { goals: 2 });
+  const defender = player("defender", { goals: 3 }, { position: "DEF" });
+  const reference = radar.createReference([a, b, defender], a, [radar.metrics.goals]);
+  assert.equal(reference.peerCount, 2, "the guest never joins the peers");
+  assert.equal(radar.evaluate(defender, radar.metrics.goals, reference).status, "incompatible_group");
+  const guest = radar.evaluate(defender, radar.metrics.goals, reference, { guest: true });
+  assert.equal(guest.guest, true);
+  close(guest.score, 250 / 3);
+  // Another season or competition is still refused.
+  const elsewhere = player("elsewhere", { goals: 3 }, { scope: { ...scope, key: "2|600" } });
+  assert.equal(radar.evaluate(elsewhere, radar.metrics.goals, reference, { guest: true }).score, null);
+  // Same role: guest changes nothing.
+  assert.equal(radar.evaluate(b, radar.metrics.goals, reference, { guest: true }).guest, false);
+});
+
 test("short samples stay outside the reference but can be shown with a warning", () => {
   const a = player("a", { goals: 1 }), b = player("b", { goals: 2 });
   const short = player("short", { goals: 1 }, { minutes: 90 });
@@ -366,6 +382,19 @@ test("with a prior, a percentage needs one attempt instead of the scaled minimum
   assert.equal(radar.evaluate(striker, radar.metrics.pass_accuracy, off).status, "insufficient_attempts");
   const none = player("none", { touches: "40", accurate_passes: "", passes: "" });
   assert.equal(radar.evaluate(none, radar.metrics.pass_accuracy, reference).status, "no_attempts");
+});
+
+test("a faded second series is drawn underneath the first and recedes", () => {
+  const axes = Object.values(radar.metrics).slice(0, 6);
+  const results = axes.map(() => ({ score: 50, status: "available" }));
+  const svg = chart.svg(axes, [{ name: "A", results, line: "red", fill: "pink" },
+    { name: "B", results, line: "blue", fill: "lightblue", faded: true }], () => "");
+  // The faded shape comes first in the document, so the primary paints over it.
+  assert.ok(svg.indexOf('stroke="blue"') < svg.indexOf('stroke="red"'));
+  assert.match(svg, /stroke="blue" stroke-width="2" stroke-opacity="0.65" data-radar-faded="true"/);
+  assert.match(svg, /stroke="red" stroke-width="3"/);
+  // Score labels keep the series order: primary first.
+  assert.ok(svg.indexOf('<tspan fill="red">50</tspan>') < svg.indexOf('<tspan fill="blue">50</tspan>'));
 });
 
 test("a blank axis says why under its dash", () => {
@@ -685,6 +714,18 @@ test("team-seasons group by scope and count ninety minutes a match", () => {
   assert.equal(team.minutes, 180);
   assert.equal(team.position, "TEAM");
   assert.equal(teams.entities(rows, fixtures, null).length, 0);
+});
+
+test("a team match the download caught in play is not a team-season match", () => {
+  const fixtures = [{ fixture_id: "1", season_id: "1", league_id: "600", "state.developer_name": "FT" },
+    { fixture_id: "2", season_id: "1", league_id: "600", "state.developer_name": "INPLAY_2ND_HALF" },
+    { fixture_id: "3", season_id: "1", league_id: "600", state: "NS" }];
+  const rows = teams.rows([
+    ...teamRecords("1", "10", { PASSES: "400" }), ...teamRecords("2", "10", { PASSES: "210" }), ...teamRecords("3", "10", { PASSES: "5" }),
+  ]);
+  const [team] = teams.entities(rows, fixtures, scope);
+  assert.deepEqual(team.rows.map((row) => row.fixture_id), ["1"]);
+  assert.equal(team.minutes, 90);
 });
 
 test("radar settings reject nonsensical thresholds", () => {

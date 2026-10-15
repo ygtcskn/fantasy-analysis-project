@@ -58,8 +58,9 @@ async function loadTeamHistory(currentRows) {
 
 // Both wheels share one reference per render, with no settings: the served
 // season and competition, every team that has played at least half as many
-// matches as the busiest, and - once loaded - every earlier season.
-function renderTeamRadars(teamId, rows, names) {
+// matches as the busiest, and - once loaded - every earlier season. They read
+// the prepared spider rows; RadarTeams.entities keeps finished fixtures only.
+function renderTeamRadars(teamId, names) {
   const charts = ["team-statistics-radar-chart", "team-statistics-detailed-chart",
     "team-statistics-radar-details", "team-statistics-detailed-details"];
   const clear = (note) => {
@@ -74,7 +75,7 @@ function renderTeamRadars(teamId, rows, names) {
     clear(spiderStatsState.state === "unavailable" ? spiderStatsState.message : "Radar verileri yükleniyor…");
     return;
   }
-  rows = spiderStatsState.teams;
+  const rows = spiderStatsState.teams;
   const fixtures = state.tables["fixtures.csv"] || [];
   const played = new Set(rows.filter((row) => row.team_id === teamId).map((row) => row.fixture_id));
   const scope = RadarScoring.fixtureScope(fixtures.find((fixture) => played.has(String(fixture.fixture_id))

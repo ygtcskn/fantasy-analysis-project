@@ -54,8 +54,26 @@ The plots have no settings. Every render uses the same definition:
 - the mid-rank percentile, with the zero-heavy rule below where no adjustment
   applies.
 
-There is no comparison overlay. Search, club and list sorting filters never
-change the reference.
+Search, club and list sorting filters never change the reference.
+
+## Comparing two players
+
+The first player picked in the list is the primary; a second pick adds a
+secondary, drawn on both wheels in a second colour, faded - a fainter fill, a
+thinner semi-transparent outline and softer points, underneath the primary - (a sky blue validated
+against the plot colour for colour-blind and normal-vision separation, in
+`--statistics-plot-compare`). A third pick replaces the secondary, picking the
+secondary again removes him, and picking the primary hands the primary role to
+the secondary; the × on each name chip does the same.
+
+The secondary is ranked against the **primary's** reference - same season,
+competition, role, minute bar and prior - through `evaluate(..., { guest: true })`
+in both `RadarScoring` and `RadarAttributes`, so both polygons sit on one scale.
+A secondary from another role is labelled as such in every tooltip. A goalkeeper
+and an outfielder have different wheels, so that pair is not overlaid and the
+note says why. The guest never joins the peers. The distribution panel draws the
+secondary as a second marker on the primary's curves; the fill stays the
+primary's.
 
 ## Who a player is compared with
 
@@ -297,7 +315,10 @@ per-match rate (shown as `/maç`), and every team is one group, `TEAM`.
   omitted-zero rules read it exactly as they read player rows. What a team
   conceded - goals, shots, shots on target - comes from the opponent's row in
   the same fixture; with only one side saved it stays unknown. xG conceded is the
-  provider's own figure, or the opponent's xG when that is blank.
+  provider's own figure, or the opponent's xG when that is blank. Only finished
+  fixtures count, by the players' rule: a match the last download caught in
+  play is left out until it is downloaded again, rather than adding half its
+  statistics as a full ninety minutes.
 - **Omitted records:** in the provider's long format an omitted statistic has no
   record at all, so preparation first gives each team row every statistic its
   season supplies anywhere,

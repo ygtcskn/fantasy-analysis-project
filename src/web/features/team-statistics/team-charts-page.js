@@ -24,11 +24,15 @@ function showTeamAnalysisTab(id, focus = false) {
     tab.tabIndex = selected ? 0 : -1;
     if (selected && focus) tab.focus();
   }
-  $("ta-fantasy-panel").hidden = id !== "fantasy";
-  $("ta-luck-panel").hidden = id !== "luck";
-  $("ta-compare-group").hidden = !id.startsWith("compare-");
+  // Every panel keeps its place, stacked in one grid cell, and only the open
+  // one is visible (team-analysis.css). The section is therefore always as
+  // tall as its tallest chart, and changing tabs never moves the page.
+  const open = (panel, shown) => panel.classList.toggle("ta-open", shown);
+  open($("ta-fantasy-panel"), id === "fantasy");
+  open($("ta-luck-panel"), id === "luck");
+  open($("ta-compare-group"), id.startsWith("compare-"));
   for (const panel of $("ta-compare-chart").querySelectorAll("[data-analysis-panel]")) {
-    panel.hidden = panel.dataset.analysisPanel !== id;
+    open(panel, panel.dataset.analysisPanel === id);
   }
 }
 
@@ -86,7 +90,13 @@ function renderTeamProfileCharts(played, selected, names, statsMissing) {
   } else {
     const balance = TeamAnalysis.momentum(teamAnalysisExtras.pressure, teamAnalysisExtras.periods || [], played);
     const chart = TeamAnalysis.momentumGrid(balance, order, names, selected, plain);
-    teamAnalysisBlock("ta-momentum", chart.html, missing || ("Sportmonks baskı endeksinde takımın rakibine göre farkı, dilimlere göre ortalama. "
+    // A match whose feed lacks either side's pressure is left out of the
+    // average; the note says so rather than letting it pass as complete.
+    const measured = new Set(teamAnalysisExtras.pressure.map((row) => `${row.fixture_id}|${row.participant_id}`));
+    const unmeasured = played.filter((match) => match.teamId === selected
+      && !(measured.has(`${match.fixtureId}|${match.teamId}`) && measured.has(`${match.fixtureId}|${match.opponentId}`))).length;
+    teamAnalysisBlock("ta-momentum", chart.html, missing || ((unmeasured ? `${unmeasured} maçta baskı verisi yok; ortalama kalan maçlardan. ` : "")
+      + "Sportmonks baskı endeksinde takımın rakibine göre farkı, dilimlere göre ortalama. "
       + "Sıfırın üstünde takım o dakikalarda üstündü. Uzatma dakikaları devre uzunluğuna göre ilgili devrenin son dilimine eklenir. "
       + `Dikey ölçek ligin en büyük farkına göre (±${displayNumber(chart.scale)}).`));
   }
@@ -112,8 +122,10 @@ function renderTeamAnalysis(list, names) {
   const fantasyReady = fantasyState.season === state.seasonSlug;
   const ledger = fantasyReady ? [...fantasyState.matches.values()].flat() : [];
   const roles = TeamAnalysis.fantasyByRole(ledger, names);
+  // While the ledger is not ready its loader's note says why - still reading,
+  // older than the match data, or absent - and what to do about it.
   teamAnalysisBlock("ta-fantasy", roles.length ? TeamAnalysis.fantasyChart(roles, names, selected) : "",
-    !fantasyReady ? "Fantezi analizi yüklenmedi. Sayfayı yenileyin."
+    !fantasyReady ? fantasyState.note
       : !roles.length ? "Bu sezon için fantezi puanı bulunamadı."
         : "Yayınlanan puan tablosundaki bu sezonun puanları, oyunun mevkilerine göre toplandı. Hangi takımın defansı veya hücumu puan getiriyor, doğrudan görünür.");
 
@@ -131,10 +143,10 @@ function renderTeamAnalysis(list, names) {
   const cards = TeamAnalysis.comparisons.map((spec) => {
     const rows = TeamAnalysis.comparisonRows(spec, withPoints, order);
     const basis = rows.length ? `${rows.length} takım, takım başına en az ${Math.min(...rows.map((row) => row.matches))} maç.`
-      : spec.id === "fantasy" && !fantasyReady ? "Fantezi analizi yüklenmedi. Sayfayı yenileyin."
+      : spec.id === "fantasy" && !fantasyReady ? fantasyState.note
         : "Bu karşılaştırma için veri yok.";
-    return `<figure id="team-analysis-panel-compare-${spec.id}" class="ta-compare-card" role="tabpanel" aria-labelledby="team-analysis-tab-compare-${spec.id}" data-analysis-panel="compare-${spec.id}" tabindex="0" hidden><figcaption>${escapeTeamAnalysis(spec.title)}</figcaption>`
-      + `${rows.length ? TeamAnalysis.scatter(rows, spec, names, selected) : ""}`
+    return `<figure id="team-analysis-panel-compare-${spec.id}" class="ta-compare-card" role="tabpanel" aria-labelledby="team-analysis-tab-compare-${spec.id}" data-analysis-panel="compare-${spec.id}" tabindex="0"><figcaption>${escapeTeamAnalysis(spec.title)}</figcaption>`
+      + `${rows.length ? `<div class="ta-chart">${TeamAnalysis.scatter(rows, spec, names, selected)}</div>` : ""}`
       + `<p class="builder-rating-note">${escapeTeamAnalysis(`${spec.note} ${basis}`)}</p></figure>`;
   });
   $("ta-compare-chart").innerHTML = cards.join("");

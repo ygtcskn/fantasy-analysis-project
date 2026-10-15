@@ -1,6 +1,7 @@
 "use strict";
 
-// Takım İstatistikleri: a tabbed team analysis, a searchable team list, and a
+// Takım İstatistikleri: a tabbed team analysis, a searchable team list, the
+// selected team's players (team-players.js), and a
 // profile of the selected team - two spider plots
 // (src/web/features/team-statistics/team-radar-page.js), season totals, and the four match-by-match
 // charts drawn for that team by src/web/features/team-statistics/team-charts-page.js.
@@ -13,12 +14,16 @@
 const teamStatisticsState = { selected: null };
 const teamMetricsState = { key: null, state: "idle", rows: [], message: "" };
 
+const teamStatisticsSigned = (value) => (value === null ? "—" : `${value > 0 ? "+" : ""}${displayNumber(value)}`);
+
+// A sort on a figure the list does not show brings it in as a last column:
+// its heading, the heading's full name, and the cell.
 const TEAM_STATISTICS_SORTS = [
   ["points", "Puan ↓", (team) => team.points],
   ["scored", "Atılan gol ↓", (team) => team.scored],
   ["conceded", "Yenilen gol ↑", (team) => (team.conceded === null ? null : -team.conceded)],
-  ["difference", "Averaj ↓", (team) => team.difference],
-  ["cleanSheets", "Gol yemeden ↓", (team) => team.cleanSheets],
+  ["difference", "Averaj ↓", (team) => team.difference, ["AV", "Averaj", (team) => teamStatisticsSigned(team.difference)]],
+  ["cleanSheets", "Gol yemeden ↓", (team) => team.cleanSheets, ["GY", "Gol yemeden", (team) => displayNumber(team.cleanSheets)]],
 ];
 
 async function loadTeamMetrics() {
@@ -40,8 +45,9 @@ async function loadTeamMetrics() {
   if (state.view === "team-statistics" && state.seasonSlug === key) renderTeamStatistics();
 }
 
-// One entry per team in the first standings group (the regular season), with
-// the provider's totals where it supplies them and saved results otherwise.
+// One entry per team in the standings group Puan Durumu has selected - the
+// first, the regular season, unless another was chosen there - with the
+// provider's totals where it supplies them and saved results otherwise.
 function teamStatisticsTeams() {
   const names = homeTeams(), source = state.tables["standings.csv"] || [];
   const groups = [...new Set(source.map(standingGroupKey))];
@@ -80,7 +86,7 @@ function teamStatisticsIdentity(team, names, label) {
 }
 
 function teamStatisticsFitNames() {
-  for (const button of $("team-statistics-list-body").querySelectorAll(".statistics-player-button")) {
+  for (const button of document.querySelectorAll("#team-statistics-list-body .statistics-player-button, #team-statistics-players-body .statistics-player-button")) {
     button.style.fontSize = "";
     for (let size = 12; size >= 8 && button.scrollWidth > button.clientWidth; size--) {
       button.style.fontSize = `${size}px`;
@@ -90,8 +96,13 @@ function teamStatisticsFitNames() {
 
 function renderTeamStatisticsList(teams, names) {
   const query = $("team-statistics-search").value.trim().toLocaleLowerCase("tr");
-  const [, , accessor] = TEAM_STATISTICS_SORTS.find(([key]) => key === $("team-statistics-sort").value)
+  const [, , accessor, extra] = TEAM_STATISTICS_SORTS.find(([key]) => key === $("team-statistics-sort").value)
     || TEAM_STATISTICS_SORTS[0];
+  const heading = $("team-statistics-sort-column");
+  heading.hidden = !extra;
+  heading.textContent = extra?.[0] || "";
+  heading.title = extra?.[1] || "";
+  heading.closest("table").classList.toggle("has-sort-column", Boolean(extra));
   const visible = teams.filter((team) => !query || team.name.toLocaleLowerCase("tr").includes(query))
     .sort((a, b) => (accessor(b) ?? -Infinity) - (accessor(a) ?? -Infinity) || (a.position ?? 99) - (b.position ?? 99));
   const body = document.createDocumentFragment();
@@ -102,11 +113,12 @@ function renderTeamStatisticsList(teams, names) {
     row.append(identity, element("td", "numeric", displayNumber(team.played)),
       element("td", "numeric", displayNumber(team.scored)), element("td", "numeric", displayNumber(team.conceded)),
       element("td", "numeric", displayNumber(team.points)));
+    if (extra) row.append(element("td", "numeric", extra[2](team)));
     body.append(row);
   }
   if (!visible.length) {
     const row = element("tr"), cell = element("td", "no-results", "Bu aramayla takım bulunamadı.");
-    cell.colSpan = 5;
+    cell.colSpan = extra ? 6 : 5;
     row.append(cell);
     body.append(row);
   }
@@ -124,20 +136,21 @@ function teamStatisticsSum(rows, column, mean = false) {
 
 function renderTeamStatisticsFacts(team, rows) {
   const own = rows.filter((row) => row.team_id === team.id);
+  // Whole per cent, as the possession charts show it.
+  const possession = own.length ? teamStatisticsSum(own, "ball_possession", true) : null;
   const entries = [
     ["Sıra", displayNumber(team.position)],
     ["Puan", displayNumber(team.points)],
     ["Maç", displayNumber(team.played)],
     ["G-B-M", [team.wins, team.draws, team.losses].every((value) => value !== null)
       ? `${team.wins}-${team.draws}-${team.losses}` : "—"],
-    ["Averaj", team.difference === null ? "—" : `${team.difference > 0 ? "+" : ""}${displayNumber(team.difference)}`],
+    ["Averaj", teamStatisticsSigned(team.difference)],
     ["Atılan gol", displayNumber(team.scored)],
     ["Yenilen gol", displayNumber(team.conceded)],
     ["Gol yemeden", displayNumber(team.cleanSheets)],
     ["xG", own.length ? displayNumber(teamStatisticsSum(own, "expected_goals")) : "—"],
     ["Rakibe verilen xG", own.length ? displayNumber(teamStatisticsSum(own, "expected_goals_against")) : "—"],
-    ["Topla oynama", own.length && teamStatisticsSum(own, "ball_possession", true) !== null
-      ? `%${displayNumber(teamStatisticsSum(own, "ball_possession", true))}` : "—"],
+    ["Topla oynama", possession === null ? "—" : `%${displayNumber(Math.round(possession))}`],
     ["Şut", own.length ? displayNumber(teamStatisticsSum(own, "shots_total")) : "—"],
   ];
   const list = document.createDocumentFragment();
@@ -174,14 +187,15 @@ function renderTeamStatisticsProfile(teams, names) {
   $("team-statistics-open-team").onclick = () => {
     location.href = `team.html?${new URLSearchParams({ id: selected.id, name: selected.name })}`;
   };
-  // Only finished fixtures: a match the last download caught in play would
-  // otherwise count with half its statistics.
+  // Season totals from finished fixtures only: a match the last download caught
+  // in play would otherwise count with half its statistics. The radars apply
+  // the same rule to their own rows.
   const finished = new Set((state.tables["fixtures.csv"] || []).filter((fixture) =>
     ["FT", "AET", "FT_PEN", "AWARDED", "WO"].includes(String(fixture["state.developer_name"] || fixture.state).toUpperCase()))
     .map((fixture) => String(fixture.fixture_id)));
   const rows = teamMetricsState.rows.filter((row) => finished.has(row.fixture_id));
   if (typeof renderTeamRadars === "function") {
-    renderTeamRadars(selected.id, rows, (id) => teamName(id, names));
+    renderTeamRadars(selected.id, (id) => teamName(id, names));
   } else {
     for (const id of panels.slice(0, 4)) $(id).replaceChildren();
     const note = "Radar dosyaları yüklenemedi; src/web/serve.py'yi yeniden başlatıp sayfayı yenileyin.";
@@ -198,6 +212,8 @@ function renderTeamStatistics() {
   const { names, list } = teamStatisticsTeams();
   renderTeamStatisticsList(list, names);
   renderTeamStatisticsProfile(list, names);
+  // After the profile, which settles the open team (the leader until a click).
+  if (typeof renderTeamPlayers === "function") renderTeamPlayers(teamStatisticsState.selected);
   if (typeof renderTeamAnalysis === "function") renderTeamAnalysis(list, names);
   requestAnimationFrame(teamStatisticsFitNames);
 }
@@ -207,4 +223,5 @@ function setupTeamStatistics() {
   $("team-statistics-sort").addEventListener("change", renderTeamStatistics);
   window.addEventListener("resize", () => requestAnimationFrame(teamStatisticsFitNames));
   if (typeof setupTeamAnalysis === "function") setupTeamAnalysis();
+  if (typeof setupTeamPlayers === "function") setupTeamPlayers();
 }

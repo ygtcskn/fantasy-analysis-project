@@ -357,7 +357,29 @@
    src/web/lib/radar.css) above season totals, with the fantasy points timeline
    running full width beneath them. Plot colours are variables so every SVG
    follows the theme like everything else. */
-:root { --statistics-plot-line: #5c71bb; --statistics-plot-fill: #5c71bb33; }
+:root { --statistics-plot-line: #5c71bb; --statistics-plot-fill: #5c71bb33;
+  /* The compared (secondary) player: a sky blue checked against the plot line
+     for colour-blind and normal-vision separation on this surface. */
+  --statistics-plot-compare: #00a9d9; --statistics-plot-compare-fill: #00a9d92e;
+  /* Fainter still on the spider plots, where the two shapes overlap. */
+  --statistics-plot-compare-faded: #00a9d914; }
+
+/* Profile header: one name chip per shown player, each starting with that
+   player's colour; chart titles carry the same swatches as a legend. */
+.statistics-profile-players { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; min-width: 0; }
+.statistics-player-chip { display: inline-flex; align-items: center; gap: 7px; max-width: 100%; padding: 4px 8px 4px 9px;
+  border: 1px solid var(--line); border-radius: 999px; background: var(--surface); font-size: 12px; line-height: 1.2; }
+.statistics-player-chip strong { font-weight: 650; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.statistics-player-chip small { color: var(--muted); font-size: 11px; white-space: nowrap; }
+.statistics-chip-remove { border: 0; background: transparent; color: var(--muted); padding: 0 2px; font-size: 15px; line-height: 1; }
+.statistics-chip-remove:hover { color: var(--ink); }
+.statistics-swatch { display: inline-block; flex: none; width: 10px; height: 10px; border-radius: 50%; }
+.statistics-legend { display: inline-flex; flex-wrap: wrap; gap: 4px 12px; margin-left: 12px; font-weight: 500; letter-spacing: 0; }
+.statistics-legend-item { display: inline-flex; align-items: center; gap: 5px; }
+.statistics-legend .statistics-swatch, .statistics-fact-value .statistics-swatch { width: 8px; height: 8px; }
+.statistics-facts-list dd { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 2px 10px; }
+.statistics-fact-value { display: inline-flex; align-items: center; gap: 4px; }
+.statistics-row-selected.statistics-row-compare > td { box-shadow: inset 2px 0 var(--statistics-plot-compare); }
 
 .statistics-profile { min-width: 0; border: 1px solid var(--line); border-top: 3px solid #b0a8dd; border-radius: 10px; background: var(--surface); color: var(--ink); overflow: hidden; container-type: inline-size; }
 
@@ -379,7 +401,7 @@
 .statistics-facts-list dt { color: var(--muted); font-size: 11px; }
 .statistics-facts-list dd { margin: 0; font-size: 13px; font-weight: 650; font-variant-numeric: tabular-nums; }
 .statistics-facts .secondary { width: 100%; }
-.statistics-timeline .builder-rating-note, .statistics-ratings .builder-rating-note { padding: 8px 0 0; margin: 0; color: var(--muted); font-size: 11px; line-height: 1.55; }
+.statistics-timeline .builder-rating-note, .statistics-ratings .builder-rating-note, .statistics-facts > .builder-rating-note { padding: 8px 0 0; margin: 0; color: var(--muted); font-size: 11px; line-height: 1.55; }
 .statistics-row-selected > td { background: var(--surface-hover); box-shadow: inset 2px 0 var(--statistics-plot-line); }
 
 .statistics-facts { margin: 16px 16px 0; }
@@ -396,7 +418,8 @@
 /* The player list runs alongside the profile through the match-rating chart. */
 #statistics-workspace .statistics-lower { grid-template-columns: minmax(0, calc((100% - 40px) / 3)) minmax(0, 1fr); }
 #statistics-workspace .statistics-players .statistics-list-scroll { flex: 1; min-height: 0; max-height: none; }
-#statistics-workspace .statistics-player-list-table { table-layout: fixed; }
+/* The player list, also drawn for the open team on Takım İstatistikleri. */
+:is(#statistics-workspace, #team-statistics-workspace) .statistics-player-list-table { table-layout: fixed; }
 #statistics-workspace .statistics-player-list-table th:first-child { width: 36%; }
 #statistics-workspace .statistics-player-list-table th:nth-child(2) { width: 19%; }
 #statistics-workspace .statistics-player-list-table th:nth-child(3) { width: 11%; }
@@ -408,8 +431,8 @@
 .statistics-players .builder-role-filters { min-width: 0; }
 .statistics-players .builder-role-filters button { flex: 1 1 0; min-width: 0; width: auto; max-width: 32px; padding: 3px; }
 .statistics-players .builder-role-filters img { width: 100%; max-width: 22px; height: auto; margin: auto; }
-#statistics-workspace .statistics-player-list-table .statistics-club { gap: 12px; }
-#statistics-workspace .statistics-player-list-table .statistics-player-button {
+:is(#statistics-workspace, #team-statistics-workspace) .statistics-player-list-table .statistics-club { gap: 12px; }
+:is(#statistics-workspace, #team-statistics-workspace) .statistics-player-list-table .statistics-player-button {
   flex: 1;
   min-width: 0;
   white-space: nowrap;
@@ -417,10 +440,24 @@
   text-overflow: ellipsis;
 }
 #team-statistics-workspace .statistics-lower { grid-template-columns: minmax(0, calc((100% - 40px) / 3)) minmax(0, 1fr); }
+/* The left column: Takım Listesi above the open team's players. */
+#team-statistics-workspace .team-statistics-side { display: grid; gap: 20px; align-content: start; min-width: 0; }
+/* The open team's Oyuncu Listesi: the search takes the team menu's row too,
+   and its own columns - rating, fantasy points per match, goals, assists. */
+#team-statistics-players .builder-search { grid-column: 1 / -1; }
+#team-statistics-players .statistics-player-list-table th:first-child { width: 32%; }
+#team-statistics-players .statistics-player-list-table th:nth-child(2) { width: 17%; }
+#team-statistics-players .statistics-player-list-table th:nth-child(3) { width: 13%; }
+#team-statistics-players .statistics-player-list-table th:nth-child(4) { width: 14%; }
+#team-statistics-players .statistics-player-list-table th:nth-child(5),
+#team-statistics-players .statistics-player-list-table th:nth-child(6) { width: 12%; }
 #team-statistics-workspace .statistics-players .statistics-list-scroll { max-height: none; overflow: visible; }
 #team-statistics-workspace .statistics-team-list-table { table-layout: fixed; }
 #team-statistics-workspace .statistics-team-list-table th:first-child { width: 50%; }
 #team-statistics-workspace .statistics-team-list-table th:not(:first-child) { width: 12.5%; }
+/* A sort on goal difference or clean sheets adds its figure as a fifth column. */
+#team-statistics-workspace .statistics-team-list-table.has-sort-column th:first-child { width: 40%; }
+#team-statistics-workspace .statistics-team-list-table.has-sort-column th:not(:first-child) { width: 12%; }
 #team-statistics-workspace .statistics-team-list-table .statistics-club { gap: 12px; }
 #team-statistics-workspace .statistics-team-list-table .statistics-player-button {
   flex: 1;
@@ -434,6 +471,9 @@
   #statistics-workspace .statistics-players .statistics-list-scroll { flex: none; max-height: 620px; }
   #team-statistics-workspace .statistics-lower { grid-template-columns: minmax(0, 1fr); }
 }
+/* Opening a team scrolls its profile to the top; on phones the fixed sidebar
+   button sits there, so the heading stops below it. */
+@media (max-width: 760px) { #team-statistics-profile { scroll-margin-top: 72px; } }
 
 /* Live standings on Maç Haftası: points as if the match ended now. */
 .standing-live { font-weight: 800; }
