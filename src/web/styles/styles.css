@@ -75,7 +75,13 @@ main {
 .standings-form { display: flex; gap: 4px; min-width: 136px; }
 .form-result { display: inline-grid; place-items: center; width: 24px; height: 25px; border-radius: 4px; text-decoration: none; font-size: 10px; font-weight: 700; }
 .form-result:hover { outline: 2px solid currentColor; outline-offset: 1px; }
-.form-win { background: #e0efdf; color: #28633b; }.form-loss { background: #f7e3df; color: #9e443b; }.form-draw { background: #eee9d8; color: #746327; }.form-unknown { background: #edf0eb; color: var(--muted); }
+/* Win, draw and loss look the same everywhere: Puan Durumu's form, the team
+   page's results, Maç Haftası's last five, the live table and every chart
+   (--result-* below, dark values in theme-dark.css). */
+.form-win, .result-w, .matchweek-form-result.matchweek-form-win { background: color-mix(in srgb, var(--result-win) 20%, var(--surface)); color: var(--result-win); }
+.form-draw, .result-d, .matchweek-form-result.matchweek-form-draw { background: color-mix(in srgb, var(--result-draw) 20%, var(--surface)); color: var(--result-draw); }
+.form-loss, .result-l, .matchweek-form-result.matchweek-form-loss { background: color-mix(in srgb, var(--result-loss) 20%, var(--surface)); color: var(--result-loss); }
+.form-unknown { background: var(--surface-raised); color: var(--muted); }
 .standings-legend { padding: 12px 24px 18px; color: var(--muted); font-size: 11px; line-height: 1.8; }
 .tier-board { display: block; }
 .tier-ranking-scroll { border-top: 1px solid var(--line); border-radius: 8px; max-height: 72vh; }
@@ -261,6 +267,9 @@ a.team-link:hover { color: #507624; text-decoration: underline; text-underline-o
   --matchweek-bg: #d5b8ed;
   --matchweek-border: #c49de4;
   --matchweek-text: #4b2369;
+  --result-win: #1d9a68;
+  --result-draw: #b88a00;
+  --result-loss: #d23f3f;
 }
 
 /* Player Tier List: compact role, team and expanding player-search controls. */

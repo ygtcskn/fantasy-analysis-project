@@ -2,6 +2,13 @@
 
 // Turkish wording and formats shared by every page. The data keeps the
 // provider's codes (FT, NS, W/D/L); only what the reader sees is translated.
+//
+// One word per thing, on every page:
+//   Reyting       Sportmonks' 1-10 match rating
+//   Puan          league points
+//   Fantezi puanı (FP) TFF fantasy points
+//   Maç           a match the player was on the pitch for (core/match-rules.js)
+//   İ / D         home / away
 const LOCALE = "tr-TR";
 
 const FIXTURE_STATES = {
@@ -26,6 +33,74 @@ function longDate(value) {
   if (!match) return "Tarih belli değil";
   const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
   return new Intl.DateTimeFormat(LOCALE, { day: "numeric", month: "long", weekday: "long", timeZone: "UTC" }).format(date);
+}
+
+// Every date and kickoff on the site is shown in Turkish time, whatever the
+// reader's clock. Saved times are UTC: Sportmonks' unzoned kickoffs and the
+// pipeline's *_utc columns alike.
+const MATCH_TIME_ZONE = "Europe/Istanbul";
+
+// A saved UTC time as milliseconds; NaN when there is none.
+function utcTime(value) {
+  const text = String(value || "").trim();
+  if (!text) return NaN;
+  const normalized = /^\d{4}-\d{2}-\d{2}$/.test(text) ? `${text}T00:00:00` : text.replace(" ", "T");
+  return Date.parse(/[zZ]$|[+-]\d{2}:?\d{2}$/.test(normalized) ? normalized : `${normalized}Z`);
+}
+
+// A fixture's kickoff as milliseconds: the provider timestamp, else its kickoff text.
+function kickoffTime(fixture) {
+  const stamp = Number(fixture?.starting_at_timestamp);
+  return String(fixture?.starting_at_timestamp ?? "").trim() && Number.isFinite(stamp) ? stamp * 1000 : utcTime(fixture?.kickoff);
+}
+
+const matchClockFormat = new Intl.DateTimeFormat(LOCALE, { timeZone: MATCH_TIME_ZONE, hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+const matchDayFormat = new Intl.DateTimeFormat("en-CA", { timeZone: MATCH_TIME_ZONE, year: "numeric", month: "2-digit", day: "2-digit" });
+
+// "21:30" in Turkish time.
+function kickoffClock(fixture) {
+  const time = kickoffTime(fixture);
+  return Number.isFinite(time) ? matchClockFormat.format(time) : "Saat belli değil";
+}
+
+// The kickoff's calendar day in Turkey, "2026-08-17"; "" when unknown. A late
+// UTC kickoff can fall on the next Turkish day.
+function kickoffDay(fixture) {
+  const time = kickoffTime(fixture);
+  return Number.isFinite(time) ? matchDayFormat.format(time) : "";
+}
+
+// "17 Ağustos Pazartesi 21:30".
+function kickoffText(fixture) {
+  const day = kickoffDay(fixture);
+  return day ? `${longDate(day)} ${kickoffClock(fixture)}` : "Tarih belli değil";
+}
+
+// A share as Turkish writes it: %55, %45,3.
+function percentText(value, digits = 0) {
+  return value === null || value === undefined || !Number.isFinite(Number(value)) ? "—"
+    : `%${Number(value).toLocaleString(LOCALE, { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
+}
+
+// Sportmonks position names ("Goalkeeper", "Centre Back"), read as one of four
+// roles and always shown in Turkish.
+function positionRole(position) {
+  const value = String(position || "").toLocaleLowerCase("en").trim();
+  if (/goalkeeper|keeper|kaleci|\bgk\b|\bkl\b/.test(value)) return "goalkeeper";
+  if (/defender|defence|defense|defans|centre.?back|center.?back|full.?back|left.?back|right.?back|\bcb\b|\blb\b|\brb\b|\bdef\b/.test(value)) return "defender";
+  if (/midfielder|midfield|orta saha|\bdm\b|\bcm\b|\bam\b|\blm\b|\brm\b|\bos\b/.test(value)) return "midfielder";
+  if (/attacker|forward|striker|forvet|centre.?forward|center.?forward|winger|\bst\b|\bcf\b|\blw\b|\brw\b|\bfor\b/.test(value)) return "attacker";
+  return "";
+}
+
+const ROLE_LABELS = { goalkeeper: "Kaleci", defender: "Defans", midfielder: "Orta saha", attacker: "Forvet" };
+
+function roleLabel(role) {
+  return ROLE_LABELS[role] || "—";
+}
+
+function positionLabel(position) {
+  return ROLE_LABELS[positionRole(position)] || "Mevki bilgisi yok";
 }
 
 // Event details as Sportmonks writes them (events.csv and the live feed), in

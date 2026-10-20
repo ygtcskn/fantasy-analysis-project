@@ -1,11 +1,17 @@
 "use strict";
 
 const matchweekResults = { season: "", completed: new Map(), metrics: [], metricsStatus: "idle", request: 0 };
-const matchweekFinalStates = new Map([["FT", "Maç sonu"], ["AET", "Uzatma sonu"], ["FT_PEN", "Penaltılar sonrası"],
-  ["5", "Maç sonu"], ["7", "Uzatma sonu"], ["8", "Penaltılar sonrası"]]);
+// The live feed can send a final state as its Sportmonks id rather than its name.
+const matchweekFinalStateIds = new Map([["5", "FT"], ["7", "AET"], ["8", "FT_PEN"]]);
 
+function matchweekFinalState(fixture) {
+  const code = String(fixture.state).toUpperCase();
+  return matchweekFinalStateIds.get(code) || code;
+}
+
+// The site's one definition of a finished match (core/match-rules.js).
 function matchweekFinished(fixture) {
-  return matchweekFinalStates.has(String(fixture.state).toUpperCase());
+  return FINISHED_STATES.has(matchweekFinalState(fixture));
 }
 
 function resetMatchweekResults() {
@@ -57,7 +63,7 @@ function matchweekFinalScore(fixture) {
 function matchweekResultBadge(fixture) {
   const badge = element("span", "matchweek-result");
   badge.append(element("strong", "", matchweekFinalScore(fixture)),
-    element("small", "", matchweekFinalStates.get(String(fixture.state).toUpperCase()) || "Maç sonu"));
+    element("small", "", fixtureStateLabel({ state: matchweekFinalState(fixture) })));
   return badge;
 }
 
@@ -103,7 +109,7 @@ function matchweekResultStatistics(fixture, teams) {
     const values = [fixture.home_team_id, fixture.away_team_id].map((team) => {
       const matching = rows.filter((metric) => metric.team_id === team && metric.type_id === String(type));
       const value = matching.length === 1 ? number(matching[0].value) : null;
-      return value === null || value < 0 || (percent && value > 100) ? "—" : `${displayNumber(value)}${percent ? "%" : ""}`;
+      return value === null || value < 0 || (percent && value > 100) ? "—" : percent ? percentText(value) : displayNumber(value);
     });
     row.append(element("td", "", values[0]), title, element("td", "", values[1])); body.append(row);
   }
@@ -120,11 +126,11 @@ function matchweekFantasyPlayers(fixture, team, players) {
   const candidates = new Map();
   for (const player of players) {
     if (player.fixture_id === fixture.fixture_id && player.team_id === team && player.player_id && (["1", "true"].includes(String(player.started).toLowerCase()) || number(player.minutes_played) > 0)) {
-      candidates.set(player.player_id, player.name || `Oyuncu ${player.player_id}`);
+      candidates.set(player.player_id, playerName(player.player_id, player.name));
     }
   }
   for (const row of ledger) {
-    if (row.team_id === team && row.player_id && !candidates.has(row.player_id)) candidates.set(row.player_id, row.player_name || `Oyuncu ${row.player_id}`);
+    if (row.team_id === team && row.player_id && !candidates.has(row.player_id)) candidates.set(row.player_id, playerName(row.player_id, row.player_name));
   }
   const opponent = fixture.home_team_id === team ? fixture.away_team_id : fixture.home_team_id;
   return [...candidates].map(([id, name]) => {

@@ -19,6 +19,8 @@ function setup() {
     renderMatchweek: () => renders++,
     number: (value) => value == null || String(value).trim() === "" || !Number.isFinite(Number(value)) ? null : Number(value),
   });
+  // The site's shared match rules load first, as they do in index.html.
+  vm.runInContext(readFileSync(join(__dirname, "../src/web/core/match-rules.js"), "utf8"), context);
   vm.runInContext(readFileSync(join(__dirname, "../src/web/features/matchweek/results.js"), "utf8") + `
     globalThis.api = { matchweekFinished, resetMatchweekResults, ingestMatchweekResults,
       matchweekEffectiveFixture, matchweekFinalScore, matchweekResultPlayers, matchweekCompletedSnapshot, matchweekFantasyPlayers };
@@ -29,7 +31,7 @@ function setup() {
 
 test("only provider final states replace predictions", () => {
   const app = setup();
-  for (const state of ["FT", "AET", "FT_PEN", "5", "7", "8"]) assert.equal(app.matchweekFinished(fixture({ state })), true);
+  for (const state of ["FT", "AET", "FT_PEN", "AWARDED", "WO", "5", "7", "8"]) assert.equal(app.matchweekFinished(fixture({ state })), true);
   for (const state of ["NS", "HT", "INPLAY_2ND_HALF", "INTERRUPTED", "POSTPONED", "ABANDONED", ""]) {
     assert.equal(app.matchweekFinished(fixture({ state })), false);
   }

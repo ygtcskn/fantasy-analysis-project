@@ -126,7 +126,7 @@ function renderSocial() {
     const heading = socialNode("div", "social-match-heading");
     const home = teams.get(fixture.home_team_id) || `Takım ${fixture.home_team_id || "—"}`;
     const away = teams.get(fixture.away_team_id) || `Takım ${fixture.away_team_id || "—"}`;
-    heading.append(socialNode("p", "social-match-date", `${longDate(fixture.kickoff)} · ${fixture.kickoff?.slice(11, 16) || "Saat belli değil"} (UTC)`), socialNode("h3", "", `${home} — ${away}`));
+    heading.append(socialNode("p", "social-match-date", kickoffText(fixture)), socialNode("h3", "", `${home} — ${away}`));
     const topicCount = socialNode("span", "social-topic-count", `${topics.length} konu`);
     const topicList = socialNode("div", "social-topic-list");
     const empty = socialNode("p", "social-empty", "Tribün henüz sessiz. Bu maçın ilk konusunu sen aç.");

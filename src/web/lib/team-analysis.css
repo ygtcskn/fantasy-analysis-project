@@ -3,7 +3,7 @@
    --ink, --muted, --statistics-plot-line) these rules use. Every colour defined
    here has a dark-theme value below. */
 :root {
-  --ta-W: #1d9a68; --ta-D: #c99a06; --ta-L: #d45a2c;
+  --ta-W: var(--result-win); --ta-D: var(--result-draw); --ta-L: var(--result-loss);
   --ta-kl: #7d5bd0; --ta-def: #2f7fc1; --ta-os: #2a9a66; --ta-for: #d45a2c;
   --ta-over: #5c71bb; --ta-under: #c9822a;
   --ta-shade: rgba(40, 30, 60, 0.06);
@@ -12,7 +12,7 @@
   --ta-tab: #7a4fc4; --ta-tab-ink: #ffffff;
 }
 :root[data-theme="dark"] {
-  --ta-W: #3fd89a; --ta-D: #f2cb4c; --ta-L: #ff8a5c;
+  --ta-W: var(--result-win); --ta-D: var(--result-draw); --ta-L: var(--result-loss);
   --ta-kl: #b49cff; --ta-def: #72b4ff; --ta-os: #5fd6a0; --ta-for: #ff8a5c;
   --ta-over: #9c8bf0; --ta-under: #f0aa55;
   --ta-shade: rgba(0, 0, 0, 0.28);

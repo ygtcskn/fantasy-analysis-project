@@ -5,7 +5,7 @@
 // without a current projection, or whose forecast is suppressed for an
 // uncertain absence, is left out and the total is marked partial, never zero-filled.
 const BUILDER_SUMMARY_METRICS = [
-  ["expected_points", "Beklenen puan"],
+  ["expected_points", "Beklenen FP"],
   ["expected_player_goals", "Beklenen gol"],
   ["expected_player_assists", "Beklenen asist"],
   ["expected_yellow_cards", "Beklenen sarı kart"],
@@ -69,7 +69,7 @@ function renderBuilderSummary(playersById, teams) {
     return builderSummaryMetric(label, value, detail);
   });
   const benchPoints = builderSummaryTotal(bench, "expected_points");
-  metrics.push(builderSummaryMetric("Yedekler · beklenen puan", benchPoints.total === null ? "—" : `${displayNumber(benchPoints.total.toFixed(2))}${benchPoints.count < bench.length ? "*" : ""}`,
+  metrics.push(builderSummaryMetric("Yedekler · beklenen FP", benchPoints.total === null ? "—" : `${displayNumber(benchPoints.total.toFixed(2))}${benchPoints.count < bench.length ? "*" : ""}`,
     bench.length ? `${bench.length} yedek` : "Yedek yok"));
   $("builder-summary-metrics").replaceChildren(...metrics);
 

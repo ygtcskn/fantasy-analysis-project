@@ -15,7 +15,7 @@ const STATISTICS_SORTS = [
   ["goals", "Gol", (player) => player.totals.goals.value],
   ["assists", "Asist", (player) => player.totals.assists.value],
   ["fantasy", "Fantezi puanı", (player) => statisticsFantasyPoints(player.id)],
-  ["rating", "Puan", (player) => player.average],
+  ["rating", "Reyting", (player) => player.average],
   ["minutes_played", "Dakika", (player) => player.totals.minutes_played.value],
   ["key_passes", "Kilit pas", (player) => player.totals.key_passes.value],
 ];
@@ -69,7 +69,7 @@ function renderStatisticsCard(bodyId, noteId, players, teams, accessor, format, 
     row.append(element("td", "numeric statistics-rank", String(rank)));
     const identity = element("td");
     const club = element("div", "statistics-club");
-    club.append(createTeamLogo([...entry.player.teams][0] || "unknown", teams, false));
+    club.append(createTeamLogo(entry.player.club || "unknown", teams, false));
     const open = element("button", "statistics-player-button", entry.player.name);
     open.type = "button";
     open.setAttribute("aria-label", `${entry.player.name} maç istatistiklerini aç`);
@@ -111,7 +111,7 @@ function renderStatisticsList(players, teams) {
     const row = element("tr");
     const identity = element("td");
     const club = element("div", "statistics-club");
-    club.append(createTeamLogo([...player.teams][0] || "unknown", teams, false));
+    club.append(createTeamLogo(player.club || "unknown", teams, false));
     const open = element("button", "statistics-player-button", statisticsShortName(player.name));
     open.type = "button";
     open.title = player.name;
@@ -122,7 +122,7 @@ function renderStatisticsList(players, teams) {
     if (player.id === statisticsState.selected) row.classList.add("statistics-row-selected");
     if (player.id === statisticsState.compare) row.classList.add("statistics-row-selected", "statistics-row-compare");
     row.append(identity);
-    row.append(element("td", "statistics-role", playerRoleLabel(playerPrimaryRole(player))));
+    row.append(element("td", "statistics-role", roleLabel(playerPrimaryRole(player))));
     row.append(element("td", "numeric", displayNumber(player.totals.minutes_played.value)));
     row.append(element("td", "numeric", ratingText(player.average)));
     row.append(element("td", "numeric", displayNumber(statisticsFantasyPoints(player.id))));
@@ -211,7 +211,7 @@ function renderStatisticsHeader(profiles) {
   const chips = profiles.map((player, index) => {
     const chip = element("span", "statistics-player-chip");
     chip.append(statisticsSwatch(index), element("strong", "", player.name),
-      element("small", "", player.teamNames[0] || "—"));
+      element("small", "", player.clubName || "—"));
     if (profiles.length > 1) {
       const remove = element("button", "statistics-chip-remove", "×");
       remove.type = "button";
@@ -264,7 +264,7 @@ function renderStatisticsFacts(profiles) {
       matches.length ? displayNumber(Math.max(...matches.map((row) => number(row.points_total) ?? 0))) : "—",
     ];
   });
-  const labels = ["Maç", "Dakika", "Gol", "Asist", "Şut", "Kilit pas", "Maç puanı", "Fantezi puanı", "Maç başına", "En iyi maç"];
+  const labels = ["Maç", "Dakika", "Gol", "Asist", "Şut", "Kilit pas", "Reyting", "Fantezi puanı", "FP / maç", "En iyi maç (FP)"];
   const list = document.createDocumentFragment();
   labels.forEach((label, row) => {
     const item = element("div"), value = element("dd");
@@ -471,7 +471,7 @@ function renderStatisticsTimeline(profiles, slots) {
   }
   $("statistics-timeline-chart").innerHTML = statisticsTimelineSvg(slots, averages, profiles.map((player) => player.name));
   const line = (entry) => (entry.count
-    ? `${entry.count} maç · toplam ${displayNumber(entry.total)} puan · maç başına ${displayNumber(entry.average)}`
+    ? `${entry.count} maç · toplam ${displayNumber(entry.total)} fantezi puanı · maç başına ${displayNumber(entry.average)}`
     : "kayıtlı fantezi puanı yok");
   $("statistics-timeline-note").textContent = profiles.length > 1
     ? `${summaries.map((entry) => `${entry.player.name}: ${line(entry)}`).join(" · ")}.`
@@ -483,7 +483,7 @@ function renderStatisticsTimeline(profiles, slots) {
 // compared, the two players' bars stand side by side in each round. Bars start
 // at zero on the provider's 0-10 scale, so their heights compare honestly. A
 // dashed line is each player's own average - the same unweighted mean of valid
-// match ratings as "Maç puanı" in the season totals and the tier list - and his
+// match ratings as "Reyting" in the season totals and the tier list - and his
 // matches below it are drawn paler.
 
 function statisticsRatingsSvg(slots, averages, names) {
@@ -506,14 +506,14 @@ function statisticsRatingsSvg(slots, averages, names) {
     slot.entries.forEach((entry, which) => {
       if (entry?.rating == null) return;
       const centre = x(index) + offset(which), below = entry.rating < mean.get(which);
-      const detail = statisticsMatchDetail(entry, `${names[which]} · ${entry.minutes === null ? "—" : displayNumber(entry.minutes)} dk · Sportmonks puanı ${ratingText(entry.rating)}`);
+      const detail = statisticsMatchDetail(entry, `${names[which]} · ${entry.minutes === null ? "—" : displayNumber(entry.minutes)} dk · Reyting ${ratingText(entry.rating)}`);
       parts.push(`<rect data-rating-bar="${index}" data-rating-player="${which}" x="${(centre - bar / 2).toFixed(1)}" y="${y(entry.rating).toFixed(1)}" width="${bar.toFixed(1)}" height="${(y(0) - y(entry.rating)).toFixed(1)}" rx="2" fill="${STATISTICS_SERIES[which].line}" fill-opacity="${below ? 0.4 : 0.9}"><title>${detail}</title></rect>`);
       if (columns.showValues) parts.push(`<text x="${centre.toFixed(1)}" y="${(y(entry.rating) - 5).toFixed(1)}" text-anchor="middle" font-size="10" fill="var(--muted)">${ratingText(entry.rating)}</text>`);
     });
   });
   statisticsMatchLabels(parts, slots, columns, frame);
   statisticsAverageLines(parts, averages, y, frame, ratingText, "data-rating-average");
-  return `<svg viewBox="0 0 ${width} ${height}" width="100%" role="img" aria-label="Maç maç Sportmonks puanı: ${statisticsEscape(averages.map((entry) => `${names[entry.which]} ortalama ${ratingText(entry.value)}`).join(", "))}">${parts.join("")}</svg>`;
+  return `<svg viewBox="0 0 ${width} ${height}" width="100%" role="img" aria-label="Maç maç reyting: ${statisticsEscape(averages.map((entry) => `${names[entry.which]} ortalama ${ratingText(entry.value)}`).join(", "))}">${parts.join("")}</svg>`;
 }
 
 function renderStatisticsRatings(profiles, slots) {
@@ -526,14 +526,14 @@ function renderStatisticsRatings(profiles, slots) {
   if (!averages.length) {
     $("statistics-ratings-chart").replaceChildren();
     $("statistics-ratings-note").textContent = profiles.length > 1
-      ? "Bu oyuncular için geçerli Sportmonks maç puanı yok." : "Bu oyuncu için geçerli Sportmonks maç puanı yok.";
+      ? "Bu oyuncular için geçerli reyting yok." : "Bu oyuncu için geçerli reyting yok.";
     return;
   }
   $("statistics-ratings-chart").innerHTML = statisticsRatingsSvg(slots, averages, profiles.map((player) => player.name));
   const line = (entry, weighting = "") => (entry.ratings.length
-    ? `${entry.ratings.length} puanlı maç · ortalama ${ratingText(entry.average)}${weighting}`
+    ? `${entry.ratings.length} reytingli maç · ortalama ${ratingText(entry.average)}${weighting}`
       + ` · en yüksek ${ratingText(Math.max(...entry.ratings))} · en düşük ${ratingText(Math.min(...entry.ratings))}`
-    : "geçerli puan yok");
+    : "geçerli reyting yok");
   if (profiles.length > 1) {
     $("statistics-ratings-note").textContent = `${summaries.map((entry) => `${entry.player.name}: ${line(entry)}`).join(" · ")}. `
       + "Ortalamalar dakikaya göre ağırlıksızdır; kesikli çizgiler oyuncuların ortalamasıdır, altındaki maçlar soluk gösterilir.";
@@ -542,7 +542,7 @@ function renderStatisticsRatings(profiles, slots) {
   const [only] = summaries;
   $("statistics-ratings-note").textContent = `${line(only, " (dakikaya göre ağırlıksız)")}. `
     + "Kesikli çizgi oyuncunun ortalamasıdır; altındaki maçlar soluk gösterilir."
-    + (only.unrated > 0 ? ` ${only.unrated} kayıtta geçerli puan yok (oynamadı veya puan verilmedi).` : "");
+    + (only.unrated > 0 ? ` ${only.unrated} maçta Sportmonks reyting vermedi.` : "");
 }
 
 function renderStatisticsProfile(players) {

@@ -45,18 +45,19 @@ function renderBuilderRecommendations(force = false) {
     const player = players.find((p) => p.id === row.player_id);
     if (!player || selectedSlotFor(player.id)) continue;
     const tr = element("tr"), name = element("td"), club = element("div", "matchweek-club");
-    club.append(createTeamLogo(row.team_id, teams, false), element("span", "", row.player_name));
+    club.append(createTeamLogo(row.team_id, teams, false), element("span", "", player.name));
     name.append(club, element("span", "builder-recommendation-role", row.position));
     const projection = builderFantasyData(player).projection;
     const side = ["KL", "DEF"].includes(row.position) ? "defensive" : "attacking";
     if (number(projection?.[`${side}_fixture_difficulty`]) !== null) {
       name.append(element("span", "builder-recommendation-role", `${side === "defensive" ? "Savunma" : "Hücum"}: ${fantasyFixtureDifficulty(projection, side)}`));
     }
-    const rating = number(row.rating);
-    if (rating) name.append(element("span", "builder-recommendation-role", `Rating ${ratingText(rating)}`));
+    // The season average the player list shows. The optimizer's own rating
+    // column is a recency-weighted form figure it only uses to break ties.
+    if (player.average !== null) name.append(element("span", "builder-recommendation-role", `Reyting ${ratingText(player.average)}`));
     const cost = number(row.points_below_optimal_xi);
     if (cost !== null) {
-      const label = cost < 0.005 ? "En iyi seçenek" : `En iyi kadroya göre ${displayNumber(cost)} puan eksik`;
+      const label = cost < 0.005 ? "En iyi seçenek" : `En iyi kadroya göre ${displayNumber(cost)} FP eksik`;
       name.append(element("span", `builder-recommendation-role${cost < 0.005 ? " builder-recommendation-best" : ""}`, label));
     }
     const action = element("td"), add = element("button", "builder-player-add", "+");
@@ -73,14 +74,14 @@ function renderBuilderRecommendations(force = false) {
     // SO% is TFF's selection rate; an older server or an unmatched player sends none.
     const ownership = number(row.so_percent);
     tr.append(name, element("td", "numeric", `₺${displayNumber(number(row.price_million_try))}M`),
-      element("td", "numeric", ownership === null ? "—" : `${displayNumber(ownership)}%`),
+      element("td", "numeric", percentText(ownership, Number.isInteger(ownership) ? 0 : 1)),
       element("td", "numeric", displayNumber(number(row.expected_points)?.toFixed(2))), action);
     body.append(tr);
   }
   $("builder-recommendations-body").replaceChildren(body);
   $("builder-recommendations-note").textContent = builderRecommendations.message
     || (activeRole && builderRecommendations.rows.length
-      ? "Oyuncunun kendi puanına göre değil, tamamladığı kadronun gücüne göre sıralanır." : "");
+      ? "Oyuncunun kendi beklenen FP'sine göre değil, tamamladığı kadronun gücüne göre sıralanır." : "");
 }
 
 async function requestBuilderRecommendations(key, selected, generation, risk, position, bench = []) {

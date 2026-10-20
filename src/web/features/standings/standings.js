@@ -34,7 +34,7 @@ function standingResults(standing, scores) {
     && (!standing.league_id || fixture.league_id === standing.league_id)
     && (!standing.stage_id || fixture.stage_id === standing.stage_id)
     && (!standing.group_id || fixture.group_id === standing.group_id));
-  const finished = fixtures.filter((fixture) => ["FT", "AET", "FT_PEN", "AWARDED", "WO"].includes(String(fixture["state.developer_name"] || fixture.state).toUpperCase()))
+  const finished = fixtures.filter(fixtureFinished)
     .sort((a, b) => String(a.kickoff || "").localeCompare(String(b.kickoff || "")) || a.fixture_id.localeCompare(b.fixture_id));
   const games = finished.map((fixture) => {
     const home = scores.get(`${fixture.fixture_id}:${fixture.home_team_id}`);
@@ -95,7 +95,7 @@ function renderDetailedStandings() {
     for (const game of results.games.slice(-5)) {
       const link = element("a", `form-result form-${game.result === "G" ? "win" : game.result === "M" ? "loss" : game.result === "B" ? "draw" : "unknown"}`, game.result);
       link.href = `team.html?${new URLSearchParams({ id: row.participant_id, name: teamName(row.participant_id, teams), match: game.fixture.fixture_id })}`;
-      const label = `${game.fixture.kickoff || "Tarih yok"} · ${teamName(game.opponent, teams)} · ${game.isHome ? "İç saha" : "Deplasman"} · ${game.valid ? `${game.own}–${game.other}` : "Skor yok"}`;
+      const label = `${kickoffText(game.fixture)} · ${teamName(game.opponent, teams)} · ${game.isHome ? "İç saha" : "Deplasman"} · ${game.valid ? `${game.own}–${game.other}` : "Skor yok"}`;
       link.title = label;
       link.setAttribute("aria-label", `${label} · Maç detaylarını aç`);
       form.append(link);

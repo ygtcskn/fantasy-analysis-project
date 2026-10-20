@@ -28,5 +28,5 @@
 }
 @media (max-width: 420px) {
   .builder-bench .builder-line-slots { gap: 4px; }
-  .builder-bench .builder-shirt { transform: scale(.85); transform-origin: top center; }
+  .builder-bench .pitch-shirt { transform: scale(.85); transform-origin: top center; }
 }

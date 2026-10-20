@@ -1,4 +1,6 @@
 .live-centre {
+  /* Fallbacks only: live-centre.js sets both to the clubs' own colours
+     (core/team-colors.js) for the match on show. */
   --live-home: #9566cf;
   --live-away: #5a9ec6;
   margin-bottom: 28px;
@@ -78,7 +80,7 @@
 .live-event:first-child { padding-top: 0; }
 .live-event:last-child { border-bottom: 0; }
 .live-event-minute { color: var(--muted); font-variant-numeric: tabular-nums; }
-.live-event-icon { color: var(--live-home); text-align: center; }
+.live-event-icon { color: var(--muted); text-align: center; }
 .live-event-icon.is-yellow { color: #d09c13; }
 .live-event-icon.is-red { color: #d9526c; }
 .live-event-details { display: grid; gap: 3px; overflow-wrap: anywhere; }

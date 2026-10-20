@@ -11,7 +11,9 @@ const liveStateLabels = {
 const liveStatistics = [
   [45, "Topa sahip olma", true], [42, "Toplam şut"], [86, "İsabetli şut"],
   [34, "Korner"], [44, "Tehlikeli atak"], [56, "Faul"], [84, "Sarı kart"],
-  [83, "Doğrudan kırmızı kart"], [85, "İkinci sarıdan kırmızı"],
+  // Sportmonks' red-card count (83) includes dismissals for a second yellow;
+  // 85 is how many of them were.
+  [83, "Kırmızı kart (toplam)"], [85, "İkinci sarıdan kırmızı"],
 ];
 const liveEventLabels = {
   GOAL: "Gol", OWNGOAL: "Kendi kalesine", OWN_GOAL: "Kendi kalesine",
@@ -108,6 +110,8 @@ function setNavLive(count) {
 async function pollNavLive() {
   clearTimeout(navLive.timer);
   let delay = 60000;
+  // A visibility change can arrive before core/app.js has defined the page state.
+  if (typeof state === "undefined") { navLive.timer = setTimeout(pollNavLive, 3000); return; }
   const local = location.protocol === "http:" && ["127.0.0.1", "localhost"].includes(location.hostname);
   // Maç Haftası polls for itself; a hidden tab or a page without a season waits.
   if (local && !document.hidden && state.seasonSlug && !liveCentreActive()) {
@@ -225,6 +229,9 @@ function renderLiveMatchCentre(meta = liveCentre.rows.find((row) => row.record_t
     node.append(createTeamLogo(id, teams, false), element("strong", "", teams.get(id).name));
     return node;
   };
+  // The statistic bars carry the two clubs' own colours, as every club comparison does.
+  teamColorPair(fixture.home_team_id, fixture.away_team_id)
+    .forEach((color, index) => panel.style.setProperty(`--live-${index ? "away" : "home"}`, color));
   const progress = [liveStateLabels[fixture.state] || fixture.state, liveMinute(fixture)].filter(Boolean).join(" · ");
   const score = element("div", "live-score");
   score.append(element("span", "live-match-state", progress), element("strong", "live-score-value", liveScore(fixture)));
@@ -245,7 +252,7 @@ function renderLiveStatistics(fixture) {
       return value !== null && value >= 0 && (!percent || value <= 100) ? value : null;
     });
     const row = element("div", "live-stat-row"), heading = element("div", "live-stat-label");
-    const text = (value) => value === null ? "—" : `${displayNumber(value)}${percent ? "%" : ""}`;
+    const text = (value) => value === null ? "—" : percent ? percentText(value) : displayNumber(value);
     heading.append(element("strong", "live-home-value", text(values[0])), element("span", "", label), element("strong", "live-away-value", text(values[1])));
     const bars = element("div", "live-stat-bars");
     bars.setAttribute("aria-hidden", "true");
@@ -273,8 +280,10 @@ function renderLiveEvents(fixture, teams, rows = liveCentre.rows, list = $("live
     const row = element("li", "live-event"), details = element("div", "live-event-details");
     const code = String(event.code || "").toUpperCase().replace(/[- ]/g, "_");
     const label = liveEventLabels[code] || translateEventText(event.label) || "Maç olayı";
-    const player = event.player_name || "";
-    const related = event.related_player_name ? (code === "SUBSTITUTION" ? `Çıkan: ${event.related_player_name}` : `İlgili oyuncu: ${event.related_player_name}`) : "";
+    // The site's one name per player; the feed's own spelling only for someone it does not know.
+    const player = event.player_id ? playerName(event.player_id, event.player_name) : event.player_name || "";
+    const relatedName = event.related_player_id ? playerName(event.related_player_id, event.related_player_name) : event.related_player_name || "";
+    const related = relatedName ? (code === "SUBSTITUTION" ? `Çıkan: ${relatedName}` : `İlgili oyuncu: ${relatedName}`) : "";
     const person = code === "SUBSTITUTION" && player ? `Giren: ${player}` : player;
     const icon = /RED|YELLOW/.test(code) ? "▮" : /GOAL|PENALTY/.test(code) ? "⚽" : code === "SUBSTITUTION" ? "⇄" : "•";
     const symbol = element("span", `live-event-icon ${/RED/.test(code) ? "is-red" : /YELLOW/.test(code) ? "is-yellow" : ""}`, icon);

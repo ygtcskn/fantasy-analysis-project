@@ -6,7 +6,7 @@
 
 // Why an axis has no score, in the reader's words.
 const STATISTICS_RADAR_STATUS = {
-  missing: "Veri sağlanmadı", partial_coverage: "Eksik maç kapsamı; puan hesaplanmadı",
+  missing: "Veri sağlanmadı", partial_coverage: "Eksik maç kapsamı; radar puanı hesaplanmadı",
   invalid_ratio: "Başarı sayısı deneme sayısını aşıyor", invalid_minutes: "Geçerli dakika verisi yok",
   invalid_value: "Geçersiz değer", insufficient_attempts: "Yetersiz deneme sayısı",
   insufficient_peers: "En az iki geçerli emsal gerekli", no_positive_peers: "Pozitif değerli emsal yok",
@@ -143,7 +143,8 @@ function statisticsHistorySeason(season, fixtures, rows, squads, reference) {
   for (const row of rows) {
     if (!row.player_id) continue;
     if (!players.has(row.player_id)) {
-      players.set(row.player_id, { id: row.player_id, name: row.name || `Oyuncu ${row.player_id}`, matches: [] });
+      // A player the served season knows keeps that one name in every season.
+      players.set(row.player_id, { id: row.player_id, name: playerName(row.player_id, row.name), matches: [] });
     }
     players.get(row.player_id).matches.push(row);
   }
@@ -318,8 +319,8 @@ function statisticsRadarTooltip(entry, result) {
       : `gereken: ${result.required} (tam sezon karşılığı ${metric.minimumAttempts})`)
     + ` · deneme kapsamı: ${result.attemptsSupplied}/${result.records} maç`);
   if (result.zeroApplied) lines.push(`Sıfır oranı: %${displayNumber(result.zeroShare * 100)} · pozitif N = ${result.positiveN}. Pozitif değerler yalnızca pozitif emsallere göre sıralanır.`);
-  if (metric.direction === "lower_better") lines.push("Düşük ham değer daha iyi; puan ters çevrilir.");
-  if (metric.direction === "context") lines.push("Bağlam ölçütü: yüksek puan daha fazla etkinliktir; tek başına kalite değildir.");
+  if (metric.direction === "lower_better") lines.push("Düşük ham değer daha iyi; radar puanı ters çevrilir.");
+  if (metric.direction === "context") lines.push("Bağlam ölçütü: yüksek radar puanı daha fazla etkinliktir; tek başına kalite değildir.");
   if (result.smallSample) lines.push("Küçük veya belirsiz dakika örneği; referans grubuna alınmadı.");
   if (result.guest) lines.push(STATISTICS_GUEST_NOTE);
   if (result.status !== "available") lines.push(STATISTICS_RADAR_STATUS[result.status] || result.status);

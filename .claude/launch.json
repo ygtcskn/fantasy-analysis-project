@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "superlig-site",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["src/web/serve.py", "--season", "2026/2027", "--no-live", "--port", "8123"],
+      "port": 8123
+    }
+  ]
+}

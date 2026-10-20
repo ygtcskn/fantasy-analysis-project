@@ -38,6 +38,10 @@
   --matchweek-bg: #3a2450;
   --matchweek-border: #563770;
   --matchweek-text: #dbc1f3;
+  /* Win, draw, loss: one palette for chips, charts and the live table. */
+  --result-win: #3fd89a;
+  --result-draw: #f2cb4c;
+  --result-loss: #ff7a73;
 }
 :root[data-theme="dark"] button:focus-visible,
 :root[data-theme="dark"] a:focus-visible,
@@ -105,10 +109,6 @@
 :root[data-theme="dark"] .fixture-status { background: var(--surface-raised); }
 :root[data-theme="dark"] .home-match { background: #130d1b; }
 :root[data-theme="dark"] .detailed-points { background: transparent; }
-:root[data-theme="dark"] .form-win { background: #183526; color: #9ad5ac; }
-:root[data-theme="dark"] .form-loss { background: #3b2027; color: #ffaaa1; }
-:root[data-theme="dark"] .form-draw { background: #383126; color: #d8c685; }
-:root[data-theme="dark"] .form-unknown { background: #2b2431; color: var(--muted); }
 :root[data-theme="dark"] .tier-toolbar { background: var(--surface-soft); }
 :root[data-theme="dark"] .tier-search-control { border-color: var(--line); background: var(--field); }
 :root[data-theme="dark"] .tier-page-number[aria-current="page"] { border-color: var(--accent); background: var(--accent); color: #160d20; }
@@ -149,9 +149,6 @@
 :root[data-theme="dark"] .match-best { border-color: #4a334f; }
 :root[data-theme="dark"] .overall-players .team-best-player { border-color: var(--line); background: #1c1326; }
 :root[data-theme="dark"] .team-rating { background: #342348; color: #d6b8fa; }
-:root[data-theme="dark"] .result-w { background: #183526; color: #9ad5ac; }
-:root[data-theme="dark"] .result-l { background: #3b2027; color: #ffaaa1; }
-:root[data-theme="dark"] .result-d { background: #383126; color: #d8c685; }
 
 
 /* ======================================================================

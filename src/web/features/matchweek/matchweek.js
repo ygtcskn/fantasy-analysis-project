@@ -1,7 +1,7 @@
 "use strict";
 
 const matchweekOdds = { request: 0, season: "", rows: [], note: "" };
-const matchweekZone = "Europe/Istanbul";
+const matchweekZone = MATCH_TIME_ZONE;
 const matchweekDayMs = 86400000;
 let selectedMatchweekFixture = null;
 // The analysis opens as a row of the odds table under the chosen match, and
@@ -91,6 +91,9 @@ function renderMatchweek() {
     if (fixture.fixture_id === selectedMatchweekFixture) selectedAnalysis = { fixture, prediction: valid ? prediction : null };
     const oddsCell = element("td"), odds = element("button", "matchweek-odds matchweek-select");
     odds.type = "button";
+    // 1 and 2 carry the clubs' own colours, as every club comparison does.
+    teamColorPair(fixture.home_team_id, fixture.away_team_id)
+      .forEach((color, index) => odds.style.setProperty(`--matchweek-${index ? "away" : "home"}`, color));
     odds.id = `matchweek-select-${fixture.fixture_id}`;
     odds.setAttribute("aria-label", `${teamName(fixture.home_team_id, teams)} – ${teamName(fixture.away_team_id, teams)} ${finished ? "maç sonucunu ve istatistiklerini" : "maç analizini"} göster`);
     odds.setAttribute("aria-controls", "matchweek-analysis");
@@ -99,8 +102,7 @@ function renderMatchweek() {
     else probabilities.forEach((probability, index) => {
       const label = ["1", "X", "2"][index];
       const badge = element("span", `matchweek-odd${valid ? ` matchweek-odd-${index}` : ""}`);
-      badge.append(element("span", "", label), element("strong", "", valid
-        ? `${(probability * 100).toLocaleString("tr-TR", { maximumFractionDigits: 1, minimumFractionDigits: 1 })}%` : "—"));
+      badge.append(element("span", "", label), element("strong", "", valid ? percentText(probability * 100, 1) : "—"));
       odds.append(badge);
     });
     oddsCell.append(odds);
@@ -142,8 +144,7 @@ function renderMatchweekAnalysis(selection, teams) {
   const scores = currentFixtureScores();
   const homeScore = scores.get(`${fixture.fixture_id}:${fixture.home_team_id}`);
   const awayScore = scores.get(`${fixture.fixture_id}:${fixture.away_team_id}`);
-  if (["FT", "INPLAY_1ST_HALF", "INPLAY_2ND_HALF", "HT"].includes(String(fixture.state).toUpperCase())
-      && homeScore != null && awayScore != null) {
+  if (!fixtureUnplayed(fixture) && homeScore != null && awayScore != null) {
     content.append(element("p", "", `Kaydedilmiş skor: ${homeScore} – ${awayScore}`));
   }
   // Laid out top to bottom: last elevens face to face, the season's league
@@ -204,16 +205,16 @@ function renderMatchweekAnalysis(selection, teams) {
     heading.append(createTeamLogo(id, teams, false), element("span", "", teamName(id, teams)));
     section.append(heading, element("p", "matchweek-card-subtitle", "En iyi oyuncular · Sezon"));
     const players = matchweekSeasonPlayers(id, fixture).slice(0, 5);
-    if (!players.length) section.append(element("p", "message", "Bu sezon için oyuncu puanı yok."));
+    if (!players.length) section.append(element("p", "message", "Bu sezon için fantezi puanı yok."));
     else {
       const list = element("ol", "matchweek-best-players"), head = element("li", "matchweek-best-head");
       head.setAttribute("aria-hidden", "true");
-      head.append(element("span", "", "Oyuncu"), element("span", "", "Reyting"), element("span", "", "Puan"));
+      head.append(element("span", "", "Oyuncu"), element("span", "", "Reyting"), element("span", "", "FP"));
       list.append(head);
       for (const player of players) {
         const item = element("li"), name = element("span", "matchweek-best-name", player.name);
-        item.title = `${player.name} · ${player.position || "Mevki yok"} · ${player.matches} maç · ${displayNumber(player.points / player.matches)} puan / maç · Reyting ${player.ratings} maçın ortalaması`;
-        item.setAttribute("aria-label", `${player.name}: Sportmonks reytingi ${ratingText(player.rating)}, fantezi puanı ${displayNumber(player.points)}`);
+        item.title = `${player.name} · ${player.position || "Mevki yok"} · ${player.matches} maç · ${displayNumber(player.points / player.matches)} FP / maç · Reyting ${player.ratings} maçın ortalaması`;
+        item.setAttribute("aria-label", `${player.name}: reyting ${ratingText(player.rating)}, fantezi puanı ${displayNumber(player.points)}`);
         item.append(name, element("span", "matchweek-best-rating", ratingText(player.rating)), element("strong", "", displayNumber(player.points)));
         list.append(item);
       }
@@ -230,11 +231,11 @@ function renderMatchweekAnalysis(selection, teams) {
   const notes = element("details", "matchweek-notes");
   notes.append(element("summary", "", "Açıklamalar"),
     element("p", "", "Son 11, geçmiş maçın kadrosudur; tahmini kadro değildir."),
-    element("p", "", "Sezon istatistikleri kaydedilmiş sezonun tamamlanmış maçlarındaki toplamlardır. Altındaki sayı lig sırasıdır: en yüksek toplam 1. olur, eşit toplamlar aynı sırayı alır. Kartlar oyuncu kayıtlarından sayılır; Sportmonks sıfırı boş bıraktığı için boş kart değeri 0 kabul edilir. Kırmızı kart, doğrudan veya ikinci sarıdan oyundan atılmayı oyuncu başına bir kez sayar."),
+    element("p", "", "Sezon istatistikleri kaydedilmiş sezonun tamamlanmış maçlarındaki toplamlardır. Altındaki sayı lig sırasıdır: en yüksek toplam 1. olur, eşit toplamlar aynı sırayı alır. Kartlar, maç sonucu tablosu ve canlı maç merkezindeki gibi takım istatistiğinden sayılır: Sportmonks ikinci sarıyı da sarı kart sayar; kırmızı kart, doğrudan veya ikinci sarıdan her oyundan atılmadır. İstatistiği kaydedilmiş bir maçta boş kart değeri 0 kabul edilir."),
     element("p", "", "Son 5 maç, seçilen maçtan önceki tamamlanmış sezon maçlarıdır, yeniden eskiye. G: galibiyet, B: beraberlik, M: mağlubiyet; İ: iç saha, D: deplasman."),
-    element("p", "", "Fantezi değerleri bu maç için beklenen oyuncu puanlarıdır; sakatlıklar dikkate alınmaz. En iyi 3, en yüksek beklenen puanlı 3 oyuncunun toplamıdır; mevki satırları o mevkideki tüm oyuncuların toplamıdır. * kısmi toplam: bazı oyuncuların geçerli tahmini yok. Bu değerler üstteki maç sonucu modeli seçimiyle değişmez."),
+    element("p", "", "Fantezi değerleri bu maç için beklenen oyuncu puanlarıdır, Kadro Kur'dakiyle aynı: sakatlık ve ceza bildirimi dikkate alınır, oynamayacak oyuncu 0 sayılır, durumu belirsiz oyuncunun tahmini gösterilmez. En iyi 3, en yüksek beklenen puanlı 3 oyuncunun toplamıdır; mevki satırları o mevkideki tüm oyuncuların toplamıdır. * kısmi toplam: bazı oyuncuların geçerli tahmini yok. Bu değerler üstteki maç sonucu modeli seçimiyle değişmez."),
     element("p", "", "Fantezi puanları grafiği, takımın her tamamlanmış maçta oyuncularının aldığı fantezi puanlarının toplamıdır (bonus dahil); yatay eksen hafta, dikey eksen puandır. Her takım kendi rengiyle çizilir. Ayrıntı için bir haftanın üzerine gelin."),
-    element("p", "", "En iyi oyuncular, bu sezon kulüp için aldıkları toplam fantezi puanına göre sıralanır. Reyting, Sportmonks maç reytinglerinin ortalamasıdır (yalnızca süre alınan ve reytingi olan maçlar). Son maçını başka bir kulüpte oynayan oyuncular listelenmez."));
+    element("p", "", "En iyi oyuncular, bu sezon kulüp için aldıkları toplam fantezi puanına (FP) göre sıralanır. Reyting, Sportmonks maç reytinglerinin ortalamasıdır (yalnızca süre alınan ve reytingi olan maçlar). Son maçını başka bir kulüpte oynayan ve ligden ayrılan oyuncular listelenmez."));
   content.append(preview, notes);
 }
 
@@ -292,14 +293,15 @@ function matchweekFantasyTeams(fixture) {
       if (!matching.length) continue;
       const positions = new Set(matching.map((row) => row.position));
       const position = positions.size === 1 && buckets.has(matching[0].position) && matching[0].position !== "ALL" ? matching[0].position : "UNKNOWN";
-      // Keep fixture/deadline guards, but compare totals before availability adjustments.
+      // The same expected points Kadro Kur shows: fixture and deadline guards,
+      // and availability applied (out counts 0, uncertain shows nothing).
       const projection = matching.length === 1 ? builderFantasyData({ id: playerId, squadTeam: teamId }).projection : null;
-      const points = projection?.fixture_id === fixture.fixture_id ? number(projection.baseline_expected_points) : null;
+      const points = projection?.fixture_id === fixture.fixture_id ? fantasyProjectionNumber(projection, "expected_points") : null;
       for (const key of ["ALL", position]) buckets.get(key).count++;
       if (points === null) continue;
       const bucket = buckets.get(position);
       bucket.available++; bucket.points += points;
-      players.push({ id: playerId, name: String(projection.player_name || "").trim() || playerId, position, points, availability: projection.availability_status });
+      players.push({ id: playerId, name: playerName(playerId, projection.player_name), position, points, availability: projection.availability_status });
     }
     players.sort((a, b) => b.points - a.points || String(a.id).localeCompare(String(b.id)));
     const all = buckets.get("ALL");
@@ -310,18 +312,20 @@ function matchweekFantasyTeams(fixture) {
 }
 
 // The club's current players ranked by season fantasy points, with their mean
-// Sportmonks rating. Only the club's own games before the selected match count,
-// and a player whose latest game was for another club is left out.
+// Sportmonks rating. Only the club's own games before the selected match count.
+// A player whose latest game was for another club is left out, and so is one
+// who has left the league - the rule every other player list follows
+// (leaguePlayers in tier-list.js).
 function matchweekSeasonPlayers(teamId, fixture) {
   if (!fantasyState.season || fantasyState.season !== state.seasonSlug) return [];
   const cutoff = Math.min(Date.now(), fantasyKickoff(fixture)), players = [];
   for (const [id, rows] of fantasyState.matches) {
-    if (rows[0]?.team_id !== teamId) continue;
+    if (rows[0]?.team_id !== teamId || (currentSquad && !currentSquad.has(id))) continue;
     const own = rows.filter((row) => row.team_id === teamId && row.fixture_id !== fixture.fixture_id && fantasyTime(row.kickoff_utc) < cutoff);
     const points = own.map((row) => number(row.points_total)).filter((value) => value !== null);
     if (!points.length) continue;
     const ratings = own.map(validMatchRating).filter((value) => value !== null);
-    players.push({ id, name: String(fantasyState.summaries.get(id)?.player_name || own[0].player_name || "").trim() || `Oyuncu ${id}`,
+    players.push({ id, name: playerName(id, fantasyState.summaries.get(id)?.player_name || own[0].player_name),
       position: own[0].fantasy_position, matches: points.length, points: points.reduce((sum, value) => sum + value, 0),
       rating: ratings.length ? ratings.reduce((sum, value) => sum + value, 0) / ratings.length : null, ratings: ratings.length });
   }
@@ -393,7 +397,7 @@ function matchweekFantasyTrend(fixture, sides, teams) {
     const hit = draw("rect", { class: "matchweek-trend-hit", x: `${(index / rounds.length) * 100}%`, y: 0, width: `${100 / rounds.length}%`, height }, svg);
     const parts = sides.map((id, side) => {
       const game = series[side].get(round);
-      return game ? `${code(id)}: ${displayNumber(game.points)} puan (${code(game.opponent)}, ${game.home ? "İ" : "D"})` : `${code(id)}: maç yok`;
+      return game ? `${code(id)}: ${displayNumber(game.points)} FP (${code(game.opponent)}, ${game.home ? "İ" : "D"})` : `${code(id)}: maç yok`;
     });
     draw("title", {}, hit).textContent = `${round.replace("·", " · ")}. hafta · ${parts.join(" · ")}`;
   });
@@ -485,29 +489,24 @@ const matchweekLeagueMetrics = [["scored", "Gol atan", "En çok gol atan"], ["co
 // Season totals and league ranks for both sides of a fixture, from the saved
 // season's completed games. Rank 1 is the highest total; ties share a rank.
 function matchweekLeagueRanks(fixture) {
-  const scores = currentFixtureScores(), clubs = new Map(), matchTeams = new Map();
+  // Cards are the team statistic (team_metrics.csv), the same figure the match
+  // result table and the live centre show, read on demand.
+  if (teamMetricsState.key !== state.seasonSlug) loadTeamMetrics();
+  const teamRows = new Map((teamMetricsState.state === "ready" ? teamMetricsState.rows : [])
+    .map((row) => [`${row.fixture_id}:${row.team_id}`, row]));
+  const scores = currentFixtureScores(), clubs = new Map();
   for (const game of state.tables["fixtures.csv"] || []) {
-    if (String(game.state).toUpperCase() !== "FT" || fantasyKickoff(game) > Date.now()) continue;
+    if (!fixtureFinished(game) || fantasyKickoff(game) > Date.now()) continue;
     for (const [id, opponent] of [[game.home_team_id, game.away_team_id], [game.away_team_id, game.home_team_id]]) {
       if (!clubs.has(id)) clubs.set(id, { games: 0, scored: 0, conceded: 0, clean: 0, scores: 0, yellow: 0, red: 0, yellowRecords: 0, redRecords: 0, yellowGames: new Set(), redGames: new Set() });
       const club = clubs.get(id); club.games++;
-      matchTeams.set(`${game.fixture_id}:${id}`, club);
       const a = scores.get(`${game.fixture_id}:${id}`), b = scores.get(`${game.fixture_id}:${opponent}`);
       if (a != null && b != null) { club.scored += a; club.conceded += b; club.clean += b === 0 ? 1 : 0; club.scores++; }
-    }
-  }
-  const seen = new Set();
-  for (const row of state.tables["player_match_stats.csv"] || []) {
-    const club = matchTeams.get(`${row.fixture_id}:${row.team_id}`);
-    const key = `${row.fixture_id}:${row.player_id}`;
-    if (!club || !row.player_id || seen.has(key)) continue;
-    seen.add(key);
-    // Sportmonks leaves a zero card count blank, so a player's blank cell is 0.
-    const yellow = number(row.yellowcards) ?? 0, red = number(row.redcards) ?? 0, second = number(row.yellowred_cards) ?? 0;
-    if (yellow >= 0) { club.yellow += yellow; club.yellowRecords++; club.yellowGames.add(row.fixture_id); }
-    if (red >= 0 && second >= 0) {
-      club.red += red > 0 || second > 0 ? 1 : 0;
-      club.redRecords++; club.redGames.add(row.fixture_id);
+      // A blank card count is none on a covered team row, else unknown (teamCountedValue).
+      const row = teamRows.get(`${game.fixture_id}:${id}`);
+      const yellow = teamCountedValue(row, "yellowcards"), red = teamCountedValue(row, "redcards");
+      if (yellow !== null) { club.yellow += yellow; club.yellowRecords++; club.yellowGames.add(game.fixture_id); }
+      if (red !== null) { club.red += red; club.redRecords++; club.redGames.add(game.fixture_id); }
     }
   }
   return matchweekLeagueMetrics.map(([metric, label, versusLabel]) => {
@@ -541,7 +540,7 @@ function matchweekLeagueComparison(fixture, teams) {
     });
     row.append(cells[0], title, cells[1]); body.append(row);
   }
-  table.append(head, body); section.append(table, element("p", "message", "Sıralamalar kaydedilmiş sezonun tamamlanmış maçlarında toplam değere göre büyükten küçüğedir; eşit toplamlar aynı sırayı alır. Seçilen maç tarihinden bağımsız güncel sezon verisidir. Gol yeme ve kart sıralamasında 1. olmak en yüksek sayıyı gösterir. Kartlar oyuncu kayıtlarından sayılır; Sportmonks sıfırı boş bıraktığı için boş kart değeri 0 kabul edilir. Maç başına değer yalnızca oyuncu kaydı bulunan maçlara bölünür. Kırmızı kart, doğrudan veya ikinci sarıdan oyundan atılmayı oyuncu başına bir kez sayar."));
+  table.append(head, body); section.append(table, element("p", "message", "Sıralamalar kaydedilmiş sezonun tamamlanmış maçlarında toplam değere göre büyükten küçüğedir; eşit toplamlar aynı sırayı alır. Seçilen maç tarihinden bağımsız güncel sezon verisidir. Gol yeme ve kart sıralamasında 1. olmak en yüksek sayıyı gösterir. Kartlar takım istatistiğinden sayılır: Sportmonks ikinci sarıyı da sarı kart sayar; kırmızı kart, doğrudan veya ikinci sarıdan her oyundan atılmadır. İstatistiği kaydedilmiş bir maçta boş kart değeri 0 kabul edilir. Maç başına değer yalnızca kart verisi bulunan maçlara bölünür."));
   return section;
 }
 
@@ -549,7 +548,7 @@ function matchweekTeamHistory(teamId, selected) {
   const cutoff = Math.min(Date.now(), fantasyKickoff(selected));
   return (state.tables["fixtures.csv"] || []).filter((game) => game.fixture_id !== selected.fixture_id
     && [game.home_team_id, game.away_team_id].includes(teamId)
-    && String(game.state).toUpperCase() === "FT"
+    && fixtureFinished(game)
     && fantasyKickoff(game) + 3 * 3600000 <= cutoff)
     .sort((a, b) => fantasyKickoff(b) - fantasyKickoff(a));
 }
@@ -588,11 +587,11 @@ function matchweekLastXI(teamId, game, teams, { players: matchPlayers = state.ta
   for (const group of [...groups.keys()].sort((a, b) => b - a)) {
     const line = element("div", "matchweek-mini-line");
     for (const player of groups.get(group).sort((a, b) => exact ? Number(a.formation_field.split(":")[1]) - Number(b.formation_field.split(":")[1]) : String(a.name).localeCompare(String(b.name)))) {
-      const person = element("div", "matchweek-mini-player"), shirt = element("span", "builder-shirt");
+      const person = element("div", "matchweek-mini-player"), shirt = element("span", "pitch-shirt");
       // The keeper is the formation's first line, or the recorded goalkeeper.
       const goalkeeper = exact ? group === 1 : role(player.position) === 1;
       shirt.innerHTML = shirtSVG(teamId, { size: 64, number: player.jersey_number, showName: false, goalkeeper });
-      person.append(shirt, element("span", "", player.name || `Oyuncu ${player.player_id}`)); line.append(person);
+      person.append(shirt, element("span", "pitch-player-name", playerName(player.player_id, player.name))); line.append(person);
     }
     pitch.append(line);
   }

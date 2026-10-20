@@ -157,19 +157,17 @@ function records() {
   if (state.view === "fixtures") {
     const scores = currentFixtureScores();
     return [...fixtures.values()].map((row) => {
-      const kickoff = String(row.kickoff || "");
-      const time = kickoff.match(/(?:T|\s)(\d{2}:\d{2})/)?.[1] || "—";
+      const time = kickoffDay(row) ? kickoffClock(row) : "—";
       const homeScore = scores.get(`${row.fixture_id}:${row.home_team_id}`);
       const awayScore = scores.get(`${row.fixture_id}:${row.away_team_id}`);
-      const notStarted = ["NS", "TBA", "POSTP", "CANC", "CANCELLED"].includes(String(row.state).toUpperCase());
-      const hasScore = !notStarted && [homeScore, awayScore].every((value) => Number.isInteger(value) && value >= 0);
-      return { ...row, date: row.kickoff, time, home: teamName(row.home_team_id, teams), away: teamName(row.away_team_id, teams),
+      const hasScore = !fixtureUnplayed(row) && [homeScore, awayScore].every((value) => Number.isInteger(value) && value >= 0);
+      return { ...row, date: row.kickoff, day: kickoffDay(row), time, home: teamName(row.home_team_id, teams), away: teamName(row.away_team_id, teams),
         score: hasScore ? `${homeScore} – ${awayScore}` : "—", round: row["round.name"], venue: row["venue.name"] };
     });
   }
   return (state.tables["player_match_stats.csv"] || []).map((row) => {
     const fixture = fixtures.get(row.fixture_id);
-    return { ...row, date: fixture?.kickoff, team: teamName(row.team_id, teams),
+    return { ...row, date: fixture?.kickoff, dateText: fixture ? kickoffText(fixture) : "—", team: teamName(row.team_id, teams),
       match: fixture?.name || (fixture ? `${teamName(fixture.home_team_id, teams)} - ${teamName(fixture.away_team_id, teams)}` : `Maç ${row.fixture_id}`),
       xg: number(row.xg_expected_goals) ?? number(row.expected_goals),
     };
@@ -209,8 +207,8 @@ function render() {
   if (socialView) {
     for (const id of ["dataset-stats", "empty-state", "workspace"]) $(id).hidden = true;
   }
-  $("view-title").textContent = homeView ? "Lig Özeti" : tierView ? "Oyuncu Listesi" : playerView ? "Oyuncu Katılımları" : "Fikstür";
-  $("view-description").textContent = homeView ? "Puan durumu ve fikstür bir arada." : tierView ? "Tüm oyuncular, sezon performansları ve puanlarını oluşturan maçlar." : playerView ? "Dakikalar, fırsatlar ve hücum katkısı. Her satır bir oyuncunun bir maçıdır." : "Sezonun bütün maçları, haftalara göre sıralanır.";
+  $("view-title").textContent = homeView ? "Ana Sayfa" : tierView ? "Oyuncu Listesi" : playerView ? "Oyuncu Katılımları" : "Fikstür";
+  $("view-description").textContent = homeView ? "Puan durumu ve fikstür bir arada." : tierView ? "Tüm oyuncular, sezon performansları ve reytinglerini oluşturan maçlar." : playerView ? "Dakikalar, fırsatlar ve hücum katkısı. Her satır bir oyuncunun bir maçıdır." : "Sezonun bütün maçları, haftalara göre sıralanır.";
   if (standingsView) {
     $("view-title").textContent = "Puan Durumu";
     $("view-description").textContent = "Maçlar, galibiyetler, goller ve form durumu — sezonun ayrıntılı tablosu.";
@@ -232,7 +230,7 @@ function render() {
     $("view-description").textContent = "Takımları sezon sonuçları, maç istatistikleri ve fantezi puanlarıyla karşılaştırın.";
   }
   $("table-heading").textContent = playerView ? "Oyuncu katılımları" : "Fikstür";
-  $("table-caption").textContent = playerView ? "Kaydedilen maç istatistikleri. Sıralamak için sütun başlığına tıklayın." : "Başlama saatleri kaydedildiği biçimde gösterilir.";
+  $("table-caption").textContent = playerView ? "Kaydedilen maç istatistikleri. Sıralamak için sütun başlığına tıklayın." : "Saatler Türkiye saatiyledir.";
   $("position-filter").hidden = !playerView;
   $("minutes-filter").hidden = !playerView;
   document.querySelectorAll("[data-view]").forEach((button) => {
@@ -279,7 +277,7 @@ function render() {
   });
   const columns = playerView ? [
     ["name", "Oyuncu"], ["team", "Takım"], ["position", "Mevki"], ["date", "Başlama"], ["match", "Maç"],
-    ["rating", "Maç puanı", true], ["minutes_played", "Dakika", true], ["started", "İlk 11", true], ["goals", "Gol", true], ["assists", "Asist", true],
+    ["rating", "Reyting", true], ["minutes_played", "Dakika", true], ["started", "İlk 11", true], ["goals", "Gol", true], ["assists", "Asist", true],
     ["xg", "xG", true], ["shots_total", "Şut", true], ["shots_on_target", "İsabetli şut", true], ["key_passes", "Kilit pas", true],
   ] : [["time", "Saat"], ["home", "Ev Sahibi"], ["score", "Skor"], ["away", "Deplasman"]];
   const numeric = columns.find(([key]) => key === state.sort)?.[2];
@@ -315,7 +313,7 @@ function render() {
   const fixtureTeams = homeTeams();
   const roundDates = new Map();
   if (!playerView) for (const row of rows) {
-    const date = String(row.date || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+    const date = String(row.day || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
     if (!date) continue;
     const key = String(row.round || "");
     const sortable = `${date[1]}-${date[2]}-${date[3]}`;
@@ -341,7 +339,7 @@ function render() {
     columns.forEach(([key, , numeric]) => {
       const td = document.createElement("td");
       if (!playerView) td.className = `fixture-${key}-cell`;
-      td.textContent = numeric ? displayNumber(row[key]) : row[key] || "—";
+      td.textContent = numeric ? displayNumber(row[key]) : key === "date" && playerView ? row.dateText : row[key] || "—";
       const clubId = key === "team" ? row.team_id : key === "home" ? row.home_team_id : key === "away" ? row.away_team_id : null;
       if (clubId) {
         const name = row[key] || `Takım ${clubId}`;
@@ -365,7 +363,7 @@ function render() {
   $("page-label").textContent = `Sayfa ${state.page + 1} / ${pageCount}`;
   $("previous").disabled = state.page === 0;
   $("next").disabled = state.page + 1 >= pageCount;
-  $("table-note").textContent = playerView ? "— sıfır değil, veri sağlanmadı demektir. İlk 11: 1 = evet, 0 = hayır." : "Kaydedilen sonuçlar · Önce ev sahibi skoru · — veri sağlanmadı demektir · Başlama saatleri dışa aktarıldığı gibi.";
+  $("table-note").textContent = playerView ? "— sıfır değil, veri sağlanmadı demektir. İlk 11: 1 = evet, 0 = hayır." : "Kaydedilen sonuçlar · Önce ev sahibi skoru · — veri sağlanmadı demektir · Saatler Türkiye saatiyle.";
 }
 
 function goToTablePage(page) {

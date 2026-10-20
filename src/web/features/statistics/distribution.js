@@ -158,7 +158,7 @@ function renderPlayerDistribution(radar, selected) {
     guest ? STATISTICS_SERIES.map((series) => series.line) : null);
   $("statistics-distribution-note").textContent = `${selected?.name || player.name} · ${statisticsReferenceLabel(reference)}. `
     + "Her satırda eğri emsallerin o ölçütteki dağılımı, kesikli çizgi oyuncunun değeri, renkli bölüm geride bıraktığı emsaller, "
-    + "sağdaki sayı yüzdeliği; Ayrıntılı Ölçütler radarıyla aynı emsaller ve aynı puan. Renk yüzdeliği gösterir: turuncu düşük, "
+    + "sağdaki sayı yüzdeliği; Ayrıntılı Ölçütler radarıyla aynı emsaller ve aynı radar puanı. Renk yüzdeliği gösterir: turuncu düşük, "
     + "nötr orta, lacivert yüksek. Düşük değerin iyi olduğu ölçütlerde (ör. yenilen gol) renkli bölüm oyuncunun değerinden yukarı uzanır. "
     + "Değerler ve eğriler az dakikalı oranlar emsal ortalamasına çekildikten sonraki değerlerdir; gözlenen değer satırın üzerinde bekleyince görünür. "
     + (guest ? `Mavi çizgi ${guest.player.name}; aynı emsallere göre sıralanır, renkli bölüm ${player.name} içindir. ` : "")

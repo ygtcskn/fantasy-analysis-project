@@ -94,7 +94,7 @@ function canUseBuilderSlot(player, slot) {
 // Back-view club shirt for a filled slot. Falls back to a neutral kit when the
 // player has no squad row, and prints nothing when the jersey number is missing.
 function builderShirt(player, goalkeeper = false) {
-  const shirt = element("span", "builder-shirt");
+  const shirt = element("span", "pitch-shirt");
   const teamId = player.squadTeam || [...player.teams][0] || null;
   shirt.innerHTML = shirtSVG(teamId, { size: 64, number: player.jersey, surname: player.name, goalkeeper });
   return shirt;
@@ -246,7 +246,7 @@ function builderPlayerDetails(player, teams) {
   const identity = element("div");
   identity.append(
     element("span", "builder-player-details-label", "Fantezi istatistikleri"),
-    element("span", "builder-player-details-meta", `${fantasyState.season || "Bu sezon"} · ${summary?.fantasy_position || projection?.position || [...player.positions].join(" / ") || "Mevki bilgisi yok"}`),
+    element("span", "builder-player-details-meta", `${fantasyState.season || "Bu sezon"} · ${summary?.fantasy_position || projection?.position || roleLabel(playerPrimaryRole(player))}`),
   );
   const actions = element("div", "builder-player-details-actions");
   if (player.matches.length) {
@@ -262,7 +262,7 @@ function builderPlayerDetails(player, teams) {
     const opponent = element("span", "builder-opponent");
     opponent.append(createTeamLogo(projection.opponent_id, teams, false), element("span", "", projection.venue ? `(${projection.venue})` : ""));
     const next = builderFantasyMetrics(`Sonraki maç · ${projection.matchweek}. Hafta`, [
-      ["Beklenen puan", displayNumber(fantasyProjectionNumber(projection, "expected_points"))],
+      ["Beklenen FP", displayNumber(fantasyProjectionNumber(projection, "expected_points"))],
       ["İlk 11 olasılığı", fantasyProbability(projection, "chance_starting")],
       ["Gol olasılığı", fantasyProbability(projection, "chance_scoring")],
       ["Fiyat", number(projection.price_million_try) === null ? "—" : `₺${displayNumber(Number(projection.price_million_try).toFixed(1))}M`],
@@ -376,20 +376,20 @@ function renderBuilderPool(players, teams) {
     const toggle = element("button", "builder-player-button builder-player-toggle", player.name);
     toggle.id = `builder-player-toggle-${player.id}`;
     toggle.type = "button";
-    toggle.title = `${[...player.positions].join(" / ") || "Mevki bilgisi yok"} · ${player.ratings.length} maçta Sportmonks rating`;
+    toggle.title = `${roleLabel(playerPrimaryRole(player))} · ${player.ratings.length} reytingli maç`;
     toggle.setAttribute("aria-expanded", String(expanded));
     toggle.setAttribute("aria-controls", `builder-player-details-${player.id}`);
     toggle.setAttribute("aria-label", `${player.name} fantezi istatistiklerini ${expanded ? "gizle" : "göster"}`);
     toggle.addEventListener("click", () => toggleBuilderPlayerDetails(player.id));
     const add = element("button", "builder-player-add", "+");
     add.type = "button";
-    add.setAttribute("aria-label", `${player.name} oyuncusunu ${selected ? "taşı" : "ekle"}; ${[...player.positions].join(" veya ") || "mevki bilgisi yok"}`);
+    add.setAttribute("aria-label", `${player.name} oyuncusunu ${selected ? "taşı" : "ekle"}; ${builderTffRole(player.id) || roleLabel(playerPrimaryRole(player))}`);
     add.addEventListener("click", () => placeBuilderPlayer(player.id));
     nameRow.append(toggle, add);
     nameCell.append(nameRow);
     const rating = element("td", "numeric builder-pool-rating", ratingText(player.average));
-    rating.title = `${player.ratings.length} maçın Sportmonks rating ortalaması`;
-    rating.setAttribute("aria-label", player.average === null ? "Rating yok" : `Ortalama Sportmonks rating ${ratingText(player.average)}`);
+    rating.title = `${player.ratings.length} maçın Sportmonks reyting ortalaması`;
+    rating.setAttribute("aria-label", player.average === null ? "Reyting yok" : `Ortalama reyting ${ratingText(player.average)}`);
     const expectedPoints = expected.get(player.id);
     const points = element("td", "numeric builder-pool-rating", expectedPoints === null ? "—" : displayNumber(expectedPoints.toFixed(2)));
     points.title = "Sonraki maç için beklenen fantezi puanı";

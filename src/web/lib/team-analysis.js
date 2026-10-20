@@ -166,7 +166,7 @@ const TeamAnalysis = (() => {
         const start = value > 0 ? positive : negative + value;
         if (value > 0) positive += value; else negative += value;
         parts.push(`<rect x="${fixed(x(start))}" y="${y + 4}" width="${fixed(Math.abs(x(value) - x(0)))}" height="${row - 8}" fill="var(--ta-${key.toLowerCase()})">`
-          + `<title>${escape(`${fullName(names, entry.teamId)} · ${name}: ${text(value, 1)} puan`)}</title></rect>`);
+          + `<title>${escape(`${fullName(names, entry.teamId)} · ${name}: ${text(value, 1)} FP`)}</title></rect>`);
       }
       parts.push(`<text x="${fixed(x(positive) + 5)}" y="${y + 15}" font-size="10" fill="var(--muted)">${text(entry.total, 1)}</text>`);
     });
@@ -371,7 +371,8 @@ const TeamAnalysis = (() => {
   // the two are equal; every other pair gets dashed lines at the league means.
   // Quadrant captions name what each corner means. Labels take the first free
   // spot around their point - right, left, above, below - so teams that play
-  // alike do not print over each other.
+  // alike do not print over each other. `colorOf` gives each club's point its
+  // own colour (teamColor on the page); without it every point is the plot line.
   // Gridlines at round values - 1, 2, 2.5 or 5 times a power of ten - labelled
   // with exactly the precision the step needs, so a line marked 1 is at 1.
   function niceTicks(low, high, target = 6) {
@@ -381,7 +382,7 @@ const TeamAnalysis = (() => {
     for (let value = Math.ceil(low / step - 1e-9) * step; value <= high + step * 1e-9; value += step) ticks.push(Number(value.toFixed(10)));
     return { ticks, digits: Math.max(0, -Math.floor(Math.log10(step) + 1e-9)) + (multiple === 2.5 ? 1 : 0) };
   }
-  function scatter(rows, spec, names, selected) {
+  function scatter(rows, spec, names, selected, colorOf = null) {
     const points = rows.filter((row) => Number.isFinite(row.x) && Number.isFinite(row.y));
     if (!points.length) return "";
     const width = 640, height = 400, left = 50, right = 16, top = 30, bottom = 42;
@@ -439,7 +440,8 @@ const TeamAnalysis = (() => {
         || (fitting.length ? fitting : spots).reduce((best, candidate) => (overlap(boxOf(candidate)) < overlap(boxOf(best)) ? candidate : best));
       placed.push(boxOf(spot));
       const tx = spot[2] === "middle" ? cx : cx + spot[0];
-      parts.push(`<g data-team="${escape(row.teamId)}" class="ta-link"><circle cx="${fixed(cx)}" cy="${fixed(cy)}" r="${chosen ? 7 : 5}" fill="var(--statistics-plot-line)" fill-opacity="${chosen ? 1 : 0.75}" stroke="var(--surface-raised)" stroke-width="1.5"/>`
+      const fill = colorOf ? colorOf(row.teamId) : "var(--statistics-plot-line)";
+      parts.push(`<g data-team="${escape(row.teamId)}" class="ta-link"><circle cx="${fixed(cx)}" cy="${fixed(cy)}" r="${chosen ? 7 : 5}" fill="${escape(fill)}" fill-opacity="${chosen ? 1 : 0.85}" stroke="${chosen ? "var(--ink)" : "var(--surface-raised)"}" stroke-width="${chosen ? 2 : 1.5}"/>`
         + `<text x="${fixed(tx)}" y="${fixed(cy + spot[1])}" text-anchor="${spot[2]}" font-size="10" font-weight="${chosen ? 700 : 400}" fill="var(--ink)">${escape(code)}</text>`
         + `<title>${escape(`${fullName(names, row.teamId)} · ${spec.xLabel}: ${text(row.x, spec.xDigits ?? 2)} · ${spec.yLabel}: ${text(row.y, spec.yDigits ?? 2)} (${row.matches} maç)`)}</title></g>`);
     }
@@ -497,7 +499,7 @@ const TeamAnalysis = (() => {
       note: "Pres, rakibin yaptığı pasın müdahale, top kesme ve fauller toplamına oranı (PPDA’ya yakın); düşük değer yoğun pres demek, bu yüzden dikey eksen ters çevrildi: yukarısı daha yoğun pres. Saha bölgesi verisi olmadığı için tüm sahayı kapsar." },
     { id: "fantasy", title: "Fantezi puanı ve xG", xLabel: "Maç başına üretilen xG", yLabel: "Maç başına takım fantezi puanı",
       x: ["xg", perMatch("xg")], y: ["fantasy", perMatch("fantasy")], xDigits: 2, yDigits: 0,
-      quadrants: ["Az pozisyon, çok puan", "Çok pozisyon, çok puan", "Az pozisyon, az puan", "Çok pozisyon, az puan"],
+      quadrants: ["Az pozisyon, çok FP", "Çok pozisyon, çok FP", "Az pozisyon, az FP", "Çok pozisyon, az FP"],
       note: "Takımın fantezi puanı pozisyonlarıyla destekleniyor mu: sol üst puanı pozisyonlarından fazla (gerileyebilir), sağ alt tersine (yükselebilir)." },
   ];
   function comparisonRows(spec, played, order) {

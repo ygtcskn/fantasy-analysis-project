@@ -101,22 +101,21 @@ function renderHomeFixtures(teams) {
   $("home-round-next").disabled = index < 0 || index === rounds.length - 1;
   const fixtures = rounds[index]?.fixtures || [];
   $("home-fixture-count").textContent = `${fixtures.length} maç`;
-  $("home-fixtures-note").textContent = !state.tables["fixtures.csv"] ? "Fikstürü görmek için fixtures.csv ve teams.csv dosyalarını açın." : !state.tables["fixture_scores.csv"] ? "Sonuçlar için fixture_scores.csv ekleyin. Başlama saatleri dışa aktarıldığı gibidir." : "Canlı yayın değil, kaydedilen sonuçlar. Başlama saatleri dışa aktarıldığı gibidir.";
+  $("home-fixtures-note").textContent = !state.tables["fixtures.csv"] ? "Fikstürü görmek için fixtures.csv ve teams.csv dosyalarını açın." : !state.tables["fixture_scores.csv"] ? "Sonuçlar için fixture_scores.csv ekleyin. Saatler Türkiye saatiyledir." : "Canlı yayın değil, kaydedilen sonuçlar. Saatler Türkiye saatiyledir.";
   const scores = currentFixtureScores();
   const list = document.createDocumentFragment();
   let previousDate = null;
   for (const fixture of fixtures) {
-    const date = fixture.kickoff?.slice(0, 10) || "";
+    const date = kickoffDay(fixture);
     if (date !== previousDate) { list.append(element("h3", "fixture-date", longDate(date))); previousDate = date; }
     const match = element("article", "home-match");
     const homeName = teamName(fixture.home_team_id, teams), awayName = teamName(fixture.away_team_id, teams);
     match.setAttribute("aria-label", `${homeName} - ${awayName}`);
     const heading = element("div", "home-match-meta");
-    heading.append(element("span", "", fixture.kickoff?.slice(11, 16) || "Saat belli değil"), element("span", "fixture-status", fixtureStateLabel(fixture)));
+    heading.append(element("span", "", kickoffClock(fixture)), element("span", "fixture-status", fixtureStateLabel(fixture)));
     const homeScore = scores.get(`${fixture.fixture_id}:${fixture.home_team_id}`);
     const awayScore = scores.get(`${fixture.fixture_id}:${fixture.away_team_id}`);
-    const notStarted = ["NS", "TBA", "POSTP", "CANC", "CANCELLED"].includes(String(fixture.state || "").toUpperCase());
-    const hasScore = !notStarted && homeScore !== undefined && homeScore !== null && awayScore !== undefined && awayScore !== null;
+    const hasScore = !fixtureUnplayed(fixture) && homeScore !== undefined && homeScore !== null && awayScore !== undefined && awayScore !== null;
     match.append(heading);
     for (const [teamId, name, score] of [[fixture.home_team_id, homeName, homeScore], [fixture.away_team_id, awayName, awayScore]]) {
       const side = element("div", "home-match-side");

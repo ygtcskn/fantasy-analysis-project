@@ -8,9 +8,9 @@
 // assists. Depends on the page helpers ($, element, number, displayNumber,
 // state, fantasyState, teamName, homeTeams, teamStatisticsState), the shared
 // player aggregation in tier-list.js (buildTierPlayers, leaguePlayers,
-// validMatchRating, ratingText, playerPrimaryRole, playerRoleLabel,
-// createTeamLogo, openTierPlayer), statisticsShortName from statistics.js and
-// RadarScoring's coverage rules.
+// ratingText, playerPrimaryRole, createTeamLogo, openTierPlayer), the site's
+// match rules (core/match-rules.js), roleLabel (core/locale.js) and
+// statisticsShortName from statistics.js.
 
 const teamPlayersState = { role: "" };
 
@@ -21,19 +21,13 @@ const TEAM_PLAYER_SORTS = {
   assists: (player) => player.assists.value,
 };
 
-// A bench row - a lineup published before kickoff, or an unused substitute -
-// is not an appearance; RadarScoring.unplayed is the site's rule for that.
-function teamPlayerPlayed(row) {
-  return typeof RadarScoring !== "undefined" ? !RadarScoring.unplayed(row) : (number(row.minutes_played) ?? 0) > 0;
-}
-
 // Sportmonks writes no zeros. A blank goal on a match its statistics covered is
 // none; on a match they did not cover it is unknown, and the total is marked
-// with an asterisk as the tier list marks one.
+// with an asterisk as the tier list marks one (countedValue, the site's rule).
 function teamPlayerCount(rows, key) {
   let value = 0, known = 0;
   for (const row of rows) {
-    const own = number(row[key]) ?? (typeof RadarScoring !== "undefined" && RadarScoring.covered(row) ? 0 : null);
+    const own = countedValue(row, key);
     if (own === null) continue;
     value += own;
     known += 1;
@@ -48,7 +42,8 @@ function teamPlayers(teamId) {
   const fantasyReady = Boolean(fantasyState.season) && fantasyState.season === state.seasonSlug;
   const current = new Set(leaguePlayers().players.map((player) => player.id));
   return buildTierPlayers().players.flatMap((player) => {
-    const rows = player.matches.filter((row) => row.team_id === teamId && teamPlayerPlayed(row));
+    // player.matches holds appearances only: finished, and on the pitch.
+    const rows = player.matches.filter((row) => row.team_id === teamId);
     if (!rows.length) return [];
     const ratings = rows.map(validMatchRating).filter((value) => value !== null);
     // The published ledger has one row per appearance, with the club he played for.
@@ -97,11 +92,11 @@ function renderTeamPlayers(teamId) {
     club.append(open);
     identity.append(club);
     row.append(identity);
-    row.append(element("td", "statistics-role", playerRoleLabel(player.role)));
+    row.append(element("td", "statistics-role", roleLabel(player.role)));
     row.append(element("td", "numeric", ratingText(player.rating)));
     const fantasy = element("td", "numeric", player.fantasy === null ? "—"
       : player.fantasy.toLocaleString("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 1 }));
-    if (player.fantasy !== null) fantasy.title = `${player.fantasyMatches} maçta ${displayNumber(player.fantasy * player.fantasyMatches)} puan`;
+    if (player.fantasy !== null) fantasy.title = `${player.fantasyMatches} maçta ${displayNumber(player.fantasy * player.fantasyMatches)} fantezi puanı`;
     row.append(fantasy, teamPlayerCountCell(player.goals), teamPlayerCountCell(player.assists));
     body.append(row);
   }

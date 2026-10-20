@@ -127,7 +127,7 @@ function renderTeamAnalysis(list, names) {
   teamAnalysisBlock("ta-fantasy", roles.length ? TeamAnalysis.fantasyChart(roles, names, selected) : "",
     !fantasyReady ? fantasyState.note
       : !roles.length ? "Bu sezon için fantezi puanı bulunamadı."
-        : "Yayınlanan puan tablosundaki bu sezonun puanları, oyunun mevkilerine göre toplandı. Hangi takımın defansı veya hücumu puan getiriyor, doğrudan görünür.");
+        : "Yayımlanan fantezi puanı kayıtlarındaki bu sezonun puanları, oyunun mevkilerine göre toplandı. Hangi takımın defansı veya hücumu fantezi puanı getiriyor, doğrudan görünür.");
 
   const luck = TeamAnalysis.luck(played, order);
   const luckKnown = luck.filter((entry) => entry.matches);
@@ -146,11 +146,11 @@ function renderTeamAnalysis(list, names) {
       : spec.id === "fantasy" && !fantasyReady ? fantasyState.note
         : "Bu karşılaştırma için veri yok.";
     return `<figure id="team-analysis-panel-compare-${spec.id}" class="ta-compare-card" role="tabpanel" aria-labelledby="team-analysis-tab-compare-${spec.id}" data-analysis-panel="compare-${spec.id}" tabindex="0"><figcaption>${escapeTeamAnalysis(spec.title)}</figcaption>`
-      + `${rows.length ? `<div class="ta-chart">${TeamAnalysis.scatter(rows, spec, names, selected)}</div>` : ""}`
+      + `${rows.length ? `<div class="ta-chart">${TeamAnalysis.scatter(rows, spec, names, selected, teamColor)}</div>` : ""}`
       + `<p class="builder-rating-note">${escapeTeamAnalysis(`${spec.note} ${basis}`)}</p></figure>`;
   });
   $("ta-compare-chart").innerHTML = cards.join("");
-  $("ta-compare-note").textContent = statsMissing + "Her nokta bir takım, bu sezonun bitmiş maçlarından. Eşit ölçekli çiftlerde (puan–xPts, gol–xG, "
+  $("ta-compare-note").textContent = statsMissing + "Her nokta bir takım, kulübün kendi renginde, bu sezonun bitmiş maçlarından. Eşit ölçekli çiftlerde (puan–xPts, gol–xG, "
     + "yenilen–xGA) kesikli çizgi iki değerin eşit olduğu yer; diğerlerinde lig ortalamaları. Köşe yazıları o bölgenin ne anlama geldiğini söyler.";
   showTeamAnalysisTab(teamAnalysisSelectedTab);
 }

@@ -7,6 +7,7 @@
   <title>Süper Lig Lab — Futbol çalışma alanın</title>
   <link rel="stylesheet" href="styles/styles.css">
   <link rel="stylesheet" href="styles/panels.css">
+  <link rel="stylesheet" href="styles/pitch.css">
   <link rel="stylesheet" href="lib/radar.css">
   <link rel="stylesheet" href="lib/team-analysis.css">
   <link rel="stylesheet" href="features/statistics/distribution.css">
@@ -18,6 +19,7 @@
   <link rel="stylesheet" href="features/builder/summary.css">
   <script src="data/csv.js" defer></script>
   <script src="core/locale.js" defer></script>
+  <script src="core/match-rules.js" defer></script>
   <script src="core/sidebar.js" defer></script>
   <script src="features/tier-list/tier-list.js" defer></script>
   <script src="features/home/home.js" defer></script>
@@ -47,7 +49,7 @@
   <main>
     <header class="page-header" aria-labelledby="view-title">
       <div class="topbar"><span>FUTBOL / VERİ GEZGİNİ</span></div>
-      <div class="page-heading"><div><p id="view-eyebrow" class="eyebrow">SÜPER LİG</p><h1 id="view-title">Lig Özeti</h1><p id="view-description">Puan durumu ve fikstür bir arada.</p><p id="home-season-note" class="home-season-note"></p></div></div>
+      <div class="page-heading"><div><p id="view-eyebrow" class="eyebrow">SÜPER LİG</p><h1 id="view-title">Ana Sayfa</h1><p id="view-description">Puan durumu ve fikstür bir arada.</p><p id="home-season-note" class="home-season-note"></p></div></div>
     </header>
     <p id="message" class="message" role="status" aria-live="polite"></p>
     <section id="dataset-stats" class="stats" aria-label="Yüklenen veriler"><div><span>OYUNCU KATILIMI</span><strong id="appearance-count">—</strong></div><div><span>MAÇ</span><strong id="fixture-count">—</strong></div><div><span>TAKIM</span><strong id="team-count">—</strong></div><div><span>SEZON</span><strong id="season-label" class="season-value">—</strong></div></section>
@@ -60,7 +62,7 @@
       <div id="social-matches"></div>
       <p id="social-status" role="status" aria-live="polite"></p>
     </section>
-    <section id="home-workspace" class="home-grid" aria-label="Lig özeti">
+    <section id="home-workspace" class="home-grid" aria-label="Ana Sayfa">
       <section class="home-panel standings-panel" aria-labelledby="standings-title">
         <div class="home-panel-heading"><div><p class="eyebrow">LİG</p><h2 id="standings-title">Puan Durumu</h2></div><span id="standings-count" class="badge">—</span></div>
         <label id="standings-group-control" class="standings-group-control" hidden>Grup<select id="standings-group"></select></label>
@@ -147,7 +149,7 @@
           <div class="builder-pool-heading"><h3 id="statistics-fantasy-title">En Çok Fantezi Puanı</h3></div>
           <table class="statistics-table">
             <caption class="sr-only">Fantezi puan sıralaması</caption>
-            <thead><tr><th scope="col" class="numeric">#</th><th scope="col">Oyuncu</th><th scope="col" class="numeric">Puan</th></tr></thead>
+            <thead><tr><th scope="col" class="numeric">#</th><th scope="col">Oyuncu</th><th scope="col" class="numeric" title="Fantezi puanı">FP</th></tr></thead>
             <tbody id="statistics-fantasy-body"></tbody>
           </table>
           <p id="statistics-fantasy-note" class="builder-rating-note" role="status"></p>
@@ -155,7 +157,7 @@
       </div>
       <div class="statistics-lower">
         <section class="statistics-players" aria-labelledby="statistics-list-title">
-          <div class="builder-pool-heading"><h3 id="statistics-list-title">Oyuncu Listesi</h3></div>
+          <div class="builder-pool-heading"><h3 id="statistics-list-title">Oyuncular</h3></div>
           <div class="builder-filters">
             <label class="builder-search"><span class="sr-only">Oyuncu ara</span><input id="statistics-search" type="search" placeholder="Oyuncu veya takım…" autocomplete="off"></label>
             <label><span class="sr-only">Takım</span><select id="statistics-team"><option value="">Tüm takımlar</option></select></label>
@@ -170,14 +172,14 @@
               <option value="goals">Gol ↓</option>
               <option value="assists">Asist ↓</option>
               <option value="fantasy">Fantezi puanı ↓</option>
-              <option value="rating" selected>Rating ↓</option>
+              <option value="rating" selected>Reyting ↓</option>
               <option value="minutes_played">Dakika ↓</option>
               <option value="key_passes">Kilit pas ↓</option>
             </select></label>
           </div>
           <div class="statistics-list-scroll" tabindex="0" aria-label="Kaydırılabilir oyuncu listesi"><table class="statistics-table statistics-player-list-table">
             <caption class="sr-only">Oyuncular ve sezon toplamları. Bir isme tıklayarak maç istatistiklerini açın.</caption>
-            <thead><tr><th scope="col">Oyuncu</th><th scope="col" class="statistics-role">Mevki</th><th scope="col" class="numeric">Dk</th><th scope="col" class="numeric">Rating</th><th scope="col" class="numeric">Fantezi Puanı</th></tr></thead>
+            <thead><tr><th scope="col">Oyuncu</th><th scope="col" class="statistics-role">Mevki</th><th scope="col" class="numeric" title="Dakika">Dk</th><th scope="col" class="numeric" title="Sportmonks maç reytingi ortalaması">Reyting</th><th scope="col" class="numeric" title="Fantezi puanı">FP</th></tr></thead>
             <tbody id="statistics-list-body"></tbody>
           </table></div>
         </section>
@@ -211,7 +213,7 @@
             <p id="statistics-timeline-note" class="builder-rating-note"></p>
           </section>
           <section class="statistics-ratings" aria-labelledby="statistics-ratings-title">
-            <h4 id="statistics-ratings-title">Sportmonks Puanı · Maç Maç</h4>
+            <h4 id="statistics-ratings-title">Reyting · Maç Maç</h4>
             <div id="statistics-ratings-chart" class="statistics-chart"></div>
             <p id="statistics-ratings-note" class="builder-rating-note"></p>
           </section>
@@ -252,7 +254,7 @@
       <div class="statistics-lower">
         <div class="team-statistics-side">
           <section class="statistics-players" aria-labelledby="team-statistics-list-title">
-            <div class="builder-pool-heading"><h3 id="team-statistics-list-title">Takım Listesi</h3></div>
+            <div class="builder-pool-heading"><h3 id="team-statistics-list-title">Takımlar</h3></div>
             <div class="builder-filters">
               <label class="builder-search"><span class="sr-only">Takım ara</span><input id="team-statistics-search" type="search" placeholder="Takım…" autocomplete="off"></label>
               <label class="builder-sort"><span class="sr-only">Sıralama</span><select id="team-statistics-sort">
@@ -265,12 +267,12 @@
             </div>
             <div class="statistics-list-scroll" tabindex="0" aria-label="Kaydırılabilir takım listesi"><table class="statistics-table statistics-team-list-table">
               <caption class="sr-only">Takımlar ve sezon toplamları. Bir takıma tıklayarak profilini açın.</caption>
-              <thead><tr><th scope="col">Takım</th><th scope="col" class="numeric">O</th><th scope="col" class="numeric">AG</th><th scope="col" class="numeric">YG</th><th scope="col" class="numeric">P</th><th id="team-statistics-sort-column" scope="col" class="numeric" hidden></th></tr></thead>
+              <thead><tr><th scope="col">Takım</th><th scope="col" class="numeric" title="Oynanan maç">O</th><th scope="col" class="numeric" title="Atılan gol">A</th><th scope="col" class="numeric" title="Yenilen gol">Y</th><th scope="col" class="numeric">Puan</th><th id="team-statistics-sort-column" scope="col" class="numeric" hidden></th></tr></thead>
               <tbody id="team-statistics-list-body"></tbody>
             </table></div>
           </section>
           <section id="team-statistics-players" class="statistics-players" aria-labelledby="team-statistics-players-title">
-            <div class="builder-pool-heading"><h3 id="team-statistics-players-title">Oyuncu Listesi</h3><span id="team-statistics-players-team" class="badge">—</span></div>
+            <div class="builder-pool-heading"><h3 id="team-statistics-players-title">Oyuncular</h3><span id="team-statistics-players-team" class="badge">—</span></div>
             <div class="builder-filters">
               <label class="builder-search"><span class="sr-only">Oyuncu ara</span><input id="team-statistics-players-search" type="search" placeholder="Oyuncu…" autocomplete="off"></label>
               <div class="builder-role-filters" role="group" aria-label="Mevkiye göre filtrele">
@@ -281,15 +283,15 @@
                 <button type="button" data-team-players-role="attacker" aria-label="Forvetler" title="Forvetler" aria-pressed="false"><img src="assets/roles/attacker.svg" alt=""></button>
               </div>
               <label class="builder-sort"><span class="sr-only">Sıralama</span><select id="team-statistics-players-sort">
-                <option value="rating" selected>Rating ↓</option>
-                <option value="fantasy">Maç başı fantezi ↓</option>
+                <option value="rating" selected>Reyting ↓</option>
+                <option value="fantasy">Maç başı FP ↓</option>
                 <option value="goals">Gol ↓</option>
                 <option value="assists">Asist ↓</option>
               </select></label>
             </div>
             <div class="statistics-list-scroll" tabindex="0" aria-label="Kaydırılabilir oyuncu listesi"><table class="statistics-table statistics-player-list-table">
               <caption class="sr-only">Seçili takımın bu sezon forma giyen oyuncuları, yalnızca bu takımdaki maçlarından. Bir isme tıklayarak maç istatistiklerini açın.</caption>
-              <thead><tr><th scope="col">Oyuncu</th><th scope="col" class="statistics-role">Mevki</th><th scope="col" class="numeric">Rating</th><th scope="col" class="numeric" title="Maç başı fantezi puanı">FP/Maç</th><th scope="col" class="numeric">Gol</th><th scope="col" class="numeric">Asist</th></tr></thead>
+              <thead><tr><th scope="col">Oyuncu</th><th scope="col" class="statistics-role">Mevki</th><th scope="col" class="numeric" title="Sportmonks maç reytingi ortalaması">Reyting</th><th scope="col" class="numeric" title="Maç başı fantezi puanı">FP/Maç</th><th scope="col" class="numeric">Gol</th><th scope="col" class="numeric">Asist</th></tr></thead>
               <tbody id="team-statistics-players-body"></tbody>
             </table></div>
             <p id="team-statistics-players-note" class="builder-rating-note"></p>
@@ -366,7 +368,7 @@
             </div>
             <label class="builder-pitch-formation"><span class="sr-only">Diziliş</span><select id="builder-formation"><option value="4-4-2">4-4-2</option><option value="4-3-3" selected>4-3-3</option><option value="4-2-3-1">4-2-3-1</option><option value="3-4-3">3-4-3</option><option value="3-5-2">3-5-2</option><option value="5-3-2">5-3-2</option></select></label>
           </div>
-          <div id="builder-pitch" class="builder-pitch" aria-label="Düzenlenebilir fantezi kadro sahası"><div class="builder-pitch-markings" aria-hidden="true"><span class="builder-centre-circle"></span><span class="builder-box builder-box-top"></span><span class="builder-box builder-box-bottom"></span></div><div id="builder-slots" class="builder-slots"></div></div>
+          <div id="builder-pitch" class="builder-pitch" aria-label="Düzenlenebilir fantezi kadro sahası"><div class="pitch-markings" aria-hidden="true"><span class="pitch-circle"></span><span class="pitch-box pitch-box-top"></span><span class="pitch-box pitch-box-bottom"></span></div><div id="builder-slots" class="builder-slots"></div></div>
           <section class="builder-bench" aria-labelledby="builder-bench-title">
             <h3 id="builder-bench-title">Yedekler</h3>
             <div id="builder-bench-slots"></div>
@@ -384,12 +386,12 @@
               <button type="button" data-builder-role="MID" aria-label="Orta saha oyuncuları" title="Orta saha oyuncuları" aria-pressed="false"><img src="assets/roles/midfielder.svg" alt=""></button>
               <button type="button" data-builder-role="FWD" aria-label="Forvetler" title="Forvetler" aria-pressed="false"><img src="assets/roles/attacker.svg" alt=""></button>
             </div>
-            <label class="builder-sort"><span class="sr-only">Sıralama</span><select id="builder-sort"><option value="rating">Rating ↓</option><option value="expected">Beklenen FP ↓</option></select></label>
+            <label class="builder-sort"><span class="sr-only">Sıralama</span><select id="builder-sort"><option value="rating">Reyting ↓</option><option value="expected">Beklenen FP ↓</option></select></label>
           </div>
-          <div class="builder-table-wrap" tabindex="0" aria-label="Kaydırılabilir oyuncu listesi"><table class="builder-table"><caption class="sr-only">Seçilebilir oyuncular. İstatistikler için oyuncu adına, kadroya eklemek için artı düğmesine basın.</caption><thead><tr><th scope="col">Takım</th><th scope="col">Oyuncu</th><th scope="col" title="TFF Fantezi Lig mevkisi">Rol</th><th scope="col" class="numeric" title="Sportmonks maç rating ortalaması">Rating</th><th scope="col" class="numeric" title="Sonraki maç için beklenen fantezi puanı">Beklenen<br>FP</th></tr></thead><tbody id="builder-player-list"></tbody></table></div>
+          <div class="builder-table-wrap" tabindex="0" aria-label="Kaydırılabilir oyuncu listesi"><table class="builder-table"><caption class="sr-only">Seçilebilir oyuncular. İstatistikler için oyuncu adına, kadroya eklemek için artı düğmesine basın.</caption><thead><tr><th scope="col">Takım</th><th scope="col">Oyuncu</th><th scope="col" title="TFF Fantezi Lig mevkisi">Rol</th><th scope="col" class="numeric" title="Sportmonks maç reytingi ortalaması">Reyting</th><th scope="col" class="numeric" title="Sonraki maç için beklenen fantezi puanı">Beklenen<br>FP</th></tr></thead><tbody id="builder-player-list"></tbody></table></div>
           <p id="builder-fantasy-note" class="builder-rating-note" role="status"></p>
           <section id="builder-recommendations" class="builder-recommendations" hidden aria-labelledby="builder-recommendations-title">
-            <div class="builder-pool-heading"><h3 id="builder-recommendations-title">Önerilen seçimler</h3><label class="builder-risk"><span class="sr-only">Risk</span><select id="builder-risk" title="Savunmayı farklı takımlara yaymak haftalık puanı korur; aynı takımdan yığmak, birini yakalamak için gereken dalgalanmayı getirir."><option value="balanced">Dengeli</option><option value="low">Düşük risk</option><option value="high">Yüksek risk</option></select></label><button id="builder-recommendations-retry" type="button" class="secondary" aria-label="Önerileri yenile">↻</button></div>
+            <div class="builder-pool-heading"><h3 id="builder-recommendations-title">Önerilen seçimler</h3><label class="builder-risk"><span class="sr-only">Risk</span><select id="builder-risk" title="Savunmayı farklı takımlara yaymak haftalık fantezi puanını korur; aynı takımdan yığmak, birini yakalamak için gereken dalgalanmayı getirir."><option value="balanced">Dengeli</option><option value="low">Düşük risk</option><option value="high">Yüksek risk</option></select></label><button id="builder-recommendations-retry" type="button" class="secondary" aria-label="Önerileri yenile">↻</button></div>
             <p id="builder-recommendations-note" class="builder-rating-note" role="status" aria-live="polite"></p>
             <div class="builder-recommendations-scroll"><table><thead><tr><th scope="col">Oyuncu</th><th scope="col" class="numeric">Fiyat</th><th scope="col" class="numeric" title="TFF seçilme oranı: oyuncuyu kadrosuna alan yöneticilerin yüzdesi">SO%</th><th scope="col" class="numeric" title="Sonraki maç için beklenen fantezi puanı">Beklenen FP</th><th scope="col"><span class="sr-only">Oyuncu ekle</span></th></tr></thead><tbody id="builder-recommendations-body"></tbody></table></div>
           </section>
@@ -405,7 +407,7 @@
       </section>
     </section>
     <section id="tier-workspace" hidden aria-label="Oyuncu Listesi">
-      <details class="tier-method"><summary>Kademeler ve sıralama nasıl hesaplanıyor?</summary><p>S ≥ 8,00 · A ≥ 7,50 · B ≥ 7,00 · C ≥ 6,50 · D &lt; 6,50. Bunlar sitemizin gösterim aralıklarıdır; resmi Sportmonks kademeleri veya fantezi tahminleri değildir. Kullanılabilir her Sportmonks maç puanı eşit ağırlıklıdır. Pozisyon düzeltmesi uygulanmadan tüm mevkiler birlikte karşılaştırılır.</p><p>Bir oyuncunun sıralamaya girmesi için en az üç geçerli puanlı maçı gerekir. Bu sınırın altındaki oyuncular <strong>Ön Değerlendirme</strong>, geçerli puanı olmayan oyuncular <strong>Puansız</strong> olarak gösterilir. 1–10 aralığı dışındaki puanlar ve açıkça sıfır dakika gösteren kayıtlar ortalamaya alınmaz. Kademe sınırlarında yuvarlanmamış ortalama kullanılır.</p><p>Sıra, uygun oyuncuları sezon genelindeki yuvarlanmamış ortalama puana göre dizer. Aynı ortalamaya sahip oyuncular aynı sırayı paylaşır; sonraki sıra, beraberlikte kullanılan basamaklar kadar ilerler. Filtreler sezon sırasını değiştirmez. Ön değerlendirme ve puansız oyuncular sıralanan oyunculardan sonra gelir ve sıra alanlarında çizgi gösterilir. Mevki, kaynaktan gelen pozisyon bilgisidir.</p><p>Toplamlar gelecekteki fikstürü değil, mevcut maç kayıtlarını kullanır. Eksik istatistikler eksik kalır; yıldız işareti toplamın veri kapsamının eksik olduğunu gösterir. Takım filtresi, oyuncunun kaydedilmiş tüm takım üyelikleriyle eşleşir ve sezon toplamlarını korur.</p></details>
+      <details class="tier-method"><summary>Kademeler ve sıralama nasıl hesaplanıyor?</summary><p>S ≥ 8,00 · A ≥ 7,50 · B ≥ 7,00 · C ≥ 6,50 · D &lt; 6,50. Bunlar sitemizin gösterim aralıklarıdır; resmi Sportmonks kademeleri veya fantezi tahminleri değildir. Kullanılabilir her Sportmonks maç reytingi eşit ağırlıklıdır. Pozisyon düzeltmesi uygulanmadan tüm mevkiler birlikte karşılaştırılır.</p><p>Bir oyuncunun sıralamaya girmesi için en az üç reytingli maçı gerekir. Bu sınırın altındaki oyuncular <strong>Ön Değerlendirme</strong>, geçerli reytingi olmayan oyuncular <strong>Reytingsiz</strong> olarak gösterilir. 1–10 aralığı dışındaki reytingler ve açıkça sıfır dakika gösteren kayıtlar ortalamaya alınmaz. Kademe sınırlarında yuvarlanmamış ortalama kullanılır.</p><p>Sıra, uygun oyuncuları sezon genelindeki yuvarlanmamış ortalama reytinge göre dizer. Aynı ortalamaya sahip oyuncular aynı sırayı paylaşır; sonraki sıra, beraberlikte kullanılan basamaklar kadar ilerler. Filtreler sezon sırasını değiştirmez. Ön değerlendirme ve reytingsiz oyuncular sıralanan oyunculardan sonra gelir ve sıra alanlarında çizgi gösterilir. Mevki, oyuncunun bu sezon en çok dakika aldığı mevkidir; hiç oynamadıysa kadrodaki mevkisidir.</p><p>Maç ve toplamlar yalnızca oyuncunun sahaya çıktığı bitmiş maçlardan gelir; yedek kulübesinde kaldığı maçlar sayılmaz. Sportmonks sıfırı boş bırakır: istatistikleri kaydedilmiş bir maçta boş değer sıfırdır, kaydedilmemiş bir maçta bilinmez ve toplamın yanına yıldız konur. Takım filtresi, oyuncunun kaydedilmiş tüm takım üyelikleriyle eşleşir ve sezon toplamlarını korur.</p></details>
       <div class="tier-toolbar" aria-label="Oyuncu filtreleri">
         <div class="tier-role-filter" role="group" aria-label="Oyuncuları mevkiye göre filtrele">
           <button type="button" class="tier-role-button" data-tier-role="" aria-label="Tüm mevkiler" aria-pressed="true" title="Tüm mevkiler"><img src="assets/roles/all.svg" alt=""></button>
@@ -458,8 +460,8 @@
     <div class="detail-heading"><div><p class="eyebrow">OYUNCU MAÇ GEÇMİŞİ</p><h2 id="player-detail-name"></h2><p id="player-detail-meta"></p></div><button id="close-player" class="secondary" autofocus>Kapat ×</button></div>
     <div id="player-detail-summary" class="detail-summary"></div>
     <p id="player-detail-coverage" class="coverage-note"></p>
-    <div class="history-toolbar"><h3>Kaydedilen tüm maçlar</h3><label><input id="all-match-stats" type="checkbox"> Dışa aktarılan tüm alanları göster</label></div>
-    <p class="history-help">En yeni maç önce gösterilir. Başlama saatleri dışa aktarıldığı biçimdedir. “—” sıfır değil, verinin sağlanmadığı anlamına gelir. Tüm alanlar görünümünde iki xG kaynağı ayrı tutulur; bunları toplamayın.</p>
+    <div class="history-toolbar"><h3>Oynadığı maçlar</h3><label><input id="all-match-stats" type="checkbox"> Dışa aktarılan tüm alanları göster</label></div>
+    <p class="history-help">En yeni maç önce gösterilir. Saatler Türkiye saatiyledir. Sportmonks sıfırı boş bırakır: istatistiği kaydedilmiş bir maçta gol, asist, şut gibi sayımlar 0 gösterilir; “—” verinin sağlanmadığı anlamına gelir. Tüm alanlar görünümünde iki xG kaynağı ayrı tutulur; bunları toplamayın.</p>
     <div class="table-container history-table" tabindex="0" aria-label="Kaydırılabilir oyuncu maç istatistikleri"><table><thead id="history-head"></thead><tbody id="history-body"></tbody></table></div>
   </dialog>
 </body>

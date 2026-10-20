@@ -42,7 +42,10 @@ async function loadTeamMetrics() {
         : error.message === "missing" ? "team_metrics.csv sunulmuyor; src/web/serve.py'yi yeniden başlatın veya sezonu yeniden indirin."
           : "Takım maç istatistikleri okunamadı." });
   }
-  if (state.view === "team-statistics" && state.seasonSlug === key) renderTeamStatistics();
+  // Maç Haftası reads the same rows for its card rankings.
+  if (state.seasonSlug !== key) return;
+  if (state.view === "team-statistics") renderTeamStatistics();
+  else if (state.view === "matchweek") renderMatchweek();
 }
 
 // One entry per team in the standings group Puan Durumu has selected - the
@@ -150,7 +153,7 @@ function renderTeamStatisticsFacts(team, rows) {
     ["Gol yemeden", displayNumber(team.cleanSheets)],
     ["xG", own.length ? displayNumber(teamStatisticsSum(own, "expected_goals")) : "—"],
     ["Rakibe verilen xG", own.length ? displayNumber(teamStatisticsSum(own, "expected_goals_against")) : "—"],
-    ["Topla oynama", possession === null ? "—" : `%${displayNumber(Math.round(possession))}`],
+    ["Topla oynama", possession === null ? "—" : percentText(Math.round(possession))],
     ["Şut", own.length ? displayNumber(teamStatisticsSum(own, "shots_total")) : "—"],
   ];
   const list = document.createDocumentFragment();
@@ -190,8 +193,7 @@ function renderTeamStatisticsProfile(teams, names) {
   // Season totals from finished fixtures only: a match the last download caught
   // in play would otherwise count with half its statistics. The radars apply
   // the same rule to their own rows.
-  const finished = new Set((state.tables["fixtures.csv"] || []).filter((fixture) =>
-    ["FT", "AET", "FT_PEN", "AWARDED", "WO"].includes(String(fixture["state.developer_name"] || fixture.state).toUpperCase()))
+  const finished = new Set((state.tables["fixtures.csv"] || []).filter(fixtureFinished)
     .map((fixture) => String(fixture.fixture_id)));
   const rows = teamMetricsState.rows.filter((row) => finished.has(row.fixture_id));
   if (typeof renderTeamRadars === "function") {

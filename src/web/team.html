@@ -6,10 +6,13 @@
   <title>Takım — Süper Lig Lab</title>
   <link rel="stylesheet" href="styles/styles.css">
   <link rel="stylesheet" href="features/team-page/team-page.css">
+  <link rel="stylesheet" href="styles/pitch.css">
   <link rel="stylesheet" href="styles/theme-dark.css">
   <link rel="stylesheet" href="styles/page-header.css">
   <script src="data/csv.js" defer></script>
   <script src="core/locale.js" defer></script>
+  <script src="core/match-rules.js" defer></script>
+  <script src="core/kits.js" defer></script>
   <script src="core/sidebar.js" defer></script>
   <script src="core/team-colors.js" defer></script>
   <script src="features/team-page/team-page.js" defer></script>
@@ -17,7 +20,7 @@
 <body class="team-page">
   <main>
     <header class="page-header" aria-labelledby="team-name">
-      <div class="topbar"><a class="team-link" href="index.html">← Lig özeti</a><span class="badge">SÜPER LİG LAB</span></div>
+      <div class="topbar"><a class="team-link" href="index.html?view=home">← Ana Sayfa</a><span class="badge">SÜPER LİG LAB</span></div>
       <div class="page-heading team-page-heading">
         <img id="team-crest" width="72" height="72" alt="" hidden>
         <div><p class="eyebrow">TAKIM / SEZON</p><h1 id="team-name">Takım</h1><p id="team-season" class="team-muted"></p></div>
@@ -31,16 +34,16 @@
         <div class="team-panel-title"><div><p class="eyebrow">SAHADA</p><h2 id="lineup-title">İlk 11</h2></div><span id="team-formation" class="badge">Diziliş —</span></div>
         <p id="lineup-note" class="team-panel-note">İlk 11'i görmek için bir maç seçin.</p>
         <div class="team-pitch" aria-label="İlk 11 sahası"><div class="pitch-markings" aria-hidden="true"><span class="pitch-circle"></span><span class="pitch-box pitch-box-top"></span><span class="pitch-box pitch-box-bottom"></span></div><div id="team-lineup" class="pitch-players"></div></div>
-        <p class="team-panel-note">Oyuncu rozetleri Sportmonks maç puanını gösterir. — geçerli puan yok demektir.</p>
+        <p class="team-panel-note">Oyuncu rozetleri Sportmonks maç reytingini gösterir. — geçerli reyting yok demektir.</p>
       </section>
       <div class="team-match-panels">
         <section class="team-panel played-panel" aria-labelledby="played-title"><div class="team-panel-title"><h2 id="played-title">Oynanan maçlar</h2><span id="played-count" class="badge">0 maç</span></div><div id="team-played" class="team-match-list"></div></section>
         <section class="team-panel upcoming-panel" aria-labelledby="upcoming-title"><div class="team-panel-title"><h2 id="upcoming-title">Sıradaki 5 maç</h2><span class="team-muted">Sezon fikstürü</span></div><div id="team-upcoming" class="team-match-list"></div></section>
-        <section class="team-panel selected-panel" aria-labelledby="selected-title"><div class="team-panel-title"><h2 id="selected-title">Seçilen hafta</h2></div><div id="team-score" class="team-score"></div><div class="match-best"><h3>Maçın en iyileri</h3><p class="team-muted">İki takım · Sportmonks maç puanları</p><div id="team-match-best"></div></div></section>
+        <section class="team-panel selected-panel" aria-labelledby="selected-title"><div class="team-panel-title"><h2 id="selected-title">Seçilen hafta</h2></div><div id="team-score" class="team-score"></div><div class="match-best"><h3>Maçın en iyileri</h3><p class="team-muted">İki takım · Sportmonks maç reytingleri</p><div id="team-match-best"></div></div></section>
       </div>
-      <section class="team-panel overall-panel" aria-labelledby="overall-title"><div class="team-panel-title"><div><p class="eyebrow">SEZONUN EN İYİLERİ</p><h2 id="overall-title">Sezonun en iyi oyuncuları</h2></div><label class="overall-minimum">En az puanlı maç<select id="team-min-rated"><option value="1">1 maç</option><option value="3" selected>3 maç</option><option value="5">5 maç</option><option value="10">10 maç</option></select></label></div><p class="team-panel-note">Yalnızca bu takımın tamamlanan maçlarındaki ortalama Sportmonks maç puanı. Maçlar eşit ağırlıklıdır; eksik puanlar ve sıfır dakikalık kayıtlar dahil edilmez.</p><div id="team-overall" class="overall-players"></div></section>
+      <section class="team-panel overall-panel" aria-labelledby="overall-title"><div class="team-panel-title"><div><p class="eyebrow">SEZONUN EN İYİLERİ</p><h2 id="overall-title">Sezonun en iyi oyuncuları</h2></div><label class="overall-minimum">En az reytingli maç<select id="team-min-rated"><option value="1">1 maç</option><option value="3" selected>3 maç</option><option value="5">5 maç</option><option value="10">10 maç</option></select></label></div><p id="overall-note" class="team-panel-note">Yalnızca bu takımın tamamlanan maçlarındaki ortalama Sportmonks maç reytingi. Maçlar eşit ağırlıklıdır; reytingi olmayan ve sıfır dakikalık kayıtlar dahil edilmez.</p><div id="team-overall" class="overall-players"></div></section>
     </div>
-    <footer>Kaynak: kaydedilen Sportmonks CSV dosyalarınız <span>Kayıtlı veri · Başlama saatleri dışa aktarıldığı gibi</span></footer>
+    <footer>Kaynak: kaydedilen Sportmonks CSV dosyalarınız <span>Kayıtlı veri · Saatler Türkiye saatiyle</span></footer>
   </main>
 </body>
 </html>
