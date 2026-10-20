@@ -378,9 +378,7 @@ $("reset").addEventListener("click", () => { resetFilters(); render(); });
 ["search", "team", "position", "minutes"].forEach((id) => $(id).addEventListener(id === "search" || id === "minutes" ? "input" : "change", () => { state.page = 0; render(); }));
 $("previous").addEventListener("click", () => goToTablePage(state.page - 1));
 $("next").addEventListener("click", () => goToTablePage(state.page + 1));
-// Maç Tribünü keeps posts only in the open tab, so the public site leaves it out.
-const siteViews = ["home", "standings", "fixtures", "matchweek", "builder", "statistics", "team-statistics", "tiers", "players",
-  ...(siteMode === "published" ? [] : ["social"])];
+const siteViews = ["home", "standings", "fixtures", "matchweek", "builder", "statistics", "team-statistics", "tiers", "players", "social"];
 function navigateView(view) {
   state.view = siteViews.includes(view) ? view : "home";
   state.sort = "date"; state.direction = state.view === "fixtures" ? 1 : -1; state.page = 0;

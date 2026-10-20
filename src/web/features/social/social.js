@@ -1,8 +1,24 @@
 "use strict";
 
-// Session-only discussion preview. No invented users, provider calls or disk writes.
-const socialTopics = new Map();
-let socialRound = null;
+// Maç Tribünü: topics under each match and replies under each topic, kept in
+// Supabase (supabase/match_discussions.sql). Anyone can read. Posting needs a
+// signed-in visitor with a nickname (core/auth.js, core/profile.js); the
+// database decides who wrote a post, never this page. Only unsent drafts on
+// the open page are kept in the browser.
+
+const SOCIAL_POST_FIELDS = "id, user_id, author_nickname, author_team_id, body, created_at";
+const socialState = {
+  round: null,
+  loadedKey: "", request: 0, status: "idle", error: "",
+  // Fixture ID -> its topics, newest first, each with its replies oldest first.
+  topics: new Map(),
+  // Topic IDs whose discussion is open, and drafts by "fixture:<id>" or
+  // "topic:<id>", so a redraw never closes what the visitor is reading or typing.
+  open: new Set(),
+  drafts: new Map(),
+};
+const socialTimeFormat = new Intl.DateTimeFormat(LOCALE, { timeZone: MATCH_TIME_ZONE, dateStyle: "medium", timeStyle: "short" });
+const socialDayFormat = new Intl.DateTimeFormat(LOCALE, { timeZone: MATCH_TIME_ZONE, day: "numeric", month: "short" });
 
 function socialNode(tag, className, text) {
   const node = document.createElement(tag);
@@ -11,83 +27,209 @@ function socialNode(tag, className, text) {
   return node;
 }
 
-function socialButton(label, handler) {
-  const button = socialNode("button", "social-button", label);
+function socialButton(label, handler, className = "social-button") {
+  const button = socialNode("button", className, label);
   button.type = "button";
   button.addEventListener("click", handler);
   return button;
 }
 
-function socialField(form, label, name, multiline, maxLength) {
+function setSocialStatus(text) {
+  document.getElementById("social-status").textContent = text;
+}
+
+function socialErrorText(error) {
+  const message = error?.message || "";
+  if (message.includes("nickname_required")) return "Yazmadan önce profilinden bir takma ad seç.";
+  if (message.includes("rate_limited")) return "Çok hızlı yazıyorsun. Bir dakika sonra tekrar dene.";
+  if (message.includes("sign_in_required")) return "Yazmak için giriş yap.";
+  if (error?.code === "23514") return "Başlık 3–120 karakter, metin en fazla 3000 karakter olmalı.";
+  if (["PGRST205", "42P01"].includes(error?.code)) {
+    return siteMode === "local"
+      ? "Tribün tabloları yok: supabase/match_discussions.sql dosyasını Supabase → SQL Editor'da çalıştır."
+      : "Maç Tribünü şu anda kullanılamıyor. Daha sonra tekrar dene.";
+  }
+  return message ? `Bir sorun çıktı: ${message}` : "Bir sorun çıktı. Tekrar dene.";
+}
+
+// Reading needs nothing; writing needs a session and a nickname. Each missing
+// step opens the dialog that supplies it.
+async function socialReadyToPost() {
+  if (!siteAuth.user) {
+    openAuthDialog();
+    setAuthMessage("Konu açmak ve yanıt yazmak için giriş yap. Okumak için gerekmez.");
+    return false;
+  }
+  await siteProfile.request?.catch(() => {});
+  if (!siteProfile.data?.nickname) {
+    openProfileDialog();
+    setProfileMessage("Yazmadan önce bir takma ad seç; yazılarında o görünür.");
+    return false;
+  }
+  return true;
+}
+
+async function loadSocialRound(fixtureIds, key) {
+  const request = ++socialState.request;
+  Object.assign(socialState, { loadedKey: key, status: "loading", error: "" });
+  try {
+    const client = await loadAuth();
+    const topics = await client.from("match_topics").select(`${SOCIAL_POST_FIELDS}, fixture_id, title`)
+      .eq("season", state.seasonSlug).in("fixture_id", fixtureIds).order("created_at", { ascending: false });
+    if (topics.error) throw topics.error;
+    const ids = topics.data.map((topic) => topic.id);
+    const replies = ids.length
+      ? await client.from("match_replies").select(`${SOCIAL_POST_FIELDS}, topic_id`).in("topic_id", ids).order("created_at")
+      : { data: [], error: null };
+    if (replies.error) throw replies.error;
+    if (request !== socialState.request) return;
+    const byTopic = new Map(ids.map((id) => [id, []]));
+    for (const reply of replies.data) byTopic.get(reply.topic_id)?.push(reply);
+    socialState.topics = new Map();
+    for (const topic of topics.data) {
+      const fixture = String(topic.fixture_id);
+      if (!socialState.topics.has(fixture)) socialState.topics.set(fixture, []);
+      socialState.topics.get(fixture).push({ ...topic, replies: byTopic.get(topic.id) });
+    }
+    socialState.status = "ready";
+  } catch (error) {
+    if (request !== socialState.request) return;
+    Object.assign(socialState, { status: "error", error: socialErrorText(error) });
+  }
+  if (state.view === "social") renderSocial();
+}
+
+function focusSocialDraft(key) {
+  document.querySelector(`[data-draft="${key}"] :is(input, textarea)`)?.focus();
+}
+
+async function startSocialDraft(key, topicId) {
+  if (!await socialReadyToPost()) return;
+  if (!socialState.drafts.has(key)) socialState.drafts.set(key, {});
+  if (topicId) socialState.open.add(topicId);
+  renderSocial();
+  focusSocialDraft(key);
+}
+
+function socialField(form, label, name, multiline, maxLength, value = "") {
   const wrapper = socialNode("label", "", label);
   const input = document.createElement(multiline ? "textarea" : "input");
   input.name = name;
-  input.required = true;
   input.maxLength = maxLength;
+  input.value = value || "";
   if (multiline) input.rows = 4;
   wrapper.append(input);
   form.append(wrapper);
   return input;
 }
 
-function socialForm(isTopic, onSave, onCancel) {
+function socialForm(draftKey, isTopic, onSubmit) {
+  const draft = socialState.drafts.get(draftKey) || {};
   const form = socialNode("form", "social-form");
-  const author = socialField(form, "Görünen ad", "author", false, 40);
-  const title = isTopic ? socialField(form, "Konu başlığı", "title", false, 120) : null;
-  const body = socialField(form, isTopic ? "Ne düşünüyorsun?" : "Yanıtın", "body", true, 3000);
+  form.noValidate = true;
+  form.dataset.draft = draftKey;
+  form.append(socialNode("p", "social-form-author", `Yazan: ${siteProfile.data?.nickname || "—"}`));
+  const title = isTopic ? socialField(form, "Konu başlığı", "title", false, 120, draft.title) : null;
+  const body = socialField(form, isTopic ? "Ne düşünüyorsun?" : "Yanıtın", "body", true, 3000, draft.body);
+  const error = socialNode("p", "social-form-error");
+  error.hidden = true;
   const actions = socialNode("div", "social-actions");
-  const submit = socialNode("button", "social-button", isTopic ? "Konuyu ekle" : "Yanıtı ekle");
+  const submit = socialNode("button", "social-button social-submit", isTopic ? "Konuyu aç" : "Yanıtla");
   submit.type = "submit";
-  actions.append(submit, socialButton("Vazgeç", onCancel));
-  form.append(actions);
-  form.addEventListener("submit", (event) => {
-    event.preventDefault();
-    const fields = [author, title, body].filter(Boolean);
-    for (const field of fields) field.setCustomValidity(field.value.trim() ? "" : "Lütfen bu alanı doldurun.");
-    if (!form.reportValidity()) return;
-    onSave({ author: author.value.trim(), title: title?.value.trim(), body: body.value.trim(), created: new Date(), replies: [] });
+  actions.append(submit, socialButton("Vazgeç", () => { socialState.drafts.delete(draftKey); renderSocial(); }));
+  form.append(error, actions);
+  form.addEventListener("input", () => {
+    socialState.drafts.set(draftKey, { title: title?.value, body: body.value });
+    error.hidden = true;
   });
-  form.addEventListener("input", (event) => event.target.setCustomValidity?.(""));
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const values = { title: title?.value.trim(), body: body.value.trim() };
+    const problem = isTopic && values.title.length < 3 ? "Başlık en az 3 karakter olmalı."
+      : !values.body ? "Bir şeyler yaz." : "";
+    if (problem) {
+      error.textContent = problem;
+      error.hidden = false;
+      (isTopic && values.title.length < 3 ? title : body).focus();
+      return;
+    }
+    submit.disabled = true;
+    try {
+      await onSubmit(values);
+      socialState.drafts.delete(draftKey);
+      renderSocial();
+    } catch (failure) {
+      error.textContent = socialErrorText(failure);
+      error.hidden = false;
+      submit.disabled = false;
+      if ((failure?.message || "").includes("nickname_required")) openProfileDialog();
+    }
+  });
   return form;
 }
 
-function socialPost(post) {
+async function deleteSocialPost(table, post, removeLocally) {
+  const question = table === "match_topics" ? "Bu konu ve altındaki bütün yanıtlar silinsin mi?" : "Bu yanıt silinsin mi?";
+  if (!confirm(question)) return;
+  try {
+    const client = await loadAuth();
+    // Row-level security lets only the author delete; a row it refuses is simply not deleted.
+    const { data, error } = await client.from(table).delete().eq("id", post.id).select("id");
+    if (error) throw error;
+    if (!data.length) throw new Error("Bu yazı silinemedi.");
+    removeLocally();
+    setSocialStatus(table === "match_topics" ? "Konun silindi." : "Yanıtın silindi.");
+    renderSocial();
+  } catch (error) {
+    setSocialStatus(socialErrorText(error));
+  }
+}
+
+function socialPost(post, table, removeLocally) {
   const article = socialNode("article", "social-post");
   const meta = socialNode("p", "social-post-meta");
-  meta.append(socialNode("strong", "", post.author), document.createTextNode(" · "));
-  const time = socialNode("time", "", new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium", timeStyle: "short" }).format(post.created));
-  time.dateTime = post.created.toISOString();
-  meta.append(time);
+  if (post.author_team_id && typeof profileCrest === "function") meta.append(profileCrest(post.author_team_id, 18));
+  const time = socialNode("time", "", socialTimeFormat.format(new Date(post.created_at)));
+  time.dateTime = post.created_at;
+  meta.append(socialNode("strong", "", post.author_nickname), document.createTextNode(" · "), time);
+  if (siteAuth.user?.id === post.user_id) {
+    meta.append(socialButton("Sil", () => deleteSocialPost(table, post, removeLocally), "social-delete"));
+  }
   article.append(meta, socialNode("p", "social-post-body", post.body));
   return article;
 }
 
-function socialTopicRow(topic) {
+function socialTopicRow(topic, siblings) {
   const details = socialNode("details", "social-topic");
+  const draftKey = `topic:${topic.id}`;
+  details.open = socialState.open.has(topic.id) || socialState.drafts.has(draftKey);
+  details.addEventListener("toggle", () => {
+    if (details.open) socialState.open.add(topic.id); else socialState.open.delete(topic.id);
+  });
   const summary = socialNode("summary", "social-topic-row");
   const identity = socialNode("span", "social-topic-identity");
-  identity.append(socialNode("strong", "", topic.title), socialNode("small", "", `${topic.author} · ${new Intl.DateTimeFormat("tr-TR", { day: "numeric", month: "short" }).format(topic.created)}`));
-  const count = socialNode("span", "social-reply-count", `${topic.replies.length} yanıt`);
-  summary.append(socialNode("span", "social-topic-icon", "↳"), identity, count);
+  identity.append(socialNode("strong", "", topic.title),
+    socialNode("small", "", `${topic.author_nickname} · ${socialDayFormat.format(new Date(topic.created_at))}`));
+  summary.append(socialNode("span", "social-topic-icon", "↳"), identity, socialNode("span", "social-reply-count", `${topic.replies.length} yanıt`));
   const content = socialNode("div", "social-discussion");
   const replies = socialNode("div", "social-replies");
-  replies.append(...topic.replies.map(socialPost));
+  for (const reply of topic.replies) {
+    replies.append(socialPost(reply, "match_replies", () => topic.replies.splice(topic.replies.indexOf(reply), 1)));
+  }
   const replyArea = socialNode("div", "");
-  const replyButton = socialButton("Yanıt yaz", () => {
-    replyButton.hidden = true;
-    const form = socialForm(false, (reply) => {
-      topic.replies.push(reply);
-      replies.append(socialPost(reply));
-      count.textContent = `${topic.replies.length} yanıt`;
-      close();
-      document.getElementById("social-status").textContent = "Yanıt bu oturuma eklendi.";
-    }, () => close());
-    const close = () => { form.remove(); replyButton.hidden = false; replyButton.focus(); };
-    replyArea.append(form);
-    form.querySelector("input").focus();
-  });
-  replyArea.append(replyButton);
-  content.append(socialPost(topic), replies, replyArea);
+  if (socialState.drafts.has(draftKey)) {
+    replyArea.append(socialForm(draftKey, false, async ({ body }) => {
+      const client = await loadAuth();
+      const { data, error } = await client.from("match_replies").insert({ topic_id: topic.id, body })
+        .select(`${SOCIAL_POST_FIELDS}, topic_id`).single();
+      if (error) throw error;
+      topic.replies.push(data);
+      setSocialStatus("Yanıtın eklendi.");
+    }));
+  } else {
+    replyArea.append(socialButton("Yanıt yaz", () => startSocialDraft(draftKey, topic.id)));
+  }
+  content.append(socialPost(topic, "match_topics", () => siblings.splice(siblings.indexOf(topic), 1)), replies, replyArea);
   details.append(summary, content);
   return details;
 }
@@ -103,61 +245,74 @@ function renderSocial() {
     if (!rounds.has(key)) rounds.set(key, { name: fixture["round.name"] ? `${fixture["round.name"]}. Hafta` : "Haftası belirtilmemiş maçlar", fixtures: [] });
     rounds.get(key).fixtures.push(fixture);
   }
-  if (!rounds.has(socialRound)) {
+  if (!rounds.has(socialState.round)) {
     const entries = [...rounds];
-    socialRound = (entries.find(([, round]) => round.fixtures.some((fixture) => String(fixture["round.is_current"]).toLowerCase() === "true"))
+    socialState.round = (entries.find(([, round]) => round.fixtures.some((fixture) => String(fixture["round.is_current"]).toLowerCase() === "true"))
       || entries.find(([, round]) => round.fixtures.some((fixture) => Number(fixture.starting_at_timestamp) >= Date.now() / 1000))
       || entries[entries.length - 1])?.[0] ?? null;
   }
   select.replaceChildren(...[...rounds].map(([key, round]) => new Option(round.name, key)));
   select.disabled = !rounds.size;
   if (!rounds.size) select.add(new Option("Yüklü hafta yok", ""));
-  select.value = socialRound || "";
+  select.value = socialState.round || "";
   container.replaceChildren();
   if (!fixtures.length) {
     container.append(socialNode("p", "social-empty", "Henüz fikstür yüklenmedi. Sezon verileri yüklendiğinde haftanın maçları ve her maçın konu alanı burada görünecek."));
     return;
   }
-  for (const fixture of rounds.get(socialRound)?.fixtures || []) {
-    const key = `${fixture.season_id || state.seasonSlug}:${fixture.fixture_id}`;
-    const topics = socialTopics.get(key) || [];
+  if (!authEnabled()) {
+    container.append(socialNode("p", "social-empty", "Maç Tribünü şu anda kullanılamıyor."));
+    return;
+  }
+  const roundFixtures = rounds.get(socialState.round)?.fixtures || [];
+  const loadKey = `${state.seasonSlug}|${socialState.round}`;
+  if (loadKey !== socialState.loadedKey) loadSocialRound(roundFixtures.map((fixture) => fixture.fixture_id), loadKey);
+  const loading = socialState.status === "loading";
+  if (socialState.status === "error") container.append(socialNode("p", "social-empty social-load-error", socialState.error));
+  for (const fixture of roundFixtures) {
+    if (!socialState.topics.has(String(fixture.fixture_id))) socialState.topics.set(String(fixture.fixture_id), []);
+    const topics = socialState.topics.get(String(fixture.fixture_id));
     const match = socialNode("article", "social-match");
     const header = socialNode("header", "social-match-header");
     const heading = socialNode("div", "social-match-heading");
     const home = teams.get(fixture.home_team_id) || `Takım ${fixture.home_team_id || "—"}`;
     const away = teams.get(fixture.away_team_id) || `Takım ${fixture.away_team_id || "—"}`;
     heading.append(socialNode("p", "social-match-date", kickoffText(fixture)), socialNode("h3", "", `${home} — ${away}`));
-    const topicCount = socialNode("span", "social-topic-count", `${topics.length} konu`);
-    const topicList = socialNode("div", "social-topic-list");
-    const empty = socialNode("p", "social-empty", "Tribün henüz sessiz. Bu maçın ilk konusunu sen aç.");
-    if (!topics.length) topicList.append(empty);
-    topicList.append(...topics.map(socialTopicRow));
+    const draftKey = `fixture:${fixture.fixture_id}`;
+    header.append(heading, socialNode("span", "social-topic-count", loading ? "…" : `${topics.length} konu`),
+      socialButton("+ Konu aç", () => startSocialDraft(draftKey)));
     const composer = socialNode("div", "social-composer");
-    const create = socialButton("+ Konu aç", () => {
-      create.hidden = true;
-      const form = socialForm(true, (topic) => {
-        topics.unshift(topic);
-        socialTopics.set(key, topics);
-        empty.remove();
-        const row = socialTopicRow(topic);
-        row.open = true;
-        topicList.prepend(row);
-        topicCount.textContent = `${topics.length} konu`;
-        close();
-        document.getElementById("social-status").textContent = "Konu bu oturuma eklendi.";
-      }, () => close());
-      const close = () => { form.remove(); create.hidden = false; create.focus(); };
-      composer.append(form);
-      form.querySelector("input").focus();
-    });
-    header.append(heading, topicCount, create);
+    if (socialState.drafts.has(draftKey)) {
+      composer.append(socialForm(draftKey, true, async ({ title, body }) => {
+        const client = await loadAuth();
+        const { data, error } = await client.from("match_topics")
+          .insert({ fixture_id: Number(fixture.fixture_id), season: state.seasonSlug, title, body })
+          .select(`${SOCIAL_POST_FIELDS}, fixture_id, title`).single();
+        if (error) throw error;
+        topics.unshift({ ...data, replies: [] });
+        socialState.open.add(data.id);
+        setSocialStatus("Konun açıldı.");
+      }));
+    }
+    const topicList = socialNode("div", "social-topic-list");
+    if (loading) topicList.append(socialNode("p", "social-empty", "Konular yükleniyor…"));
+    else if (socialState.status === "error") topicList.append(socialNode("p", "social-empty", "Konular yüklenemedi."));
+    else if (!topics.length) topicList.append(socialNode("p", "social-empty", "Tribün henüz sessiz. Bu maçın ilk konusunu sen aç."));
+    else topicList.append(...topics.map((topic) => socialTopicRow(topic, topics)));
     match.append(header, composer, topicList);
     container.append(match);
   }
 }
 
 document.getElementById("social-round").addEventListener("change", (event) => {
-  socialRound = event.target.value;
+  socialState.round = event.target.value;
   renderSocial();
-  document.getElementById("social-status").textContent = "Seçilen haftanın maçları gösteriliyor.";
+  setSocialStatus("Seçilen haftanın maçları gösteriliyor.");
 });
+document.getElementById("social-refresh").addEventListener("click", () => {
+  socialState.loadedKey = "";
+  renderSocial();
+  setSocialStatus("Konular yenilendi.");
+});
+// Signing in or out changes who may post and whose posts can be deleted.
+document.addEventListener("site-auth-change", () => { if (typeof state !== "undefined" && state.view === "social") renderSocial(); });

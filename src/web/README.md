@@ -7,11 +7,18 @@ saved fixtures by matchweek. Blue match headers contain a **Konu aç** control;
 rose topic rows expand to show the discussion and a reply form. The page supports
 dark mode and narrow screens. It uses the existing loaded fixtures and teams.
 
-Discussions are a session-only UI preview: topics and replies stay in memory in
-this tab and disappear on reload. They are not sent to other users or saved to
-CSV, SQLite or browser storage. There are no seeded posts or simulated users.
-Shared, persistent discussions require a future backend and identity system.
-The implementation lives in `features/social/`.
+Topics and replies live in Supabase, in `match_topics` and `match_replies`
+(`supabase/match_discussions.sql`, run after `profiles.sql`), keyed by
+Sportmonks fixture ID and season. Anyone can read them. Posting needs a
+signed-in visitor with a nickname: "+ Konu aç" or "Yanıt yaz" opens the
+sign-in dialog, then the profile, whichever is missing. The database fills in
+the author from the session and the profile, so a post cannot be signed as
+someone else; a later nickname or club change shows on earlier posts too.
+Authors can delete their own posts ("Sil"; a topic takes its replies with it),
+nobody can edit, and the database allows five posts a minute per person.
+Moderation is deleting rows in Supabase → Table Editor. New posts by others
+appear on refresh (↻) or when the week changes; unsent drafts survive redraws
+on the open page only. The implementation lives in `features/social/`.
 
 Every view, including individual team pages, uses the shared light-purple banner in
 `styles/page-header.css`. It contains the page title, season/context and description,
@@ -517,9 +524,9 @@ files that do not exist yet.
 `siteMode` in `core/site.js` is `"local"` under `serve.py`, `"published"` on
 the public site and `"none"` when a page is opened from disk. Live scores and
 Kadro Kur recommendations need `serve.py`, so they appear only in `"local"`
-mode. On the public site the serve.py setup instructions on the empty page,
-Maç Tribünü (its posts last only as long as the tab) and the team page's
-"open CSV files" and "refresh saved data" buttons are hidden.
+mode. On the public site the serve.py setup instructions on the empty page
+and the team page's "open CSV files" and "refresh saved data" buttons are
+hidden. Maç Tribünü and sign-in work the same on both, through Supabase.
 
 The pages fetch data with `cache: "no-cache"`: the browser asks every time,
 but a file that has not changed since the last visit comes back as a short

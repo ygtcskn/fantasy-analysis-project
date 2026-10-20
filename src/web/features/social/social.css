@@ -51,3 +51,14 @@
   .social-topic-row { padding: 12px 10px; gap: 9px; }
   .social-topic-icon { display: none; }
 }
+
+/* Posting through Supabase: the refresh button, the author line on forms,
+   errors in the theme's red and the author's own "Sil". */
+.social-toolbar-actions { display: flex; align-items: end; gap: 8px; }
+.social-post-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.social-post-meta .profile-crest { margin-right: 2px; }
+.social-delete { margin-left: auto; padding: 2px 4px; border: 0; background: transparent; color: var(--muted); font-size: 11px; text-decoration: underline; cursor: pointer; }
+.social-delete:hover { color: var(--result-loss); }
+.social-form-author { margin: 0; font-size: 12px; color: var(--muted); }
+.social-form-error, .social-load-error { margin: 0; font-size: 12px; color: var(--result-loss); }
+.social-submit { background: var(--accent); border-color: var(--accent); color: var(--paper); }

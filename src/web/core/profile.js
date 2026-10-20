@@ -186,7 +186,7 @@ function openProfileDialog(welcome = false) {
   dialog.querySelector("#profile-title").textContent = welcome ? "Hoş geldin" : "Profil";
   dialog.querySelector("#profile-help").textContent = welcome
     ? "Bir takma ad ve tuttuğun takımı seç. İstediğin zaman sol menüdeki Profil'den değiştirebilirsin."
-    : "Takma adın ve tuttuğun takım. Şimdilik bunları yalnızca sen görüyorsun.";
+    : "Maç Tribünü'ne yazdıklarında takma adın ve tuttuğun takımın arması görünür; e-postan görünmez.";
   dialog.querySelector("#profile-nickname").value = profile?.nickname || "";
   dialog.querySelector("#profile-email").textContent = `Giriş e-postası: ${siteAuth.user.email || "—"}`;
   const select = dialog.querySelector("#profile-team");
