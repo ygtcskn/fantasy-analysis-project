@@ -99,7 +99,7 @@ async function statisticsHistoryCSV(path) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 30000);
   try {
-    const response = await fetch(`/local-data/history/${path}`, { cache: "no-store", signal: controller.signal });
+    const response = await fetch(`/local-data/history/${path}`, { cache: "no-cache", signal: controller.signal });
     if (!response.ok) throw new Error(response.status === 404 ? "missing" : `HTTP ${response.status}`);
     if (response.headers.get("X-Superlig-Local") !== "1") throw new Error("local");
     return parseCSV(await response.text()).records;

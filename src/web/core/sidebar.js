@@ -13,10 +13,10 @@ function setupSidebar() {
         <p class="rail-label">FANTEZİ</p>
         <nav data-nav-group="fantasy" aria-label="Fantezi araçları"></nav>
       </div>
-      <div class="rail-section">
+      ${siteMode === "published" ? "" : `<div class="rail-section">
         <p class="rail-label">SOSYAL</p>
         <nav data-nav-group="social" aria-label="Sosyal sayfalar"></nav>
-      </div>
+      </div>`}
     </aside>`);
   const menus = {
     league: document.querySelector('[data-nav-group="league"]'),
@@ -41,12 +41,15 @@ function setupSidebar() {
     }
     menus[group].append(link);
   }
-  const socialLink = document.createElement("a");
-  socialLink.className = "nav-button";
-  socialLink.dataset.view = "social";
-  socialLink.href = "index.html?view=social";
-  socialLink.innerHTML = '<span aria-hidden="true">☷</span> Maç Tribünü';
-  menus.social.append(socialLink);
+  // Maç Tribünü keeps posts only in the open tab, so the public site leaves it out.
+  if (menus.social) {
+    const socialLink = document.createElement("a");
+    socialLink.className = "nav-button";
+    socialLink.dataset.view = "social";
+    socialLink.href = "index.html?view=social";
+    socialLink.innerHTML = '<span aria-hidden="true">☷</span> Maç Tribünü';
+    menus.social.append(socialLink);
+  }
   const rail = document.getElementById("sidebar"), toggle = document.getElementById("sidebar-toggle");
   // The sidebar is open by default and the ☰ button is the only thing that
   // hides or shows it. On phone-width screens it would cover the page, so there

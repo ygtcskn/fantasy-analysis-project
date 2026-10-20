@@ -114,7 +114,8 @@ async function loadLocalData() {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 15000);
       try {
-        const response = await fetch(`/local-data/${name}`, { cache: "no-store", signal: controller.signal });
+        // no-cache still asks the server every time; an unchanged file returns as a short 304.
+        const response = await fetch(`/local-data/${name}`, { cache: "no-cache", signal: controller.signal });
         if (!response.ok) throw new Error(`${name}: HTTP ${response.status}`);
         if (response.headers.get("X-Superlig-Local") !== "1") throw new Error("Siteyi src/web/serve.py ile başlatın.");
         const blob = await response.blob();
@@ -377,8 +378,11 @@ $("reset").addEventListener("click", () => { resetFilters(); render(); });
 ["search", "team", "position", "minutes"].forEach((id) => $(id).addEventListener(id === "search" || id === "minutes" ? "input" : "change", () => { state.page = 0; render(); }));
 $("previous").addEventListener("click", () => goToTablePage(state.page - 1));
 $("next").addEventListener("click", () => goToTablePage(state.page + 1));
+// Maç Tribünü keeps posts only in the open tab, so the public site leaves it out.
+const siteViews = ["home", "standings", "fixtures", "matchweek", "builder", "statistics", "team-statistics", "tiers", "players",
+  ...(siteMode === "published" ? [] : ["social"])];
 function navigateView(view) {
-  state.view = ["home", "standings", "fixtures", "matchweek", "builder", "statistics", "team-statistics", "tiers", "players", "social"].includes(view) ? view : "home";
+  state.view = siteViews.includes(view) ? view : "home";
   state.sort = "date"; state.direction = state.view === "fixtures" ? 1 : -1; state.page = 0;
   render();
 }

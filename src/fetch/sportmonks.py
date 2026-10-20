@@ -23,13 +23,19 @@ CACHE = ROOT / "data" / "temp" / "cache_csv"
 BASE = "https://api.sportmonks.com/v3/football"
 
 
-def token():
-    value = os.environ.get("SPORTMONKS_API_TOKEN", "").strip()
+def local_setting(key):
+    """A value from the environment, else from the project .env file; "" if unset."""
+    value = os.environ.get(key, "").strip()
     if not value and (ROOT / ".env").exists():
         for line in (ROOT / ".env").read_text(encoding="utf-8-sig").splitlines():
             name, sep, item = line.partition("=")
-            if sep and name.strip() == "SPORTMONKS_API_TOKEN":
+            if sep and name.strip() == key:
                 value = item.strip().strip("\"'")
+    return value
+
+
+def token():
+    value = local_setting("SPORTMONKS_API_TOKEN")
     if not value:
         raise RuntimeError("Add SPORTMONKS_API_TOKEN to the project .env file.")
     return value

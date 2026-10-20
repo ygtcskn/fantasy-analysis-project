@@ -1,5 +1,10 @@
 """Write the public website: the pages plus one season's data files, ready to
-upload to Cloudflare Pages. Reads data/final only; no provider requests.
+upload to Cloudflare Pages. No provider requests.
+
+The website code comes from GitHub: main as last pushed, never this folder's
+unpushed or uncommitted edits, so work in progress cannot go live with a data
+update. Pushing is how code is published. The data comes from data/final.
+--local-code publishes this folder's code instead, to preview before pushing.
 
 The output mirrors what src/web/serve.py serves, at the same paths, so the pages
 need no separate code for the public site. What it cannot do without a server -
@@ -8,10 +13,14 @@ live scores and Kadro Kur recommendations - is switched off by core/site.js.
 
 import argparse
 import csv
+import io
+import os
 from pathlib import Path
 import re
 import shutil
+import subprocess
 import sys
+import tarfile
 
 
 WEB_ROOT = Path(__file__).resolve().parent
@@ -26,7 +35,11 @@ from src.web.serve import (  # noqa: E402
 
 
 SITE_ROOT = PROJECT_ROOT / "data" / "temp" / "site"
+# The Cloudflare Pages project that serves fantezianaliz.com.
+PAGES_PROJECT = "fantezianaliz"
 STAGING_ROOT = SITE_ROOT.with_name("site-partial")
+# The website code that is published: this remote branch, as last pushed.
+CODE_REMOTE, CODE_BRANCH = "origin", "main"
 # Cloudflare Pages refuses any single file above 25 MiB.
 MAX_FILE_BYTES = 25 * 1024 * 1024
 # No page uses them, and they are third-party artwork that is not ours to publish.
@@ -51,14 +64,55 @@ def remove_build(folder):
     shutil.rmtree(folder)
 
 
-def web_files():
-    """Site files by published path, under the same rules serve.py applies."""
+def published(relative):
+    """Whether a site file is published, under the same rules serve.py applies."""
+    return bool(ASSET_PATH.fullmatch(f"/{relative}")) and not relative.startswith(EXCLUDED_ASSETS)
+
+
+def git(*args, timeout=120):
+    # Fail rather than wait for a password prompt nobody will answer.
+    env = dict(os.environ, GIT_TERMINAL_PROMPT="0", GCM_INTERACTIVE="never")
+    try:
+        return subprocess.run(["git", *args], cwd=PROJECT_ROOT, env=env, capture_output=True, timeout=timeout)
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise SystemExit(f"git {args[0]} failed: {error}") from None
+
+
+def local_web_files():
+    """Site file contents by published path, from this folder."""
     files = {}
     for source in sorted(WEB_ROOT.rglob("*")):
         relative = source.relative_to(WEB_ROOT).as_posix()
-        if source.is_file() and ASSET_PATH.fullmatch(f"/{relative}") and not relative.startswith(EXCLUDED_ASSETS):
-            files[relative] = source
+        if source.is_file() and published(relative):
+            files[relative] = source.read_bytes()
     return files
+
+
+def github_web_files():
+    """Site file contents by published path as pushed to GitHub, and that commit."""
+    ref = f"{CODE_REMOTE}/{CODE_BRANCH}"
+    fetched = git("fetch", "--quiet", CODE_REMOTE, CODE_BRANCH)
+    if fetched.returncode:
+        reason = fetched.stderr.decode(errors="replace").strip().splitlines() or ["no reason given"]
+        print(f"Could not reach GitHub ({reason[-1]}); publishing {ref} as last fetched.")
+    commit = git("log", "-1", "--format=%h %s", ref)
+    if commit.returncode:
+        raise SystemExit(f"No {ref} to publish from. Push the website code first, or use --local-code.")
+    archive = git("archive", "--format=tar", ref, "src/web", timeout=300)
+    if archive.returncode:
+        raise SystemExit(f"Could not read src/web from {ref}.")
+    files = {}
+    with tarfile.open(fileobj=io.BytesIO(archive.stdout)) as tar:
+        for member in tar.getmembers():
+            relative = member.name.removeprefix("src/web/")
+            if member.isfile() and published(relative):
+                files[relative] = tar.extractfile(member).read()
+    unpushed = git("rev-list", "--count", f"{ref}..HEAD").stdout.decode().strip()
+    if unpushed not in ("", "0"):
+        print(f"Not published: {unpushed} local commit(s) not yet pushed to GitHub.")
+    if git("status", "--porcelain", "--", "src/web").stdout.strip():
+        print("Not published: uncommitted changes in src/web.")
+    return files, commit.stdout.decode(errors="replace").strip()
 
 
 def data_files(season):
@@ -86,14 +140,38 @@ def data_files(season):
     return files, absent, earlier
 
 
-def headers_file(season):
-    # The pages check these two headers before trusting a data file; serve.py
-    # sends the same pair.
+def copy_season_rows(source, target, season):
+    """Copy a CSV keeping only the served season's rows, when it has a season column.
+
+    The points files hold every season since 2021, but the pages read only the
+    served one: publishing the rest would cost every visitor ten times the download.
+    """
+    with source.open(encoding="utf-8-sig", newline="") as stream:
+        reader = csv.reader(stream)
+        header = next(reader, None)
+        if not header or "season" not in header:
+            shutil.copyfile(source, target)
+            return
+        column = header.index("season")
+        rows = [row for row in reader if len(row) > column and row[column].replace("/", "-") == season]
+    with target.open("w", encoding="utf-8", newline="") as stream:
+        writer = csv.writer(stream)
+        writer.writerow(header)
+        writer.writerows(rows)
+
+
+def headers_file(season, code):
+    # The pages check the two X-Superlig headers before trusting a data file;
+    # serve.py sends the same pair. Cloudflare compresses text/plain but not
+    # text/csv, and the pages read the files as text whatever the type says.
+    # X-Site-Code names the published code, so the live site can be checked.
     return (f"{BUILD_MARK}\n"
             "/*\n"
+            f"  X-Site-Code: {code}\n"
             "  X-Content-Type-Options: nosniff\n"
             "  Referrer-Policy: strict-origin-when-cross-origin\n"
             "/local-data/*\n"
+            "  Content-Type: text/plain; charset=utf-8\n"
             "  X-Superlig-Local: 1\n"
             f"  X-Superlig-Season: {season}\n")
 
@@ -101,36 +179,50 @@ def headers_file(season):
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--season", type=season_name, default="2026/2027")
+    parser.add_argument("--local-code", action="store_true",
+                        help="Publish this folder's website code instead of GitHub's main, to preview before pushing.")
     args = parser.parse_args()
     season = args.season
 
-    site = web_files()
+    if args.local_code:
+        code, described, version = local_web_files(), "this folder (--local-code)", "local"
+    else:
+        code, commit = github_web_files()
+        described, version = f"GitHub {CODE_REMOTE}/{CODE_BRANCH} {commit}", commit.split()[0]
+    if "core/site.js" not in code or "404.html" not in code:
+        raise SystemExit(f"The website code in {described} has no core/site.js or 404.html. Push the current code first.")
     data, absent, earlier = data_files(season)
-    site.update({f"local-data/{path}": source for path, source in data.items()})
-    too_large = sorted(path for path, source in site.items() if source.stat().st_size > MAX_FILE_BYTES)
-    if too_large:
-        raise SystemExit(f"Cloudflare Pages accepts files up to 25 MiB; too large: {', '.join(too_large)}")
-    if "core/site.js" not in site or "404.html" not in site:
-        raise SystemExit("src/web/core/site.js and src/web/404.html are required.")
+    season_scoped = set(analysis_files(season))
 
     remove_build(STAGING_ROOT)
     STAGING_ROOT.mkdir(parents=True)
     # Written first, so an interrupted run still leaves a folder a rerun may delete.
-    (STAGING_ROOT / "_headers").write_text(headers_file(season), encoding="utf-8", newline="\n")
-    for path, source in site.items():
+    (STAGING_ROOT / "_headers").write_text(headers_file(season, version), encoding="utf-8", newline="\n")
+    for path, content in code.items():
         target = STAGING_ROOT / path
         target.parent.mkdir(parents=True, exist_ok=True)
         if path == "core/site.js":
-            text = source.read_text(encoding="utf-8")
+            text = content.decode("utf-8")
             if text.count(SITE_FLAG[0]) != 1:
-                raise SystemExit(f"Expected one '{SITE_FLAG[0]}' line in {source}.")
-            target.write_text(text.replace(*SITE_FLAG), encoding="utf-8", newline="")
+                raise SystemExit(f"Expected one '{SITE_FLAG[0]}' line in core/site.js.")
+            content = text.replace(*SITE_FLAG).encode("utf-8")
+        target.write_bytes(content)
+    for path, source in data.items():
+        target = STAGING_ROOT / "local-data" / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if path in season_scoped:
+            copy_season_rows(source, target, season)
         else:
             shutil.copyfile(source, target)
     with (STAGING_ROOT / "local-data" / "history" / "seasons.csv").open("w", encoding="utf-8", newline="") as stream:
         writer = csv.writer(stream)
         writer.writerow(["season"])
         writer.writerows([name] for name in earlier)
+    # Checked on what was written, after other seasons' rows were dropped.
+    too_large = sorted(path.relative_to(STAGING_ROOT).as_posix() for path in STAGING_ROOT.rglob("*")
+                       if path.is_file() and path.stat().st_size > MAX_FILE_BYTES)
+    if too_large:
+        raise SystemExit(f"Cloudflare Pages accepts files up to 25 MiB; too large: {', '.join(too_large)}")
 
     remove_build(SITE_ROOT)
     STAGING_ROOT.rename(SITE_ROOT)
@@ -138,13 +230,14 @@ def main():
     total = sum(path.stat().st_size for path in SITE_ROOT.rglob("*") if path.is_file())
     count = sum(1 for path in SITE_ROOT.rglob("*") if path.is_file())
     print(f"Wrote {count} files ({total / 1024 / 1024:.1f} MB) to {SITE_ROOT}")
+    print(f"Website code: {described}")
     print(f"Season {season}; radar history: {', '.join(earlier) or 'none'}")
     if absent:
         print("Not published because they do not exist yet; the pages that use them will say so:")
         for path in absent:
             print(f"  {path}")
     print("Upload with:")
-    print(f"  npx wrangler pages deploy {SITE_ROOT.relative_to(PROJECT_ROOT).as_posix()} --project-name fantezianaliz --branch main")
+    print(f"  npx wrangler pages deploy {SITE_ROOT.relative_to(PROJECT_ROOT).as_posix()} --project-name {PAGES_PROJECT} --branch main")
 
 
 if __name__ == "__main__":

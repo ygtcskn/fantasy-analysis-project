@@ -287,7 +287,7 @@ async function loadClubData(files) {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 15000);
         try {
-          const response = await fetch(`/local-data/${name}`, { cache: "no-store", signal: controller.signal });
+          const response = await fetch(`/local-data/${name}`, { cache: "no-cache", signal: controller.signal });
           if (response.status === 404 && optionalFiles[name]) return null;
           if (!response.ok || response.headers.get("X-Superlig-Local") !== "1") throw new Error(`${name} yüklenemedi. Yerel sunucuyu yeniden başlatıp kaydedilen CSV dosyalarını kontrol edin.`);
           return new File([await response.blob()], name);
@@ -356,8 +356,11 @@ el("team-refresh").addEventListener("click", () => loadClubData());
 el("team-open").addEventListener("click", () => el("team-files").click());
 el("team-files").addEventListener("change", (event) => loadClubData([...event.target.files]));
 renderClub();
+// Opening CSV files and refreshing saved data are for this computer; the public
+// site loads its published files once per visit.
+el("team-open").hidden = siteMode === "published";
 if (validClub && siteMode !== "none") {
-  el("team-refresh").hidden = false;
+  el("team-refresh").hidden = siteMode === "published";
   loadClubData();
 } else {
   el("team-message").textContent = validClub ? "fixtures.csv, teams.csv, player_match_stats.csv, fixture_scores.csv ve fixture_formations.csv dosyalarını birlikte açın ya da otomatik yükleme için yerel sunucuyu kullanın." : "Ana Sayfa'dan bir takım seçin.";

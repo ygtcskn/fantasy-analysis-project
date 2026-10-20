@@ -444,14 +444,22 @@ Custom domains** and add `fantezianaliz.com` and `www.fantezianaliz.com`.
 
 `build_static.py` writes `data/temp/site/` from scratch each run:
 
+- **Code source** - the website files come from GitHub's `main` as last pushed
+  (`git fetch`, then `git archive`), never from this folder, so unpushed or
+  half-finished edits cannot go live with a data update. `--local-code` builds
+  from this folder instead, for previewing with `npx wrangler pages dev`.
 - **Pages** - every file `serve.py` would serve, except `assets/face-portraits/`
   (unused, and third-party artwork). Its copy of `core/site.js` says
   `SITE_PUBLISHED = true`.
 - **Data** - the same files `serve.py` answers under `/local-data/`, at the same
   paths, so the pages read both sites the same way. Radar history includes only
-  seasons before the published one, because the radar reads no others.
+  seasons before the published one, because the radar reads no others. The
+  analysis files with a `season` column (points, odds) keep only the published
+  season's rows: the points file holds every season since 2021, and the pages
+  discard the rest, so publishing it whole cost every visitor about 11 MB.
 - **`_headers`** - sends the `X-Superlig-Local` and `X-Superlig-Season` headers
-  the pages check before trusting a data file.
+  the pages check before trusting a data file, and labels the data
+  `text/plain`: Cloudflare compresses that type but not `text/csv`.
 - **`404.html`** - without it Pages answers a missing CSV with `index.html`, and
   optional files such as `download_status.csv` would look present but broken.
 
@@ -462,5 +470,11 @@ files that do not exist yet.
 `siteMode` in `core/site.js` is `"local"` under `serve.py`, `"published"` on
 the public site and `"none"` when a page is opened from disk. Live scores and
 Kadro Kur recommendations need `serve.py`, so they appear only in `"local"`
-mode. The serve.py setup instructions on the empty page are hidden on the
-public site.
+mode. On the public site the serve.py setup instructions on the empty page,
+Maç Tribünü (its posts last only as long as the tab) and the team page's
+"open CSV files" and "refresh saved data" buttons are hidden.
+
+The pages fetch data with `cache: "no-cache"`: the browser asks every time,
+but a file that has not changed since the last visit comes back as a short
+304 instead of the whole CSV. `serve.py` forbids storing its responses, so
+locally every load still reads the files fresh.

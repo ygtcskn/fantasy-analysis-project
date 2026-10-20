@@ -125,7 +125,9 @@ function renderMatchweek() {
   $("matchweek-matches").replaceChildren(body);
   renderMatchweekAnalysis(selectedAnalysis, teams);
   $("matchweek-note").textContent = missing
-    ? (matchweekOdds.season === state.seasonSlug && matchweekOdds.note) || "— Bu maç için eşleşen tahmin yok; analiz çıktısını yenileyin." : "";
+    ? (matchweekOdds.season === state.seasonSlug && matchweekOdds.note)
+      // Only the person running the site can refresh the analysis; visitors just learn there is no forecast.
+      || (siteMode === "published" ? "— Bu maç için tahmin yok." : "— Bu maç için eşleşen tahmin yok; analiz çıktısını yenileyin.") : "";
 }
 
 function renderMatchweekAnalysis(selection, teams) {
