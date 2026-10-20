@@ -6,7 +6,7 @@
 // secret. The secret (service_role) key must never appear here or anywhere in
 // src/web. With url empty, sign-in is off and the sidebar shows no account area.
 const SITE_AUTH = {
-  url: "https://olbgtnuvwrqoqyakqswu.supabase.co/rest/v1/",  // Supabase → Project Settings → API → Project URL, https://<ref>.supabase.co
+  url: "https://olbgtnuvwrqoqyakqswu.supabase.co",  // Supabase → Project Settings → API → Project URL, https://<ref>.supabase.co
   key: "sb_publishable_afttzqrJGrbgeyqyzMlVrw_teb4-5mU",  // Supabase → Project Settings → API Keys → publishable (anon) key
   // Ways to sign in, in the order offered. Keep only those switched on in
   // Supabase → Authentication → Sign In / Providers. Email links need custom

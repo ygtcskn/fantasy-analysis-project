@@ -63,7 +63,9 @@ function loadAuth() {
     script.addEventListener("error", () => reject(new Error("Giriş hizmeti yüklenemedi. Bağlantını kontrol edip tekrar dene.")));
     document.head.append(script);
   }).then(async (library) => {
-    const client = library.createClient(SITE_AUTH.url, SITE_AUTH.key, {
+    // The project's address alone: a URL copied with a path such as /rest/v1/
+    // would send sign-in requests to the wrong place.
+    const client = library.createClient(new URL(SITE_AUTH.url).origin, SITE_AUTH.key, {
       auth: { flowType: "pkce", storageKey: AUTH_STORAGE_KEY, persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
     });
     siteAuth.client = client;
