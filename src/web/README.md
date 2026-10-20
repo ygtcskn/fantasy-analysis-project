@@ -452,8 +452,10 @@ sidebar: "Giriş yap" when signed out, the email and "Çıkış yap" when signed
   `supabase/profiles.sql`. Each visitor can read and change only their own row;
   the database enforces that and the nickname rules, and the page repeats them
   only to explain mistakes. Signed in, the sidebar shows the nickname (else the
-  email) with the club's crest, then "Profil" and "Çıkış yap". The first
-  sign-in opens the profile as "Hoş geldin". A new field means a column and its
+  email) with the club's crest, then "Profil" and "Çıkış yap". Until a
+  nickname is saved, the profile opens first as "Hoş geldin": right after
+  signing in (in the tab the email link opened and in the tab that asked for
+  it), and otherwise once per browser session. A new field means a column and its
   check in `profiles.sql` (run again in the SQL Editor) and an input in
   `profile.js`.
 - **For features** - `siteAuth.user` is the signed-in user or `null`, and

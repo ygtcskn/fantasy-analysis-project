@@ -4,11 +4,27 @@
 // Supabase profiles table (supabase/profiles.sql). Each visitor can read and
 // change only their own row, and nicknames are unique; the database enforces
 // both. The sidebar's account area (core/auth.js) shows the nickname and the
-// club's crest once set. The first sign-in opens this dialog to choose them.
+// club's crest once set. Until a nickname is saved, this dialog opens first
+// (see profileAskDue).
 
 // The same rule as the profiles_nickname_format check in supabase/profiles.sql.
 const PROFILE_NICKNAME = /^[A-Za-z0-9ÇĞİÖŞÜçğıöşü_.-]{3,24}$/;
+// Remembers, for this browser session, whom the profile was already offered to.
+const PROFILE_ASKED_KEY = "fantezi-analiz-profile-asked";
 const siteProfile = { userId: null, data: null, request: null, teams: null };
+
+// A signed-in visitor without a nickname is asked for one first: right after
+// signing in, and otherwise once per browser session, so a session that began
+// before profiles existed is asked too and closing the dialog is respected.
+function profileAskDue(user) {
+  if (siteAuth.justSignedIn) return true;
+  try { return sessionStorage.getItem(PROFILE_ASKED_KEY) !== user.id; } catch { return false; }
+}
+
+function askForProfile(user) {
+  try { sessionStorage.setItem(PROFILE_ASKED_KEY, user.id); } catch { /* storage unavailable */ }
+  openProfileDialog(true);
+}
 
 function profileCrest(teamId, size) {
   const img = document.createElement("img");
@@ -41,13 +57,12 @@ async function loadProfile(user) {
     if (siteProfile.request !== request) return;
     siteProfile.data = data;
     renderAuthAccount();
-    // Right after sign-in, the profile comes first until it has a nickname.
-    if (siteAuth.justSignedIn && siteAuth.user && !data?.nickname) openProfileDialog(true);
+    if (siteAuth.user && !data?.nickname && profileAskDue(user)) askForProfile(user);
   } catch (error) {
-    // The account area keeps showing the email. Right after sign-in the profile
-    // still opens first, saying why it could not be read.
-    if (siteProfile.request === request && siteAuth.justSignedIn && siteAuth.user) {
-      openProfileDialog(true);
+    // The account area keeps showing the email. The profile still opens when
+    // due, saying why it could not be read.
+    if (siteProfile.request === request && siteAuth.user && profileAskDue(user)) {
+      askForProfile(user);
       setProfileMessage(profileErrorText(error), true);
     }
   }
