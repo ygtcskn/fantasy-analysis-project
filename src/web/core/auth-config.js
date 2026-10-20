@@ -11,6 +11,6 @@ const SITE_AUTH = {
   // Ways to sign in, in the order offered. Keep only those switched on in
   // Supabase → Authentication → Sign In / Providers. Email links need custom
   // SMTP: Supabase's own sender reaches only the project's team.
-  providers: ["google", "email"],
+  providers: ["email"],
 };
 
