@@ -6,7 +6,7 @@
 - Keep CSV as the analysis/exchange format, including caches and reports. SQLite is allowed for the final structured dataset and SQL queries. Do not create duplicate JSON exports or JSON-encoded CSV cells.
 - JSON parsing is allowed only in memory to decode provider HTTP responses.
 - Do not delete or convert previously downloaded files without an explicit request.
-- Keep API credentials local and never print their values.
+- Keep API credentials local and never print their values. The one exception is the Supabase publishable (anon) key in `src/web/core/auth-config.js`, which is public by design; the Supabase secret/`service_role` key is a credential and never goes in the site or the repository.
 - Keep lossless provider captures under `data/raw`, rebuildable caches and reports under `data/temp`, and website-ready CSVs under `data/final`.
 - Keep the unified SQLite database at `data/superlig.sqlite`. Preserve reviewed identity overrides under `config/`; they are not temporary data.
 - The public site (fantezianaliz.com, Cloudflare Pages) is the files-only build that `src/web/build_static.py` writes to `data/temp/site`, with website code from GitHub `main` as pushed and data from `data/final`; nothing reaches the public site until it is pushed. Anything that needs `src/web/serve.py` at request time, such as live scores or Kadro Kur recommendations, must stay off unless `siteMode` (in `src/web/core/site.js`) is `"local"`. Never publish `.env`, `data/raw`, or `assets/face-portraits/`. `src/update_site.py` runs from Windows Task Scheduler and publishes on its own; keep each of its steps the same command `fullrun.md` gives for a manual run, and update both together.

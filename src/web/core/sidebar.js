@@ -17,6 +17,7 @@ function setupSidebar() {
         <p class="rail-label">SOSYAL</p>
         <nav data-nav-group="social" aria-label="Sosyal sayfalar"></nav>
       </div>`}
+      <div id="rail-account" class="rail-account" hidden></div>
     </aside>`);
   const menus = {
     league: document.querySelector('[data-nav-group="league"]'),

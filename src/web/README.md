@@ -392,6 +392,7 @@ src/web/
   build_static.py             Writes the public site to data/temp/site
   core/                       The shell every page shares
     site.js                     siteMode: local server, public site or opened from disk
+    auth.js / auth-config.js    Optional visitor sign-in (Supabase) and its project settings
     app.js                      Loading, navigation, shared helpers
     locale.js                   Turkish words, Turkish-time dates, positions, percentages
     match-rules.js              Finished match, appearance, blank and rating rules
@@ -425,6 +426,40 @@ Two rules keep it that way. A feature never reaches into another feature: what
 two of them share moves to `core/`, `lib/` or `data/`. And nothing outside
 `data/` fetches a file, so there is one place to look when a page shows the
 wrong season.
+
+## Sign-in
+
+Every page is open to everyone; signing in only gives a visitor an account
+that later features can build on. `core/auth.js` uses Supabase Auth with no
+passwords: "Google ile devam et", or a one-time link sent by email. The first
+sign-in creates the account. The account area sits at the foot of the
+sidebar: "Giriş yap" when signed out, the email and "Çıkış yap" when signed in.
+
+- **Settings** - `core/auth-config.js` holds the Supabase project URL, its
+  publishable (anon) key and which sign-in ways to offer. Both values are public
+  by design and ship to every browser; the secret `service_role` key must never
+  appear in `src/web`. With the URL empty, sign-in is off and the account area
+  stays hidden.
+- **Cost to visitors** - the Supabase library (pinned, integrity-checked, from
+  jsDelivr) loads only when someone opens the dialog, already has a session or
+  comes back from a sign-in. Visitors who never sign in download none of it.
+- **Session** - kept in the browser under `fantezi-analiz-auth`. Email links use
+  PKCE, so a link must be opened in the browser that asked for it; the dialog
+  says so when it is not. "Çıkış yap" signs out this browser only.
+- **For features** - `siteAuth.user` is the signed-in user or `null`, and
+  `document` receives a `site-auth-change` event whenever it changes. Anything
+  members-only must also be enforced by Supabase (row-level security), never
+  only by hiding it in the page: everything under `/local-data/` is public.
+
+Supabase setup, once: create a project; under Authentication → URL
+Configuration set the Site URL to `https://fantezianaliz.com` and allow
+`https://fantezianaliz.com/**`, `https://www.fantezianaliz.com/**`,
+`https://fantezianaliz.pages.dev/**` and, for the local site,
+`http://127.0.0.1:8000/**` and `http://localhost:8000/**`. Google needs an
+OAuth client from Google Cloud, entered under Authentication → Sign In /
+Providers → Google. Email links need custom SMTP (for example Resend): the
+built-in sender only reaches the project's own team, two emails an hour. Leave
+out of `providers` any way that is not set up.
 
 ## Publishing the site
 

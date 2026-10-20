@@ -1,0 +1,27 @@
+/* Sign-in (core/auth.js): the account area at the foot of the sidebar and the
+   sign-in dialog. Every page is dark, so this draws only on the theme tokens;
+   errors use the theme's red. Load after theme-dark.css. */
+/* The sidebar is a full-height column on every screen size; margin-top: auto
+   pins the account area to its foot. On a screen too short for both, the
+   sidebar scrolls to it rather than cutting it off. */
+.rail { overflow-y: auto; }
+.rail-account { margin-top: auto; padding-top: 16px; border-top: 1px solid var(--line); display: grid; gap: 2px; }
+.rail-account-email { margin: 0; padding: 0 12px; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+
+.auth-dialog { width: min(440px, 92vw); }
+.auth-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+.auth-heading .eyebrow { margin-bottom: 8px; }
+.auth-heading h2 { margin: 0; }
+.auth-help { margin: 14px 0 20px; color: var(--muted); font-size: 13px; line-height: 1.6; }
+.auth-options { display: grid; gap: 12px; }
+.auth-options > button, .auth-email button { width: 100%; }
+.auth-divider { display: flex; align-items: center; gap: 10px; margin: 0; color: var(--muted); font-size: 11px; letter-spacing: 1px; }
+.auth-divider::before, .auth-divider::after { content: ""; flex: 1; border-top: 1px solid var(--line); }
+.auth-email { display: grid; gap: 8px; }
+.auth-email label { font-size: 11px; font-weight: 600; color: var(--muted); }
+.auth-email input { width: 100%; }
+.auth-field-error { margin: 0; font-size: 12px; color: var(--result-loss); }
+.auth-message { margin: 16px 0 0; font-size: 13px; line-height: 1.6; color: var(--ink); }
+.auth-message:empty { display: none; }
+.auth-message.error { color: var(--result-loss); }
+.auth-privacy { margin: 14px 0 0; font-size: 11px; color: var(--muted); }
