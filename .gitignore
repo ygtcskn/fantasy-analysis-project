@@ -29,6 +29,9 @@ temp/
 *.db-*
 *.log
 
+# Cloudflare wrangler state
+.wrangler/
+
 # Browser/test output
 playwright-report/
 test-results/

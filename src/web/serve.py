@@ -82,6 +82,21 @@ def history_seasons():
                   and (FINAL_ROOT / "spider" / path.name / "spider_stats.csv").is_file())
 
 
+def analysis_files(season):
+    """Published analysis outputs by /local-data/ path; temp runs stay private.
+
+    src/web/build_static.py publishes the same map, so the local and public
+    sites read the same files.
+    """
+    return {
+        "odds/predictions.csv": FINAL_ROOT / "odds" / "predictions.csv",
+        "points/player_season_summary.csv": FINAL_ROOT / "points" / "player_season_summary.csv",
+        "points/player_match_points.csv": FINAL_ROOT / "points" / "player_match_points.csv",
+        "player_projections/player_projections.csv": FINAL_ROOT / "player_projections" / season / "player_projections.csv",
+        "fantasy_pipeline/pipeline_status.csv": FINAL_ROOT / "fantasy_pipeline" / season / "pipeline_status.csv",
+    }
+
+
 def make_handler(csv_root, live_enabled=True):
     from src.web.live import LiveFeed
     live_feed = LiveFeed(csv_root, enabled=live_enabled)
@@ -89,15 +104,7 @@ def make_handler(csv_root, live_enabled=True):
     # src/tables and published here; the browser only renders them. Resolved per
     # request, so a pipeline run that adds a table needs no restart.
     tables_root = FINAL_ROOT / "tables" / csv_root.name
-
-    # Only published analysis outputs are available; temp runs stay private.
-    fantasy_files = {
-        "odds/predictions.csv": FINAL_ROOT / "odds" / "predictions.csv",
-        "points/player_season_summary.csv": FINAL_ROOT / "points" / "player_season_summary.csv",
-        "points/player_match_points.csv": FINAL_ROOT / "points" / "player_match_points.csv",
-        "player_projections/player_projections.csv": FINAL_ROOT / "player_projections" / csv_root.name / "player_projections.csv",
-        "fantasy_pipeline/pipeline_status.csv": FINAL_ROOT / "fantasy_pipeline" / csv_root.name / "pipeline_status.csv",
-    }
+    fantasy_files = analysis_files(csv_root.name)
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):

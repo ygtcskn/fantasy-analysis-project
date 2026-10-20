@@ -124,7 +124,8 @@ async function loadLocalData() {
       } finally { clearTimeout(timeout); }
     }));
     const failures = results.filter((result) => result.status === "rejected");
-    if (failures.length) throw new Error(`Kaydedilen CSV dosyaları okunamadı. ${failures.map((result) => result.reason.message).join("; ")}. Yerel sunucunun çalıştığını ve indirmenin bittiğini kontrol edin.`);
+    const advice = siteMode === "local" ? "Yerel sunucunun çalıştığını ve indirmenin bittiğini kontrol edin." : "Sayfayı yeniden yükleyin.";
+    if (failures.length) throw new Error(`Kaydedilen CSV dosyaları okunamadı. ${failures.map((result) => result.reason.message).join("; ")}. ${advice}`);
     return results.map((result) => result.value);
   }, { replace: true, local: true });
   if (loaded) await Promise.allSettled([loadFantasyData(), loadMatchweekOdds(), loadCurrentSquads()]);
@@ -194,7 +195,8 @@ function render() {
   $("home-workspace").hidden = !homeView;
   $("home-season-note").hidden = !homeView;
   $("dataset-stats").hidden = homeView || standingsView || builderView || fixtureView || tierView || matchweekView || statisticsView || teamStatisticsView;
-  $("empty-state").hidden = loaded || homeView || standingsView || matchweekView;
+  // Its serve.py instructions are for this computer, not for visitors to the public site.
+  $("empty-state").hidden = loaded || siteMode === "published" || homeView || standingsView || matchweekView;
   $("statistics-workspace").hidden = !loaded || !statisticsView;
   $("team-statistics-workspace").hidden = !loaded || !teamStatisticsView;
   $("workspace").hidden = !loaded || tierView || homeView || standingsView || builderView || matchweekView || statisticsView || teamStatisticsView;
@@ -405,7 +407,7 @@ setupLiveMatchCentre();
 // The local server supplies the saved season on every page load; reloading the
 // page is how new data arrives after a download or a pipeline run.
 navigateView(new URLSearchParams(location.search).get("view"));
-if (location.protocol === "http:" && ["127.0.0.1", "localhost"].includes(location.hostname)) {
+if (siteMode !== "none") {
   loadLocalData();
 } else {
   $("message").textContent = "Siteyi görmek için python src/web/serve.py --season 2026/2027 komutunu çalıştırıp http://127.0.0.1:8000 adresini açın.";

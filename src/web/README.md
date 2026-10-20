@@ -1,4 +1,4 @@
-# Süper Lig Lab — local data explorer
+# Fantezi Analiz — local data explorer
 
 ## Maç Tribünü
 
@@ -387,8 +387,11 @@ hunting through a flat folder.
 ```text
 src/web/
   index.html                  Main page; team.html is the club dashboard
+  404.html                    The public site's missing-page answer
   serve.py                    Read-only local server
+  build_static.py             Writes the public site to data/temp/site
   core/                       The shell every page shares
+    site.js                     siteMode: local server, public site or opened from disk
     app.js                      Loading, navigation, shared helpers
     locale.js                   Turkish words, Turkish-time dates, positions, percentages
     match-rules.js              Finished match, appearance, blank and rating rules
@@ -423,8 +426,41 @@ two of them share moves to `core/`, `lib/` or `data/`. And nothing outside
 `data/` fetches a file, so there is one place to look when a page shows the
 wrong season.
 
-## Domain later
+## Publishing the site
 
-`yigitcoskun.com` currently has Cloudflare nameservers. This indicates where DNS is managed, not who owns the domain or whether it has active hosting. Confirm access to the domain's account before connecting it.
+The public site, **fantezianaliz.com**, is a files-only copy of this folder on
+Cloudflare Pages. Build it after each download and pipeline run, then upload it:
 
-This folder can later be deployed as a static website. Deploy only these website files, never the project root, `.env`, or the football dataset. The initial hosted version can retain the local file picker so each visitor's CSV files stay in their browser. No domain or hosting configuration has been changed.
+```powershell
+python src/web/build_static.py --season 2026/2027
+npx wrangler pages deploy data/temp/site --project-name fantezianaliz --branch main
+```
+
+The first upload needs Node.js and opens a browser to sign in to Cloudflare.
+Before it, create the project once with
+`npx wrangler pages project create fantezianaliz --production-branch main`.
+Then, in the Cloudflare dashboard, open **Workers & Pages → fantezianaliz →
+Custom domains** and add `fantezianaliz.com` and `www.fantezianaliz.com`.
+
+`build_static.py` writes `data/temp/site/` from scratch each run:
+
+- **Pages** - every file `serve.py` would serve, except `assets/face-portraits/`
+  (unused, and third-party artwork). Its copy of `core/site.js` says
+  `SITE_PUBLISHED = true`.
+- **Data** - the same files `serve.py` answers under `/local-data/`, at the same
+  paths, so the pages read both sites the same way. Radar history includes only
+  seasons before the published one, because the radar reads no others.
+- **`_headers`** - sends the `X-Superlig-Local` and `X-Superlig-Season` headers
+  the pages check before trusting a data file.
+- **`404.html`** - without it Pages answers a missing CSV with `index.html`, and
+  optional files such as `download_status.csv` would look present but broken.
+
+The build never reads `.env`, `data/raw` or `data/temp`, and never contacts
+Sportmonks. It stops if a file exceeds Pages' 25 MiB limit, and lists optional
+files that do not exist yet.
+
+`siteMode` in `core/site.js` is `"local"` under `serve.py`, `"published"` on
+the public site and `"none"` when a page is opened from disk. Live scores and
+Kadro Kur recommendations need `serve.py`, so they appear only in `"local"`
+mode. The serve.py setup instructions on the empty page are hidden on the
+public site.

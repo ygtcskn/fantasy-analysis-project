@@ -4,7 +4,8 @@ const builderRecommendations = { key: "", controller: null, timer: null, rows: [
 
 function renderBuilderRecommendations(force = false) {
   const panel = $("builder-recommendations");
-  const count = builderState.selected.size;
+  // The optimizer runs in src/web/serve.py; the published site has no server to ask.
+  const count = siteMode === "local" ? builderState.selected.size : 0;
   panel.hidden = count === 0;
   document.querySelector(".builder-pool").classList.toggle("has-recommendations", count > 0);
   const generation = fantasyState.projections.values().next().value?.[0]?.pipeline_run_id || "";

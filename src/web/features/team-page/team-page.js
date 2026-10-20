@@ -37,7 +37,7 @@ const orderFixtures = (a, b) => String(a.kickoff || "9999").localeCompare(String
 
 function setClubName(name) {
   el("team-name").textContent = name;
-  document.title = `${name} — Süper Lig Lab`;
+  document.title = `${name} — Fantezi Analiz`;
   el("team-crest").alt = `${name} logo`;
 }
 
@@ -356,7 +356,7 @@ el("team-refresh").addEventListener("click", () => loadClubData());
 el("team-open").addEventListener("click", () => el("team-files").click());
 el("team-files").addEventListener("change", (event) => loadClubData([...event.target.files]));
 renderClub();
-if (validClub && location.protocol === "http:" && ["127.0.0.1", "localhost"].includes(location.hostname)) {
+if (validClub && siteMode !== "none") {
   el("team-refresh").hidden = false;
   loadClubData();
 } else {

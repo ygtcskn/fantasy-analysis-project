@@ -29,7 +29,7 @@ const liveEventLabels = {
 
 function liveCentreActive() {
   return state.view === "matchweek" && !document.hidden && Boolean(state.seasonSlug)
-    && location.protocol === "http:" && ["127.0.0.1", "localhost"].includes(location.hostname);
+    && siteMode === "local";
 }
 
 function stopLiveMatchCentre() {
@@ -112,9 +112,8 @@ async function pollNavLive() {
   let delay = 60000;
   // A visibility change can arrive before core/app.js has defined the page state.
   if (typeof state === "undefined") { navLive.timer = setTimeout(pollNavLive, 3000); return; }
-  const local = location.protocol === "http:" && ["127.0.0.1", "localhost"].includes(location.hostname);
   // Maç Haftası polls for itself; a hidden tab or a page without a season waits.
-  if (local && !document.hidden && state.seasonSlug && !liveCentreActive()) {
+  if (siteMode === "local" && !document.hidden && state.seasonSlug && !liveCentreActive()) {
     navLive.controller?.abort();
     const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), 25000);
     navLive.controller = controller;
