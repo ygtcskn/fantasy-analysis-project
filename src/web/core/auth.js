@@ -20,8 +20,11 @@ const AUTH_STORAGE_KEY = "fantezi-analiz-auth";
 const AUTH_RETURN_PARAMS = ["code", "error", "error_code", "error_description"];
 
 // user is the signed-in Supabase user, or null. Features should listen for
-// "site-auth-change" on document instead of reading it once.
-const siteAuth = { user: null, known: false, client: null, loading: null, startError: null };
+// "site-auth-change" on document instead of reading it once. justSignedIn is
+// true while a sign-in has just completed on this page: it arrived from a
+// sign-in link or Google, or another tab completed the sign-in while this one
+// was showing the sign-in dialog. The profile opens first on such a page.
+const siteAuth = { user: null, known: false, client: null, loading: null, startError: null, justSignedIn: false };
 
 function authEnabled() {
   return siteMode !== "none" && typeof SITE_AUTH !== "undefined" && Boolean(SITE_AUTH.url && SITE_AUTH.key);
@@ -84,6 +87,13 @@ function loadAuth() {
 
 function setAuthUser(user) {
   const changed = !siteAuth.known || (siteAuth.user?.id ?? null) !== (user?.id ?? null);
+  // The email link opens in a new tab; Supabase tells this tab too. The "link
+  // sent" dialog has done its job, and this tab moves on to the profile as well.
+  const dialog = document.getElementById("auth-dialog");
+  if (user && !siteAuth.user && dialog?.open) {
+    dialog.close();
+    siteAuth.justSignedIn = true;
+  }
   siteAuth.user = user;
   siteAuth.known = true;
   renderAuthAccount();
@@ -109,10 +119,14 @@ function renderAuthAccount() {
   area.hidden = !siteAuth.known;
   if (!siteAuth.known) return;
   if (siteAuth.user) {
+    // core/profile.js, when loaded, supplies the nickname, crest and Profil button.
+    const profile = typeof siteProfile !== "undefined" && siteProfile.userId === siteAuth.user.id ? siteProfile.data : null;
     const who = document.createElement("p");
     who.className = "rail-account-email";
-    who.textContent = siteAuth.user.email || "Giriş yapıldı";
-    area.replaceChildren(who, authButton("←", "Çıkış yap", signOutAuth));
+    if (profile?.favorite_team_id) who.append(profileCrest(profile.favorite_team_id, 20));
+    who.append(profile?.nickname || siteAuth.user.email || "Giriş yapıldı");
+    const buttons = typeof openProfileDialog === "function" ? [authButton("☺", "Profil", () => openProfileDialog())] : [];
+    area.replaceChildren(who, ...buttons, authButton("←", "Çıkış yap", signOutAuth));
   } else {
     area.replaceChildren(authButton("→", "Giriş yap", () => openAuthDialog()));
   }
@@ -240,6 +254,7 @@ function setupAuth() {
     return;
   }
   const returning = authReturning(), problem = authReturnProblem();
+  siteAuth.justSignedIn = returning && !problem;
   loadAuth().then(() => {
     if (!returning) return;
     history.replaceState(history.state, "", authReturnUrl());

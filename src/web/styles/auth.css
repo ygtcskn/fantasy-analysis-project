@@ -6,7 +6,8 @@
    sidebar scrolls to it rather than cutting it off. */
 .rail { overflow-y: auto; }
 .rail-account { margin-top: auto; padding-top: 16px; border-top: 1px solid var(--line); display: grid; gap: 2px; }
-.rail-account-email { margin: 0; padding: 0 12px; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.rail-account-email { display: flex; align-items: center; gap: 8px; margin: 0; padding: 0 12px 4px; font-size: 12px; color: var(--ink); overflow-wrap: anywhere; }
+.profile-crest { flex: none; object-fit: contain; }
 
 .auth-dialog { width: min(440px, 92vw); }
 .auth-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
@@ -25,3 +26,11 @@
 .auth-message:empty { display: none; }
 .auth-message.error { color: var(--result-loss); }
 .auth-privacy { margin: 14px 0 0; font-size: 11px; color: var(--muted); }
+
+/* The profile dialog (core/profile.js) reuses the sign-in dialog's layout. */
+.profile-form label:not(:first-child) { margin-top: 8px; }
+.profile-hint { margin: 0; font-size: 11px; color: var(--muted); }
+.profile-team-row { display: flex; align-items: center; gap: 10px; }
+.profile-team-row select { flex: 1; min-width: 0; }
+.profile-team-crest { display: grid; place-items: center; flex: none; width: 28px; height: 28px; }
+.profile-form button[type=submit] { margin-top: 8px; }

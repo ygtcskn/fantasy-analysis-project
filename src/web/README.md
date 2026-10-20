@@ -446,6 +446,16 @@ sidebar: "Giriş yap" when signed out, the email and "Çıkış yap" when signed
 - **Session** - kept in the browser under `fantezi-analiz-auth`. Email links use
   PKCE, so a link must be opened in the browser that asked for it; the dialog
   says so when it is not. "Çıkış yap" signs out this browser only.
+- **Profile** - `core/profile.js` keeps a nickname (3–24 characters: letters,
+  digits, `_ . -`; unique whatever the case) and a favourite club (its
+  Sportmonks team ID) in the Supabase `profiles` table, created by
+  `supabase/profiles.sql`. Each visitor can read and change only their own row;
+  the database enforces that and the nickname rules, and the page repeats them
+  only to explain mistakes. Signed in, the sidebar shows the nickname (else the
+  email) with the club's crest, then "Profil" and "Çıkış yap". The first
+  sign-in opens the profile as "Hoş geldin". A new field means a column and its
+  check in `profiles.sql` (run again in the SQL Editor) and an input in
+  `profile.js`.
 - **For features** - `siteAuth.user` is the signed-in user or `null`, and
   `document` receives a `site-auth-change` event whenever it changes. Anything
   members-only must also be enforced by Supabase (row-level security), never

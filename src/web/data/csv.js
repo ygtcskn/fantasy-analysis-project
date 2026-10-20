@@ -33,3 +33,11 @@ function parseCSV(text) {
   return { header, records };
 }
 
+// The served season's clubs, for code that runs on every page whether or not
+// the page loaded the season itself (the profile's favourite team).
+async function readSeasonTeams() {
+  const response = await fetch("/local-data/teams.csv", { cache: "no-cache" });
+  if (!response.ok) throw new Error(`teams.csv: HTTP ${response.status}`);
+  return parseCSV(await response.text()).records;
+}
+
