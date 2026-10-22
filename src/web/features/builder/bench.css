@@ -8,6 +8,14 @@
 .builder-bench .builder-position.active .builder-position-name { color: var(--accent); }
 .builder-bench .builder-position-select { min-height: 140px; padding: 8px 3px; color: var(--ink); }
 .builder-bench .builder-position-name { text-shadow: none; }
+/* Kadroyu kaydet, under the bench. */
+.builder-save { display: grid; justify-items: center; gap: 8px; padding: 6px 22px 22px; text-align: center; }
+.builder-save .primary { width: min(100%, 440px); min-height: 48px; font-size: 14px; }
+.builder-save-hint, .builder-save-status { margin: 0; max-width: 520px; font-size: 11px; line-height: 1.6; color: var(--muted); }
+.builder-save-status:empty { display: none; }
+.builder-save-status { color: var(--ink); font-weight: 600; }
+.builder-save-status.error { color: #f49ca9; }
+:root:not([data-theme="dark"]) .builder-save-status.error { color: #a0372f; }
 .builder-position-price { font-size: 10px; font-weight: 600; color: inherit; }
 .builder-pitch-heading { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 12px; }
 .builder-pitch-left { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; }

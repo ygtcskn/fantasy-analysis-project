@@ -56,6 +56,8 @@ const PlayerDistribution = (() => {
   // compare? }. `compare` is a second player { value, score, detail } drawn
   // as his own marker on the same curve; the fill stays the first player's.
   // `colours` names the two markers' colours once a second player is drawn.
+  // A row with an `id` makes its label a button (data-dist-metric) that picks
+  // the metric the page ranks players by; `selected` marks the current one.
   function chart(rows, display = (score) => String(Math.round(score)), colours = null) {
     const width = 640, left = 150, plotRight = 516, rowHeight = 52, top = 8;
     const plot = plotRight - left, legendTop = top + rows.length * rowHeight + 14;
@@ -65,7 +67,10 @@ const PlayerDistribution = (() => {
     rows.forEach((row, index) => {
       const y0 = top + index * rowHeight, base = y0 + 32;
       const values = row.values.filter(Number.isFinite);
-      body.push(`<text x="${left - 10}" y="${base - 6}" text-anchor="end" font-size="11" font-weight="600" fill="var(--ink)">${escape(row.label)}</text>`);
+      const pick = row.id ? ` data-dist-metric="${escape(row.id)}" class="dist-metric-label${row.selected ? " is-selected" : ""}"`
+        + ` role="button" tabindex="0" aria-pressed="${row.selected ? "true" : "false"}"` : "";
+      body.push(`<text x="${left - 10}" y="${base - 6}" text-anchor="end" font-size="11" font-weight="600" fill="var(--ink)"${pick}>`
+        + `${pick ? `<title>${escape(`${row.label}: oyuncuları bu ölçüte göre sırala`)}</title>` : ""}${escape(row.label)}</text>`);
       if (values.length < 2) {
         body.push(`<line x1="${left}" y1="${base}" x2="${plotRight}" y2="${base}" stroke="var(--line)"/>`);
         body.push(`<text x="${left + plot / 2}" y="${base - 8}" text-anchor="middle" font-size="10" fill="var(--muted)">Yeterli emsal verisi yok</text>`);
@@ -136,20 +141,46 @@ const PlayerDistribution = (() => {
 // Page wiring: one row per axis of the Ayrıntılı Ölçütler wheel, from the
 // reference renderStatisticsRadars just built. Depends on the page helpers
 // ($, displayNumber) and on radar-page.js (statisticsUnit, statisticsReferenceLabel).
+// Each metric label is a button: clicking it ranks the players in the panel
+// beside the chart (renderMetricRanking below). The last render is kept so a
+// click redraws only these two, not the whole profile.
+const distributionState = { radar: null, selected: null };
+
 function renderPlayerDistribution(radar, selected) {
+  Object.assign(distributionState, { radar, selected });
+  const container = $("statistics-distribution-chart");
+  if (!container.dataset.metricPicker) {
+    container.dataset.metricPicker = "1";
+    const pick = (event) => {
+      const label = event.target.closest?.("[data-dist-metric]");
+      if (!label) return;
+      if (event.type === "keydown") {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+      }
+      selectDistributionMetric(label.dataset.distMetric);
+    };
+    container.addEventListener("click", pick);
+    container.addEventListener("keydown", pick);
+  }
   if (!radar?.reference) {
-    $("statistics-distribution-chart").replaceChildren();
+    container.replaceChildren();
     $("statistics-distribution-note").textContent = radar?.note || "Dağılım için radar verisi yok.";
+    renderMetricRanking(radar);
     return;
   }
   const { player, reference, profile, results, guest } = radar;
+  // The ranked metric survives a change of player while his wheel has it; a
+  // goalkeeper's wheel has other axes, so it falls back to the first.
+  if (!profile.some((metric) => metric.id === statisticsState.rankMetric)) statisticsState.rankMetric = profile[0]?.id ?? null;
   const detail = (who, metric, result, count) => `${who.name} · ${metric.label}: ${displayNumber(result.value)} ${statisticsUnit(metric)}`
     + (result.prior ? ` (gözlenen ${displayNumber(result.observedValue)}, kendi payı %${displayNumber(Math.round(result.reliability * 100))})` : "")
     + ` · yüzdelik ${Number.isFinite(result.score) ? RadarChart.display(result.score) : "—"} · ${count} emsal değeri`;
   const rows = profile.map((metric, index) => {
     const result = results[index], values = reference.metrics.get(metric.id) || [];
     const other = guest?.results[index];
-    return { label: metric.label, unit: statisticsUnit(metric), values, value: Number.isFinite(result.value) ? result.value : null,
+    return { id: metric.id, selected: metric.id === statisticsState.rankMetric,
+      label: metric.label, unit: statisticsUnit(metric), values, value: Number.isFinite(result.value) ? result.value : null,
       score: result.score, direction: metric.direction, detail: detail(player, metric, result, values.length),
       compare: other ? { value: Number.isFinite(other.value) ? other.value : null, score: other.score,
         detail: detail(guest.player, metric, other, values.length) } : null };
@@ -162,7 +193,90 @@ function renderPlayerDistribution(radar, selected) {
     + "nötr orta, lacivert yüksek. Düşük değerin iyi olduğu ölçütlerde (ör. yenilen gol) renkli bölüm oyuncunun değerinden yukarı uzanır. "
     + "Değerler ve eğriler az dakikalı oranlar emsal ortalamasına çekildikten sonraki değerlerdir; gözlenen değer satırın üzerinde bekleyince görünür. "
     + (guest ? `Mavi çizgi ${guest.player.name}; aynı emsallere göre sıralanır, renkli bölüm ${player.name} içindir. ` : "")
+    + "Bir ölçütün adına tıklayın: yandaki Sıralama, oyuncuları o ölçütte en iyiden en kötüye dizer. "
     + (radar.pool || "");
+  renderMetricRanking(radar);
+}
+
+function selectDistributionMetric(id) {
+  statisticsState.rankMetric = id;
+  renderPlayerDistribution(distributionState.radar, distributionState.selected);
+  // The chart was redrawn, so focus returns to the same label.
+  $("statistics-distribution-chart").querySelector(`[data-dist-metric="${CSS.escape(id)}"]`)?.focus({ preventScroll: true });
+  // Stacked on a narrow screen, the ranking sits far above the chart.
+  const panel = $("statistics-ranking"), box = panel?.getBoundingClientRect();
+  if (box && (box.bottom < 0 || box.top > window.innerHeight)) {
+    panel.scrollIntoView({ block: "start", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+  }
+}
+
+// The players of the distribution's reference group in this season, best to
+// worst on the picked metric: the same adjusted value and the same percentile
+// the chart shows, so the two never disagree. Lower-is-better metrics are
+// already reversed in the percentile. The primary and secondary player are
+// listed even when they are short of the minute bar (flagged), in their
+// colours; clicking a name compares, as in the player list.
+function renderMetricRanking(radar) {
+  const body = $("statistics-ranking-body");
+  if (!body) return;
+  const metric = radar?.profile?.find((entry) => entry.id === statisticsState.rankMetric);
+  if (!radar?.reference || !metric) {
+    body.replaceChildren();
+    $("statistics-ranking-metric").textContent = "—";
+    $("statistics-ranking-note").textContent = radar?.note || "Sıralama için radar verisi yok.";
+    return;
+  }
+  const { reference, player, guest } = radar;
+  const { players: league, teams } = leaguePlayers();
+  const known = new Map(league.map((entry) => [entry.id, entry]));
+  const listed = new Map(reference.peers.filter((peer) => peer.scope?.key === reference.scope?.key)
+    .map((peer) => [peer.id, peer]));
+  for (const extra of [player, guest?.player]) if (extra && !listed.has(extra.id)) listed.set(extra.id, extra);
+  const better = metric.direction === "lower_better" ? (a, b) => a - b : (a, b) => b - a;
+  const ranked = [...listed.values()]
+    .map((entry) => ({ entry, result: RadarScoring.evaluate(entry, metric, reference, { guest: entry.id === guest?.player.id }) }))
+    .filter(({ result }) => Number.isFinite(result.score) && Number.isFinite(result.value))
+    .sort((a, b) => b.result.score - a.result.score || better(a.result.value, b.result.value)
+      || a.entry.name.localeCompare(b.entry.name, "tr"));
+  const unit = statisticsUnit(metric), rows = document.createDocumentFragment();
+  let rank = 0;
+  ranked.forEach(({ entry, result }, index) => {
+    // Equal percentiles share a rank, as on the leader cards.
+    if (!index || result.score !== ranked[index - 1].result.score) rank = index + 1;
+    const row = element("tr"), profile = known.get(entry.id);
+    if (entry.id === player.id) row.classList.add("statistics-row-selected");
+    if (entry.id === guest?.player.id) row.classList.add("statistics-row-selected", "statistics-row-compare");
+    row.append(element("td", "numeric statistics-rank", String(rank)));
+    const identity = element("td"), club = element("div", "statistics-club");
+    club.append(createTeamLogo([...(profile?.teams || [])][0] || "unknown", teams, false));
+    const open = element("button", "statistics-player-button", statisticsShortName(entry.name));
+    open.type = "button";
+    open.title = entry.name + (result.smallSample ? ` · ${displayNumber(entry.minutes)} dk, emsal eşiğinin altında` : "");
+    open.setAttribute("aria-label", `${entry.name} ile karşılaştır`);
+    open.addEventListener("click", () => statisticsPick(entry.id));
+    club.append(open);
+    if (result.smallSample) club.append(element("small", "statistics-ranking-flag", "az dk"));
+    identity.append(club);
+    const value = element("td", "numeric", displayNumber(result.value));
+    value.append(element("small", "statistics-ranking-unit", ` ${unit}`));
+    if (result.prior) value.title = `Gözlenen ${displayNumber(result.observedValue)} ${unit}; az dakika emsal ortalamasına çekildi.`;
+    row.append(identity, value, element("td", "numeric", RadarChart.display(result.score)));
+    rows.append(row);
+  });
+  if (!ranked.length) {
+    const row = element("tr"), cell = element("td", "no-results", "Bu ölçütte sıralanacak oyuncu yok.");
+    cell.colSpan = 4;
+    row.append(cell);
+    rows.append(row);
+  }
+  body.replaceChildren(rows);
+  $("statistics-ranking-metric").textContent = metric.label;
+  $("statistics-ranking-note").textContent = `${RadarScoring.positionLabels[reference.position] || reference.position} · `
+    + `${statisticsBarLabel(reference.config.minimumMinutes, reference.position)} · bu sezon ${ranked.length} oyuncu, en iyiden en kötüye. `
+    + "Değer ve puan Dağılım ile aynıdır"
+    + (metric.direction === "lower_better" ? "; düşük değer daha iyidir. " : metric.direction === "context"
+      ? "; bağlam ölçütü: yüksek değer daha fazla etkinliktir. " : ". ")
+    + "Bir isme tıklayarak karşılaştırın.";
 }
 
 if (typeof module !== "undefined" && module.exports) module.exports = { PlayerDistribution };

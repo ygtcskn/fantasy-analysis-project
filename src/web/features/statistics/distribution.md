@@ -47,6 +47,22 @@ who recorded the event at all, while the curve shows everyone, zeros included;
 the two can therefore look different at the low end, and the tooltip gives the
 number of peer values behind each row.
 
+## Ranking by a metric
+
+Each metric label is a button (`data-dist-metric`; mouse, Enter or Space). It
+picks the metric the **Sıralama** panel ranks - the left column's second panel,
+under Oyuncular, stretched to end level with this chart. The panel lists this
+season's players of the same reference group (role and minute bar) best to
+worst, by the same small-sample-adjusted value and the same percentile the chart
+shows, so a player's number never differs between the two; lower-is-better
+metrics are already reversed in the percentile, and context metrics rank more
+activity first. The primary and secondary player are always listed, in their
+colours, flagged "az dk" when short of the minute bar. Equal percentiles share
+a rank. Clicking a name there compares, as in the player list. The panel opens
+on the first metric, keeps the picked one while the wheel has it, and falls back
+to the first for a goalkeeper's wheel. A click redraws only the chart and the
+panel, then returns focus to the label.
+
 ## Density
 
 The bandwidth is Silverman's rule with the robust spread,

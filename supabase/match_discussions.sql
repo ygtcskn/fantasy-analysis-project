@@ -37,6 +37,11 @@ create table if not exists public.match_replies (
 create index if not exists match_replies_topic on public.match_replies (topic_id, created_at);
 create index if not exists match_replies_author on public.match_replies (user_id, created_at desc);
 
+-- The author's profile photo (profiles.avatar_path), copied like the nickname.
+-- Added after the tables first shipped, so added here rather than above.
+alter table public.match_topics add column if not exists author_avatar_path text;
+alter table public.match_replies add column if not exists author_avatar_path text;
+
 -- Every new post: the author is the signed-in visitor, named by their profile.
 -- No nickname, no post. At most five posts a minute per person, topics and
 -- replies together, against spam. The errors' messages are what the page reads.
@@ -46,6 +51,7 @@ declare
   -- Named apart from the columns, so no query can mistake one for the other.
   v_nickname text;
   v_team bigint;
+  v_avatar text;
   v_recent integer;
 begin
   new.user_id := auth.uid();
@@ -53,7 +59,7 @@ begin
   if new.user_id is null then
     raise exception 'sign_in_required' using errcode = '42501';
   end if;
-  select p.nickname, p.favorite_team_id into v_nickname, v_team
+  select p.nickname, p.favorite_team_id, p.avatar_path into v_nickname, v_team, v_avatar
     from public.profiles p where p.id = new.user_id;
   if v_nickname is null then
     raise exception 'nickname_required';
@@ -68,6 +74,7 @@ begin
   end if;
   new.author_nickname := v_nickname;
   new.author_team_id := v_team;
+  new.author_avatar_path := v_avatar;
   return new;
 end;
 $$;
@@ -79,17 +86,20 @@ drop trigger if exists match_replies_author on public.match_replies;
 create trigger match_replies_author before insert on public.match_replies
   for each row execute function public.match_post_author();
 
--- A changed nickname or club shows on the author's earlier posts too. A
+-- A changed nickname, club or photo shows on the author's earlier posts too. A
 -- cleared nickname leaves the posts signed with the last one.
 create or replace function public.match_posts_follow_profile() returns trigger
 language plpgsql security definer set search_path = '' as $$
 begin
-  if new.nickname is distinct from old.nickname or new.favorite_team_id is distinct from old.favorite_team_id then
+  if new.nickname is distinct from old.nickname or new.favorite_team_id is distinct from old.favorite_team_id
+      or new.avatar_path is distinct from old.avatar_path then
     update public.match_topics
-      set author_nickname = coalesce(new.nickname, author_nickname), author_team_id = new.favorite_team_id
+      set author_nickname = coalesce(new.nickname, author_nickname), author_team_id = new.favorite_team_id,
+          author_avatar_path = new.avatar_path
       where user_id = new.id;
     update public.match_replies
-      set author_nickname = coalesce(new.nickname, author_nickname), author_team_id = new.favorite_team_id
+      set author_nickname = coalesce(new.nickname, author_nickname), author_team_id = new.favorite_team_id,
+          author_avatar_path = new.avatar_path
       where user_id = new.id;
   end if;
   return new;

@@ -26,6 +26,25 @@ function askForProfile(user) {
   openProfileDialog(true);
 }
 
+// Reading needs nothing; anything that shows a visitor's name to others needs a
+// session and a nickname. Each missing step opens the dialog that supplies it,
+// saying why. A stored session still being restored is waited for first.
+async function profileReady(signInText, nicknameText) {
+  await siteAuth.loading?.catch(() => {});
+  if (!siteAuth.user) {
+    openAuthDialog();
+    setAuthMessage(signInText);
+    return false;
+  }
+  await siteProfile.request?.catch(() => {});
+  if (!siteProfile.data?.nickname) {
+    openProfileDialog();
+    setProfileMessage(nicknameText);
+    return false;
+  }
+  return true;
+}
+
 function profileCrest(teamId, size) {
   const img = document.createElement("img");
   img.className = "profile-crest";
@@ -41,12 +60,168 @@ function profileCrest(teamId, size) {
   return img;
 }
 
+// Profile photos live in the public "avatars" bucket (supabase/avatars.sql),
+// one folder per visitor. Each upload gets a new name, so browsers may keep a
+// photo for good and a change still shows at once.
+const AVATAR_BUCKET = "avatars";
+const AVATAR_SIZE = 256;
+const AVATAR_MAX_INPUT = 15 * 1024 * 1024;
+
+function avatarUrl(path) {
+  return `${new URL(SITE_AUTH.url).origin}/storage/v1/object/public/${AVATAR_BUCKET}/${path.split("/").map(encodeURIComponent).join("/")}`;
+}
+
+// How a person appears beside their name: their photo, else their club's
+// crest, else nothing. A photo that no longer loads, say one removed by
+// moderation, falls back to the crest. person has avatar_path and favorite_team_id.
+function profileBadge(person, size) {
+  const crest = () => (person?.favorite_team_id ? profileCrest(person.favorite_team_id, size) : null);
+  if (!person?.avatar_path) return crest();
+  const img = document.createElement("img");
+  img.className = "profile-avatar";
+  img.width = size;
+  img.height = size;
+  img.alt = "";
+  img.decoding = "async";
+  img.addEventListener("error", () => {
+    const fallback = crest();
+    if (fallback) img.replaceWith(fallback); else img.remove();
+  }, { once: true });
+  img.src = avatarUrl(person.avatar_path);
+  return img;
+}
+
+// A square, centre-cropped, 256-pixel copy of the chosen picture. Drawing it
+// afresh keeps only the pixels, so anything the camera stored, such as the
+// place it was taken, never leaves the visitor's device.
+async function avatarImage(file) {
+  if (!file.type.startsWith("image/")) throw new Error("Bir resim dosyası seç: JPG, PNG ya da WebP.");
+  if (file.size > AVATAR_MAX_INPUT) throw new Error("Bu dosya çok büyük; 15 MB'tan küçük bir resim seç.");
+  let bitmap;
+  try {
+    bitmap = await createImageBitmap(file);
+  } catch {
+    throw new Error("Bu resim açılamadı. JPG ya da PNG dene.");
+  }
+  const side = Math.min(bitmap.width, bitmap.height);
+  const canvas = document.createElement("canvas");
+  canvas.width = AVATAR_SIZE;
+  canvas.height = AVATAR_SIZE;
+  const context = canvas.getContext("2d");
+  // Transparent parts take the page's own surface colour rather than black.
+  context.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--surface").trim() || "#171020";
+  context.fillRect(0, 0, AVATAR_SIZE, AVATAR_SIZE);
+  context.imageSmoothingQuality = "high";
+  context.drawImage(bitmap, (bitmap.width - side) / 2, (bitmap.height - side) / 2, side, side, 0, 0, AVATAR_SIZE, AVATAR_SIZE);
+  bitmap.close();
+  const encode = (type) => new Promise((resolve) => canvas.toBlob(resolve, type, 0.85));
+  // A browser that cannot write WebP hands back a PNG; JPEG is far smaller then.
+  let blob = await encode("image/webp");
+  if (!blob || blob.type !== "image/webp") blob = await encode("image/jpeg");
+  if (!blob) throw new Error("Resim hazırlanamadı. Başka bir resim dene.");
+  return blob;
+}
+
+function avatarErrorText(error) {
+  const message = error?.message || "";
+  if (/bucket not found/i.test(message)) {
+    return siteMode === "local"
+      ? "avatars deposu yok: supabase/avatars.sql dosyasını Supabase → SQL Editor'da çalıştır."
+      : "Fotoğraf şu anda yüklenemiyor. Daha sonra tekrar dene.";
+  }
+  if (/maximum allowed size|payload too large/i.test(message)) return "Fotoğraf çok büyük. Başka bir resim dene.";
+  if (/row-level security|unauthorized/i.test(message)) return "Fotoğraf yüklenemedi. Biraz sonra tekrar dene.";
+  // The avatar_path column is missing until profiles.sql is run again.
+  if (error?.code === "PGRST204" || error?.code === "42703") {
+    return siteMode === "local"
+      ? "Fotoğraf sütunu yok: supabase/profiles.sql, match_discussions.sql ve avatars.sql'i yeniden çalıştır."
+      : "Fotoğraf şu anda kaydedilemiyor. Daha sonra tekrar dene.";
+  }
+  return error?.code ? profileErrorText(error) : message || "Bir sorun çıktı. Tekrar dene.";
+}
+
+// Every file in the visitor's folder except keep. The bucket allows three per
+// person, so leftovers from an interrupted change are cleared before uploading.
+async function removeAvatarFiles(storage, userId, keep = null) {
+  const { data } = await storage.list(userId, { limit: 50 });
+  const stale = (data || []).map((file) => `${userId}/${file.name}`).filter((path) => path !== keep);
+  if (stale.length) await storage.remove(stale);
+}
+
+function showProfileAvatar() {
+  const dialog = document.getElementById("profile-dialog"), profile = siteProfile.data;
+  const badge = profile?.avatar_path ? profileBadge(profile, 72) : null;
+  const placeholder = document.createElement("span");
+  placeholder.className = "profile-avatar-empty";
+  placeholder.textContent = (profile?.nickname || siteAuth.user?.email || "?").charAt(0).toLocaleUpperCase("tr");
+  dialog.querySelector(".profile-avatar-preview").replaceChildren(badge || placeholder);
+  dialog.querySelector("[data-avatar-remove]").hidden = !profile?.avatar_path;
+}
+
+function setAvatarBusy(busy) {
+  for (const button of document.querySelectorAll("#profile-dialog .profile-avatar-buttons button")) button.disabled = busy;
+}
+
+async function uploadAvatar(file) {
+  const user = siteAuth.user;
+  if (!user || !file) return;
+  setAvatarBusy(true);
+  setProfileMessage("Fotoğraf hazırlanıyor…");
+  try {
+    const blob = await avatarImage(file);
+    const client = await loadAuth(), storage = client.storage.from(AVATAR_BUCKET);
+    const previous = siteProfile.data?.avatar_path || null;
+    await removeAvatarFiles(storage, user.id, previous);
+    const path = `${user.id}/${Date.now().toString(36)}.${blob.type === "image/webp" ? "webp" : "jpg"}`;
+    setProfileMessage("Fotoğraf yükleniyor…");
+    const upload = await storage.upload(path, blob, { contentType: blob.type, cacheControl: "31536000", upsert: false });
+    if (upload.error) throw upload.error;
+    const saved = await client.from("profiles").upsert({ id: user.id, avatar_path: path }).select("*").single();
+    if (saved.error) {
+      await storage.remove([path]);
+      throw saved.error;
+    }
+    siteProfile.data = saved.data;
+    if (previous) await storage.remove([previous]);
+    renderAuthAccount();
+    showProfileAvatar();
+    setProfileMessage("Fotoğrafın güncellendi.");
+  } catch (error) {
+    setProfileMessage(avatarErrorText(error), true);
+  } finally {
+    setAvatarBusy(false);
+  }
+}
+
+async function removeAvatar() {
+  const user = siteAuth.user;
+  if (!user || !siteProfile.data?.avatar_path || !confirm("Profil fotoğrafın kaldırılsın mı?")) return;
+  setAvatarBusy(true);
+  setProfileMessage("Fotoğraf kaldırılıyor…");
+  try {
+    const client = await loadAuth();
+    const saved = await client.from("profiles").update({ avatar_path: null }).eq("id", user.id).select("*").single();
+    if (saved.error) throw saved.error;
+    siteProfile.data = saved.data;
+    await removeAvatarFiles(client.storage.from(AVATAR_BUCKET), user.id);
+    renderAuthAccount();
+    showProfileAvatar();
+    setProfileMessage("Fotoğrafın kaldırıldı.");
+  } catch (error) {
+    setProfileMessage(avatarErrorText(error), true);
+  } finally {
+    setAvatarBusy(false);
+  }
+}
+
 async function loadProfile(user) {
   siteProfile.userId = user?.id ?? null;
   siteProfile.data = null;
   const request = siteProfile.request = user ? (async () => {
     const client = await loadAuth();
-    const { data, error } = await client.from("profiles").select("nickname, favorite_team_id").eq("id", user.id).maybeSingle();
+    // Every column, so a column added later (avatar_path) is used once it exists
+    // and its absence never breaks the profile.
+    const { data, error } = await client.from("profiles").select("*").eq("id", user.id).maybeSingle();
     if (error) throw error;
     return data;
   })() : null;
@@ -127,7 +302,7 @@ async function saveProfile(form) {
   try {
     const client = await loadAuth();
     const row = { id: siteAuth.user.id, nickname: nickname || null, favorite_team_id: select.value ? Number(select.value) : null };
-    const { data, error } = await client.from("profiles").upsert(row).select("nickname, favorite_team_id").single();
+    const { data, error } = await client.from("profiles").upsert(row).select("*").single();
     if (error) throw error;
     siteProfile.data = data;
     renderAuthAccount();
@@ -158,6 +333,15 @@ function profileDialog() {
   dialog.innerHTML = `
     <div class="auth-heading"><div><p class="eyebrow">HESAP</p><h2 id="profile-title">Profil</h2></div><button type="button" class="secondary" data-profile-close>Kapat ×</button></div>
     <p id="profile-help" class="auth-help"></p>
+    <div class="profile-avatar-row">
+      <span class="profile-avatar-preview" aria-hidden="true"></span>
+      <div>
+        <p class="profile-avatar-label">Profil fotoğrafı</p>
+        <div class="profile-avatar-buttons"><button type="button" class="secondary" data-avatar-choose>Fotoğraf yükle</button><button type="button" class="text-button" data-avatar-remove hidden>Kaldır</button></div>
+        <p class="profile-hint">Kare olarak kırpılır ve küçültülür; herkes görebilir.</p>
+        <input type="file" accept="image/*" hidden data-avatar-file>
+      </div>
+    </div>
     <form class="auth-email profile-form" novalidate>
       <label for="profile-nickname">Takma ad</label>
       <input id="profile-nickname" autocomplete="nickname" maxlength="24" spellcheck="false" aria-describedby="profile-nickname-hint profile-nickname-error">
@@ -173,6 +357,14 @@ function profileDialog() {
   dialog.querySelector("#profile-nickname").addEventListener("input", () => setNicknameError(""));
   select.addEventListener("change", () => showProfileCrest(select.value));
   form.addEventListener("submit", (event) => { event.preventDefault(); saveProfile(form); });
+  const file = dialog.querySelector("[data-avatar-file]");
+  dialog.querySelector("[data-avatar-choose]").addEventListener("click", () => file.click());
+  file.addEventListener("change", () => {
+    uploadAvatar(file.files[0]);
+    // Cleared, so choosing the same file again still counts as a change.
+    file.value = "";
+  });
+  dialog.querySelector("[data-avatar-remove]").addEventListener("click", removeAvatar);
   dialog.querySelector("[data-profile-close]").addEventListener("click", () => dialog.close());
   document.body.append(dialog);
   return dialog;
@@ -185,13 +377,15 @@ function openProfileDialog(welcome = false) {
   const dialog = profileDialog(), profile = siteProfile.data;
   dialog.querySelector("#profile-title").textContent = welcome ? "Hoş geldin" : "Profil";
   dialog.querySelector("#profile-help").textContent = welcome
-    ? "Bir takma ad ve tuttuğun takımı seç. İstediğin zaman sol menüdeki Profil'den değiştirebilirsin."
-    : "Maç Tribünü'ne yazdıklarında takma adın ve tuttuğun takımın arması görünür; e-postan görünmez.";
+    ? "Bir takma ad, tuttuğun takım ve istersen bir fotoğraf seç. İstediğin zaman sol menüdeki Profil'den değiştirebilirsin."
+    : "Maç Tribünü'ne yazdıklarında takma adın ve fotoğrafın (yoksa takımının arması) görünür; e-postan görünmez.";
   dialog.querySelector("#profile-nickname").value = profile?.nickname || "";
   dialog.querySelector("#profile-email").textContent = `Giriş e-postası: ${siteAuth.user.email || "—"}`;
   const select = dialog.querySelector("#profile-team");
   select.value = String(profile?.favorite_team_id ?? "");
   showProfileCrest(profile?.favorite_team_id);
+  showProfileAvatar();
+  setAvatarBusy(false);
   setNicknameError("");
   setProfileMessage("");
   if (!dialog.open) dialog.showModal();

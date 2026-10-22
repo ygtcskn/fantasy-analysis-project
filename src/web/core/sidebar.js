@@ -42,12 +42,17 @@ function setupSidebar() {
     }
     menus[group].append(link);
   }
-  const socialLink = document.createElement("a");
-  socialLink.className = "nav-button";
-  socialLink.dataset.view = "social";
-  socialLink.href = "index.html?view=social";
-  socialLink.innerHTML = '<span aria-hidden="true">☷</span> Maç Tribünü';
-  menus.social.append(socialLink);
+  for (const [view, icon, label] of [["social", "☷", "Maç Tribünü"], ["squads", "▣", "Kadrolar"]]) {
+    const link = document.createElement("a");
+    link.className = "nav-button";
+    link.dataset.view = view;
+    link.href = `index.html?view=${view}`;
+    const symbol = document.createElement("span");
+    symbol.setAttribute("aria-hidden", "true");
+    symbol.textContent = icon;
+    link.append(symbol, ` ${label}`);
+    menus.social.append(link);
+  }
   const rail = document.getElementById("sidebar"), toggle = document.getElementById("sidebar-toggle");
   // The sidebar is open by default and the ☰ button is the only thing that
   // hides or shows it. On phone-width screens it would cover the page, so there

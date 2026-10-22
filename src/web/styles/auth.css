@@ -34,3 +34,12 @@
 .profile-team-row select { flex: 1; min-width: 0; }
 .profile-team-crest { display: grid; place-items: center; flex: none; width: 28px; height: 28px; }
 .profile-form button[type=submit] { margin-top: 8px; }
+
+/* Profile photos (core/profile.js): round everywhere they appear, cropped to
+   fill. Without a photo the dialog shows the visitor's initial. */
+.profile-avatar { flex: none; border-radius: 50%; object-fit: cover; background: var(--surface-raised); }
+.profile-avatar-row { display: flex; align-items: center; gap: 16px; margin-bottom: 18px; }
+.profile-avatar-preview { display: grid; place-items: center; flex: none; width: 72px; height: 72px; }
+.profile-avatar-empty { display: grid; place-items: center; width: 72px; height: 72px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface-raised); color: var(--muted); font-size: 28px; }
+.profile-avatar-label { margin: 0 0 8px; font-size: 11px; font-weight: 600; color: var(--muted); }
+.profile-avatar-buttons { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }

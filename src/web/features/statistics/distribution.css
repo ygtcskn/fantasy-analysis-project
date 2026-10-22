@@ -12,3 +12,7 @@
 .statistics-distribution { min-width: 0; margin: 0 16px 16px; border: 1px solid var(--line); border-top: 2px solid #8896d6; border-radius: 8px; padding: 12px; background: var(--surface-raised); }
 :root[data-theme="dark"] .statistics-distribution { border-top-color: #8f9df0; }
 .statistics-distribution .builder-rating-note { padding: 8px 0 0; margin: 0; color: var(--muted); font-size: 11px; line-height: 1.55; }
+/* Metric labels are buttons that pick what the Sıralama panel ranks. */
+.dist-metric-label { cursor: pointer; }
+.dist-metric-label:hover, .dist-metric-label:focus-visible { text-decoration: underline; outline: none; }
+.dist-metric-label.is-selected { fill: var(--statistics-plot-line); text-decoration: underline; }

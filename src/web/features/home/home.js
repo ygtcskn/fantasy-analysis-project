@@ -67,11 +67,7 @@ function homeRounds() {
 }
 
 function initialHomeRound(rounds) {
-  const current = rounds.find((round) => round.fixtures.some((fixture) => String(fixture["round.is_current"]).toLowerCase() === "true"));
-  if (current) return current.key;
-  const now = Date.now() / 1000;
-  const upcoming = rounds.find((round) => round.fixtures.some((fixture) => (number(fixture.starting_at_timestamp) ?? -1) >= now));
-  return (upcoming || rounds[rounds.length - 1])?.key ?? null;
+  return rounds[currentRoundIndex(rounds)]?.key ?? null;
 }
 
 function currentFixtureScores() {

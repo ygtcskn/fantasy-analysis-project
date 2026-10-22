@@ -20,6 +20,37 @@ Moderation is deleting rows in Supabase → Table Editor. New posts by others
 appear on refresh (↻) or when the week changes; unsent drafts survive redraws
 on the open page only. The implementation lives in `features/social/`.
 
+## Kadrolar
+
+The sidebar's **Sosyal → Kadrolar** page (`index.html?view=squads`), below
+Maç Tribünü, lists the fantasy squads visitors have shared. Each matchweek is a
+purple bar, newest first: the current week always (the same week Ana Sayfa and
+Maç Tribünü open on, `currentRoundIndex` in `core/match-rules.js`), then every
+earlier or later week someone shared a squad for. Under each bar, three cards
+to a row (two, then one, on narrower screens) show the sharer's club crest in a
+ring of the club's colour (or the nickname's first letter), nickname, share
+date in Turkish time and the eleven's expected fantasy points, highest first.
+A total that left out an eleven without a current projection carries a `*`, as
+on Kadro Kur.
+
+Squads are saved with **Kadroyu kaydet** under Kadro Kur's bench
+(`features/builder/save.js`), for the first matchweek whose fantasy deadline
+(one hour before its first kickoff, `fantasyDeadline` in `data/fantasy.js`) is
+still ahead; the line under the button names that week and its deadline. Saving
+needs a full eleven, a signed-in visitor and a nickname: a visitor who is not
+signed in gets the sign-in dialog, and the squad on the pitch is kept for that
+tab (`sessionStorage`), so a Google sign-in, which leaves the page, comes back to
+it. Saving again for the same week replaces that week's squad.
+
+Squads live in Supabase, in `shared_squads` (`supabase/shared_squads.sql`, run
+after `profiles.sql`), one per visitor per week, keyed by season and Sportmonks
+round ID; each holds the formation, the eleven (goalkeeper first) and bench as
+Sportmonks player IDs, the expected points when saved and how many of the eleven
+had a projection. Anyone can read them. The database fills in the author from
+the session and the profile, as for Maç Tribünü, and keeps a squad in its week.
+It knows no kickoffs, so the deadline is the page's rule only. The page lives in
+`features/squads/`.
+
 Every view, including individual team pages, uses the shared light-purple banner in
 `styles/page-header.css`. It contains the page title, season/context and description,
 and stays light purple in dark mode. Load this stylesheet after `theme-dark.css`.
@@ -285,6 +316,9 @@ curve, the player's value marked on it, the peers he outperforms coloured by
 percentile, and his percentile on the right - the same peers and the same
 numbers as the wheel. It lives in `features/statistics/distribution.js`; see
 [features/statistics/distribution.md](features/statistics/distribution.md).
+Clicking a metric's name fills **Sıralama**, the panel beside it under the
+player list, with this season's players of the same group ranked best to worst
+on that metric, by the chart's own value and percentile.
 
 All of these charts are inline SVG with no charting library, and their colours
 are CSS variables so they follow the theme like everything else.
@@ -413,7 +447,7 @@ src/web/
     radar.js / radar.css        The two spider plots, players and teams
     team-analysis.js / .css     The match-by-match team charts
   features/                   One folder per page or panel
-    home/  standings/  matchweek/  tier-list/  builder/
+    home/  standings/  matchweek/  tier-list/  builder/  social/  squads/
     statistics/                 Player page: list, profile, radar page, distribution
     team-statistics/            Team page: list, players, profile, radar page, charts page
     team-page/                  team.html
@@ -465,6 +499,19 @@ sidebar: "Giriş yap" when signed out, the email and "Çıkış yap" when signed
   it), and otherwise once per browser session. A new field means a column and its
   check in `profiles.sql` (run again in the SQL Editor) and an input in
   `profile.js`.
+- **Profile photo** - "Fotoğraf yükle" in the profile crops the chosen picture
+  to a centred square and shrinks it to 256 pixels in the browser (WebP, else
+  JPEG; a few KB), which also drops anything the camera stored, such as the
+  place it was taken. It goes to `<user id>/<new name>` in the public `avatars`
+  Storage bucket (`supabase/avatars.sql`), and `profiles.avatar_path` points
+  to it. Only the owner can upload to or delete from their folder, at most
+  three files at a time; the bucket takes only images up to 512 KB. Each upload
+  gets a new name, so browsers can keep a photo for good. "Kaldır" removes it.
+  `profileBadge()` draws a person everywhere they appear: the photo, else the
+  club's crest; a photo that no longer loads falls back to the crest.
+  Maç Tribünü posts copy the photo like the nickname (`author_avatar_path`), and
+  a change follows onto earlier posts. Moderation: delete the file in Supabase
+  → Storage → avatars.
 - **For features** - `siteAuth.user` is the signed-in user or `null`, and
   `document` receives a `site-auth-change` event whenever it changes. Anything
   members-only must also be enforced by Supabase (row-level security), never
@@ -526,7 +573,7 @@ the public site and `"none"` when a page is opened from disk. Live scores and
 Kadro Kur recommendations need `serve.py`, so they appear only in `"local"`
 mode. On the public site the serve.py setup instructions on the empty page
 and the team page's "open CSV files" and "refresh saved data" buttons are
-hidden. Maç Tribünü and sign-in work the same on both, through Supabase.
+hidden. Maç Tribünü, Kadrolar and sign-in work the same on both, through Supabase.
 
 The pages fetch data with `cache: "no-cache"`: the browser asks every time,
 but a file that has not changed since the last visit comes back as a short

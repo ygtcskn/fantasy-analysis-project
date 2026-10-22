@@ -422,8 +422,8 @@
 .statistics-players .builder-role-filters { min-width: 0; }
 .statistics-players .builder-role-filters button { flex: 1 1 0; min-width: 0; width: auto; max-width: 32px; padding: 3px; }
 .statistics-players .builder-role-filters img { width: 100%; max-width: 22px; height: auto; margin: auto; }
-:is(#statistics-workspace, #team-statistics-workspace) .statistics-player-list-table .statistics-club { gap: 12px; }
-:is(#statistics-workspace, #team-statistics-workspace) .statistics-player-list-table .statistics-player-button {
+:is(#statistics-workspace, #team-statistics-workspace) :is(.statistics-player-list-table, .statistics-ranking-table) .statistics-club { gap: 12px; }
+:is(#statistics-workspace, #team-statistics-workspace) :is(.statistics-player-list-table, .statistics-ranking-table) .statistics-player-button {
   flex: 1;
   min-width: 0;
   white-space: nowrap;
@@ -431,6 +431,16 @@
   text-overflow: ellipsis;
 }
 #team-statistics-workspace .statistics-lower { grid-template-columns: minmax(0, calc((100% - 40px) / 3)) minmax(0, 1fr); }
+/* The left column: Oyuncular above Sıralama, which ranks the players on the
+   metric picked in the Dağılım chart beside it. */
+#statistics-workspace .statistics-left { display: grid; gap: 20px; align-content: start; min-width: 0; }
+#statistics-workspace .statistics-ranking-table { table-layout: fixed; }
+#statistics-workspace .statistics-ranking-table th:nth-child(1) { width: 13%; }
+#statistics-workspace .statistics-ranking-table th:nth-child(2) { width: 49%; }
+#statistics-workspace .statistics-ranking-table th:nth-child(3) { width: 23%; }
+#statistics-workspace .statistics-ranking-table th:nth-child(4) { width: 15%; }
+.statistics-ranking-unit { color: var(--muted); font-size: 10px; font-weight: 400; }
+.statistics-ranking-flag { flex: none; color: var(--muted); font-size: 10px; white-space: nowrap; }
 /* The left column: Takım Listesi above the open team's players. */
 #team-statistics-workspace .team-statistics-side { display: grid; gap: 20px; align-content: start; min-width: 0; }
 /* The open team's Oyuncu Listesi: the search takes the team menu's row too,

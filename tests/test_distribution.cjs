@@ -90,6 +90,22 @@ test("a compared player gets his own marker and value line; the fill stays the f
   assert.ok(!single.includes('data-dist-marker="1"'));
 });
 
+test("metric labels are buttons that pick the ranked metric", () => {
+  const rows = [
+    { id: "goals", selected: true, label: "Gol", unit: "/90", values: peers, value: 0.6, score: 70, direction: "higher_better" },
+    { id: "xg", selected: false, label: "xG", unit: "/90", values: peers, value: 0.3, score: 30, direction: "higher_better" },
+    { label: "Etiket", unit: "/90", values: peers, value: 0.3, score: 30, direction: "higher_better" },
+  ];
+  const svg = distribution.chart(rows, (score) => String(Math.round(score)));
+  assert.match(svg, /data-dist-metric="goals" class="dist-metric-label is-selected" role="button" tabindex="0" aria-pressed="true"/);
+  assert.match(svg, /data-dist-metric="xg" class="dist-metric-label" role="button" tabindex="0" aria-pressed="false"/);
+  assert.equal((svg.match(/data-dist-metric=/g) || []).length, 2, "a row without an id stays plain text");
+  const html = fs.readFileSync(path.join(__dirname, "../src/web/index.html"), "utf8");
+  for (const id of ["statistics-ranking", "statistics-ranking-body", "statistics-ranking-metric", "statistics-ranking-note", "statistics-list-panel"]) {
+    assert.ok(html.includes(`id="${id}"`), id);
+  }
+});
+
 test("the chart is loaded with its feature, before the statistics page that draws it", () => {
   const html = fs.readFileSync(path.join(__dirname, "../src/web/index.html"), "utf8");
   const order = ["features/statistics/distribution.js", "features/statistics/statistics.js"]

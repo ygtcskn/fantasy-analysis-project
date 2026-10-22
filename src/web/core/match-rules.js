@@ -55,6 +55,16 @@ function validMatchRating(row) {
   return value !== null && value >= 1 && value <= 10 && ruleNumber(row?.minutes_played) !== 0 ? value : null;
 }
 
+// The matchweek a page opens on, as an index into rounds listed in kickoff
+// order, each { fixtures: [...] }: the one Sportmonks marks current, else the
+// first with a match still to kick off, else the last. -1 when there are none.
+function currentRoundIndex(rounds, now = Date.now()) {
+  const marked = rounds.findIndex((round) => round.fixtures.some((fixture) => String(fixture["round.is_current"]).toLowerCase() === "true"));
+  if (marked >= 0) return marked;
+  const upcoming = rounds.findIndex((round) => round.fixtures.some((fixture) => (ruleNumber(fixture.starting_at_timestamp) ?? -1) * 1000 >= now));
+  return upcoming >= 0 ? upcoming : rounds.length - 1;
+}
+
 // The same rule for a team's match statistics (team_metrics.csv), covered when
 // any of these is recorded - src/tables/common.py's TEAM_COVERAGE_COLUMNS.
 // Team card counts come only from here, on every page: Sportmonks counts a
@@ -89,5 +99,5 @@ function profileName(profile) {
 
 if (typeof module !== "undefined" && module.exports) {
   module.exports = { FINISHED_STATES, fixtureState, fixtureFinished, fixtureUnplayed, playerAppeared, rowCovered,
-    countedValue, validMatchRating, teamCountedValue, profileName };
+    countedValue, validMatchRating, currentRoundIndex, teamCountedValue, profileName };
 }

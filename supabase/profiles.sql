@@ -22,6 +22,14 @@ create table if not exists public.profiles (
 
 create unique index if not exists profiles_nickname_unique on public.profiles (lower(nickname));
 
+-- The profile photo: a file in the public "avatars" bucket (avatars.sql), always
+-- in the visitor's own folder, <their id>/<name>. Added after the table first
+-- shipped, so it is added here rather than in create table above.
+alter table public.profiles add column if not exists avatar_path text;
+alter table public.profiles drop constraint if exists profiles_avatar_path_own;
+alter table public.profiles add constraint profiles_avatar_path_own
+  check (avatar_path is null or avatar_path ~ ('^' || id::text || '/[A-Za-z0-9_.-]{1,64}\.(webp|jpg|png)$'));
+
 -- updated_at follows every change; created_at cannot be rewritten by a visitor.
 create or replace function public.profiles_touch() returns trigger
 language plpgsql set search_path = '' as $$

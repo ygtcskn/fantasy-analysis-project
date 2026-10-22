@@ -119,11 +119,12 @@ function renderAuthAccount() {
   area.hidden = !siteAuth.known;
   if (!siteAuth.known) return;
   if (siteAuth.user) {
-    // core/profile.js, when loaded, supplies the nickname, crest and Profil button.
+    // core/profile.js, when loaded, supplies the nickname, photo or crest and Profil button.
     const profile = typeof siteProfile !== "undefined" && siteProfile.userId === siteAuth.user.id ? siteProfile.data : null;
     const who = document.createElement("p");
     who.className = "rail-account-email";
-    if (profile?.favorite_team_id) who.append(profileCrest(profile.favorite_team_id, 20));
+    const badge = profile && profileBadge(profile, 24);
+    if (badge) who.append(badge);
     who.append(profile?.nickname || siteAuth.user.email || "Giriş yapıldı");
     const buttons = typeof openProfileDialog === "function" ? [authButton("☺", "Profil", () => openProfileDialog())] : [];
     area.replaceChildren(who, ...buttons, authButton("←", "Çıkış yap", signOutAuth));

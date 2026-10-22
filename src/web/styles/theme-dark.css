@@ -360,21 +360,21 @@
   padding-left: 54px;
   text-align: left;
 }
-:root[data-theme="dark"] :is(#statistics-workspace, #team-statistics-workspace) .statistics-player-list-table :is(th, td):not(.no-results) {
+:root[data-theme="dark"] :is(#statistics-workspace, #team-statistics-workspace) :is(.statistics-player-list-table, .statistics-ranking-table) :is(th, td):not(.no-results) {
   height: 42px;
   padding: 5px 7px;
   border-inline: 0;
   font-size: 11px;
   white-space: nowrap;
 }
-:root[data-theme="dark"] #statistics-workspace .statistics-player-list-table tbody > tr.statistics-row-selected > td {
+:root[data-theme="dark"] #statistics-workspace :is(.statistics-player-list-table, .statistics-ranking-table) tbody > tr.statistics-row-selected > td {
   box-shadow: none;
 }
 /* Compared players: a rule in each player's colour marks which row is which. */
-:root[data-theme="dark"] #statistics-workspace .statistics-player-list-table tbody > tr.statistics-row-selected > td:first-child {
+:root[data-theme="dark"] #statistics-workspace :is(.statistics-player-list-table, .statistics-ranking-table) tbody > tr.statistics-row-selected > td:first-child {
   box-shadow: inset 3px 0 var(--statistics-plot-line);
 }
-:root[data-theme="dark"] #statistics-workspace .statistics-player-list-table tbody > tr.statistics-row-compare > td:first-child {
+:root[data-theme="dark"] #statistics-workspace :is(.statistics-player-list-table, .statistics-ranking-table) tbody > tr.statistics-row-compare > td:first-child {
   box-shadow: inset 3px 0 var(--statistics-plot-compare);
 }
 :root[data-theme="dark"] #team-statistics-workspace .statistics-team-list-table :is(th, td):not(.no-results) {

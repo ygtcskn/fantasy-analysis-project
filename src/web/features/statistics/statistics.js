@@ -8,8 +8,9 @@
 
 // `selected` is the primary player, `compare` the secondary; `picked` turns
 // true at the first click, so the default leader is replaced, not compared.
+// `rankMetric` is the Dağılım metric the Sıralama panel ranks by.
 const statisticsState = { search: "", team: "", role: "", sort: "rating", limit: 10,
-  selected: null, compare: null, picked: false };
+  selected: null, compare: null, picked: false, rankMetric: null };
 
 const STATISTICS_SORTS = [
   ["goals", "Gol", (player) => player.totals.goals.value],
@@ -33,14 +34,24 @@ function statisticsShortName(name) {
 function statisticsListLayout() {
   const workspace = $("statistics-workspace");
   if (workspace.hidden) return;
-  const panel = workspace.querySelector(".statistics-players");
+  const panel = $("statistics-list-panel"), ranking = $("statistics-ranking");
   const ratings = $("statistics-ratings-chart").closest(".statistics-ratings");
+  const distribution = $("statistics-distribution-chart").closest(".statistics-distribution");
+  // Side by side, the player list ends level with the rating chart and the
+  // Sıralama panel beneath it ends level with the Dağılım chart it ranks.
+  const fit = (element, bottom) => {
+    const height = Math.ceil(bottom - element.getBoundingClientRect().top);
+    if (height > 0 && element.style.height !== `${height}px`) element.style.height = `${height}px`;
+  };
   if (window.matchMedia("(min-width: 1101px)").matches) {
-    const height = ratings.getBoundingClientRect().bottom - panel.getBoundingClientRect().top;
-    if (height > 0 && panel.style.height !== `${Math.ceil(height)}px`) panel.style.height = `${Math.ceil(height)}px`;
-  } else if (panel.style.height) panel.style.height = "";
+    fit(panel, ratings.getBoundingClientRect().bottom);
+    fit(ranking, Math.max(distribution.getBoundingClientRect().bottom, ranking.getBoundingClientRect().top + 320));
+  } else {
+    if (panel.style.height) panel.style.height = "";
+    if (ranking.style.height) ranking.style.height = "";
+  }
   // Shrink only unusually long abbreviated names; keep every row on one line.
-  for (const button of panel.querySelectorAll(".statistics-player-list-table .statistics-player-button")) {
+  for (const button of workspace.querySelectorAll(".statistics-players .statistics-player-button")) {
     button.style.fontSize = "";
     for (let size = 12; size >= 8 && button.scrollWidth > button.clientWidth; size--) {
       button.style.fontSize = `${size}px`;
@@ -171,7 +182,8 @@ function setupStatistics() {
   if (typeof ResizeObserver !== "undefined") {
     const observer = new ResizeObserver(() => requestAnimationFrame(statisticsListLayout));
     observer.observe($("statistics-ratings-chart").closest(".statistics-ratings"));
-    observer.observe($("statistics-workspace").querySelector(".statistics-players"));
+    observer.observe($("statistics-distribution-chart").closest(".statistics-distribution"));
+    observer.observe($("statistics-list-panel"));
   }
   window.addEventListener("resize", () => requestAnimationFrame(statisticsListLayout));
 }
@@ -560,6 +572,7 @@ function renderStatisticsProfile(players) {
     for (const id of ["statistics-radar-note", "statistics-detailed-note", "statistics-timeline-note",
       "statistics-ratings-note", "statistics-distribution-note"]) $(id).textContent = "";
     renderStatisticsLegends([]);
+    if (typeof renderMetricRanking === "function") renderMetricRanking(null);
     return;
   }
   statisticsState.selected = selected.id;

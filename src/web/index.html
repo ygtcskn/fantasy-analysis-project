@@ -16,6 +16,7 @@
   <link rel="stylesheet" href="styles/page-header.css">
   <link rel="stylesheet" href="styles/auth.css">
   <link rel="stylesheet" href="features/social/social.css">
+  <link rel="stylesheet" href="features/squads/squads.css">
   <link rel="stylesheet" href="features/builder/bench.css">
   <link rel="stylesheet" href="features/builder/summary.css">
   <script src="core/site.js" defer></script>
@@ -38,6 +39,7 @@
   <script src="features/builder/builder.js" defer></script>
   <script src="features/builder/recommendations.js" defer></script>
   <script src="features/builder/summary.js" defer></script>
+  <script src="features/builder/save.js" defer></script>
   <script src="lib/radar.js" defer></script>
   <script src="features/statistics/radar-page.js" defer></script>
   <script src="features/team-statistics/team-radar-page.js" defer></script>
@@ -48,6 +50,7 @@
   <script src="features/team-statistics/team-players.js" defer></script>
   <script src="features/team-statistics/team-statistics.js" defer></script>
   <script src="features/social/social.js" defer></script>
+  <script src="features/squads/squads.js" defer></script>
   <script src="core/app.js" defer></script>
 </head>
 <body>
@@ -66,6 +69,15 @@
       <p class="social-session-note">Herkes okuyabilir. Konu açmak ve yanıt yazmak için giriş yapıp bir takma ad seç; yazılarında takma adın ve tuttuğun takımın arması görünür, e-postan görünmez.</p>
       <div id="social-matches"></div>
       <p id="social-status" role="status" aria-live="polite"></p>
+    </section>
+    <section id="squads-workspace" aria-label="Kadrolar" hidden>
+      <div class="squads-toolbar">
+        <div><p class="eyebrow">PAYLAŞILAN KADROLAR</p><h2>Herkesin ilk on biri, hafta hafta.</h2></div>
+        <button id="squads-refresh" type="button" class="secondary" aria-label="Kadroları yenile" title="Kadroları yenile">↻</button>
+      </div>
+      <p class="squads-note">Herkes görebilir. Kartlarda paylaşanın takma adı, tuttuğu takımın arması, paylaşım tarihi ve ilk on birinin beklenen fantezi puanı görünür; e-posta görünmez. Her haftanın kadroları beklenen FP'ye göre sıralanır.</p>
+      <div id="squads-weeks"></div>
+      <p id="squads-status" role="status" aria-live="polite"></p>
     </section>
     <section id="home-workspace" class="home-grid" aria-label="Ana Sayfa">
       <section class="home-panel standings-panel" aria-labelledby="standings-title">
@@ -161,7 +173,8 @@
         </section>
       </div>
       <div class="statistics-lower">
-        <section class="statistics-players" aria-labelledby="statistics-list-title">
+        <div class="statistics-left">
+        <section id="statistics-list-panel" class="statistics-players" aria-labelledby="statistics-list-title">
           <div class="builder-pool-heading"><h3 id="statistics-list-title">Oyuncular</h3></div>
           <div class="builder-filters">
             <label class="builder-search"><span class="sr-only">Oyuncu ara</span><input id="statistics-search" type="search" placeholder="Oyuncu veya takım…" autocomplete="off"></label>
@@ -188,6 +201,16 @@
             <tbody id="statistics-list-body"></tbody>
           </table></div>
         </section>
+        <section id="statistics-ranking" class="statistics-players statistics-ranking" aria-labelledby="statistics-ranking-title">
+          <div class="builder-pool-heading"><h3 id="statistics-ranking-title">Sıralama</h3><span id="statistics-ranking-metric" class="badge">—</span></div>
+          <p id="statistics-ranking-note" class="builder-rating-note" role="status"></p>
+          <div class="statistics-list-scroll" tabindex="0" aria-label="Kaydırılabilir ölçüt sıralaması"><table class="statistics-table statistics-ranking-table">
+            <caption class="sr-only">Dağılımda seçilen ölçütte oyuncular, en iyiden en kötüye. Bir isme tıklayarak karşılaştırın.</caption>
+            <thead><tr><th scope="col" class="numeric">#</th><th scope="col">Oyuncu</th><th scope="col" class="numeric">Değer</th><th scope="col" class="numeric" title="Dağılımdaki yüzdelik">Puan</th></tr></thead>
+            <tbody id="statistics-ranking-body"></tbody>
+          </table></div>
+        </section>
+        </div>
         <section class="statistics-profile" aria-labelledby="statistics-profile-title">
           <div class="builder-pool-heading"><h3 id="statistics-profile-title">Oyuncu Profili</h3><div id="statistics-profile-name" class="statistics-profile-players" aria-live="polite">—</div></div>
           <p id="statistics-profile-note" class="builder-rating-note" role="status"></p>
@@ -378,6 +401,11 @@
             <h3 id="builder-bench-title">Yedekler</h3>
             <div id="builder-bench-slots"></div>
           </section>
+          <div id="builder-save-area" class="builder-save" hidden>
+            <button id="builder-save" type="button" class="primary">Kadroyu kaydet</button>
+            <p id="builder-save-hint" class="builder-save-hint"></p>
+            <p id="builder-save-status" class="builder-save-status" role="status" aria-live="polite"></p>
+          </div>
         </section>
         <section class="builder-pool" aria-labelledby="builder-pool-title">
           <div class="builder-pool-heading"><h3 id="builder-pool-title">Oyuncular</h3><span id="builder-result-count" class="badge">0 oyuncu</span></div>

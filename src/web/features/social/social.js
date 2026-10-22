@@ -6,7 +6,9 @@
 // database decides who wrote a post, never this page. Only unsent drafts on
 // the open page are kept in the browser.
 
-const SOCIAL_POST_FIELDS = "id, user_id, author_nickname, author_team_id, body, created_at";
+// Every column: posts carry the author's nickname, club and photo, and a column
+// added later (author_avatar_path) is used once it exists without breaking reads.
+const SOCIAL_POST_FIELDS = "*";
 const socialState = {
   round: null,
   loadedKey: "", request: 0, status: "idle", error: "",
@@ -52,21 +54,9 @@ function socialErrorText(error) {
   return message ? `Bir sorun çıktı: ${message}` : "Bir sorun çıktı. Tekrar dene.";
 }
 
-// Reading needs nothing; writing needs a session and a nickname. Each missing
-// step opens the dialog that supplies it.
-async function socialReadyToPost() {
-  if (!siteAuth.user) {
-    openAuthDialog();
-    setAuthMessage("Konu açmak ve yanıt yazmak için giriş yap. Okumak için gerekmez.");
-    return false;
-  }
-  await siteProfile.request?.catch(() => {});
-  if (!siteProfile.data?.nickname) {
-    openProfileDialog();
-    setProfileMessage("Yazmadan önce bir takma ad seç; yazılarında o görünür.");
-    return false;
-  }
-  return true;
+function socialReadyToPost() {
+  return profileReady("Konu açmak ve yanıt yazmak için giriş yap. Okumak için gerekmez.",
+    "Yazmadan önce bir takma ad seç; yazılarında o görünür.");
 }
 
 async function loadSocialRound(fixtureIds, key) {
@@ -74,12 +64,12 @@ async function loadSocialRound(fixtureIds, key) {
   Object.assign(socialState, { loadedKey: key, status: "loading", error: "" });
   try {
     const client = await loadAuth();
-    const topics = await client.from("match_topics").select(`${SOCIAL_POST_FIELDS}, fixture_id, title`)
+    const topics = await client.from("match_topics").select(SOCIAL_POST_FIELDS)
       .eq("season", state.seasonSlug).in("fixture_id", fixtureIds).order("created_at", { ascending: false });
     if (topics.error) throw topics.error;
     const ids = topics.data.map((topic) => topic.id);
     const replies = ids.length
-      ? await client.from("match_replies").select(`${SOCIAL_POST_FIELDS}, topic_id`).in("topic_id", ids).order("created_at")
+      ? await client.from("match_replies").select(SOCIAL_POST_FIELDS).in("topic_id", ids).order("created_at")
       : { data: [], error: null };
     if (replies.error) throw replies.error;
     if (request !== socialState.request) return;
@@ -188,7 +178,9 @@ async function deleteSocialPost(table, post, removeLocally) {
 function socialPost(post, table, removeLocally) {
   const article = socialNode("article", "social-post");
   const meta = socialNode("p", "social-post-meta");
-  if (post.author_team_id && typeof profileCrest === "function") meta.append(profileCrest(post.author_team_id, 18));
+  const badge = typeof profileBadge === "function"
+    && profileBadge({ avatar_path: post.author_avatar_path, favorite_team_id: post.author_team_id }, 22);
+  if (badge) meta.append(badge);
   const time = socialNode("time", "", socialTimeFormat.format(new Date(post.created_at)));
   time.dateTime = post.created_at;
   meta.append(socialNode("strong", "", post.author_nickname), document.createTextNode(" · "), time);
@@ -221,7 +213,7 @@ function socialTopicRow(topic, siblings) {
     replyArea.append(socialForm(draftKey, false, async ({ body }) => {
       const client = await loadAuth();
       const { data, error } = await client.from("match_replies").insert({ topic_id: topic.id, body })
-        .select(`${SOCIAL_POST_FIELDS}, topic_id`).single();
+        .select(SOCIAL_POST_FIELDS).single();
       if (error) throw error;
       topic.replies.push(data);
       setSocialStatus("Yanıtın eklendi.");
@@ -246,10 +238,8 @@ function renderSocial() {
     rounds.get(key).fixtures.push(fixture);
   }
   if (!rounds.has(socialState.round)) {
-    const entries = [...rounds];
-    socialState.round = (entries.find(([, round]) => round.fixtures.some((fixture) => String(fixture["round.is_current"]).toLowerCase() === "true"))
-      || entries.find(([, round]) => round.fixtures.some((fixture) => Number(fixture.starting_at_timestamp) >= Date.now() / 1000))
-      || entries[entries.length - 1])?.[0] ?? null;
+    const keys = [...rounds.keys()];
+    socialState.round = keys[currentRoundIndex([...rounds.values()])] ?? null;
   }
   select.replaceChildren(...[...rounds].map(([key, round]) => new Option(round.name, key)));
   select.disabled = !rounds.size;
@@ -287,7 +277,7 @@ function renderSocial() {
         const client = await loadAuth();
         const { data, error } = await client.from("match_topics")
           .insert({ fixture_id: Number(fixture.fixture_id), season: state.seasonSlug, title, body })
-          .select(`${SOCIAL_POST_FIELDS}, fixture_id, title`).single();
+          .select(SOCIAL_POST_FIELDS).single();
         if (error) throw error;
         topics.unshift({ ...data, replies: [] });
         socialState.open.add(data.id);

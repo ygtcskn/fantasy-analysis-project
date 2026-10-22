@@ -419,6 +419,7 @@ function renderBuilderPool(players, teams) {
 function renderSquadBuilder() {
   const { players, teams } = builderData();
   const playersById = new Map(players.map((player) => [player.id, player]));
+  restoreBuilderDraft(playersById);
   for (const [slot, playerId] of builderState.selected) if (!playersById.has(playerId) || !builderSlots().some((item) => item.key === slot)) builderState.selected.delete(slot);
   $("builder-count").textContent = `${builderState.selected.size} / 15`;
   const budget = builderBudget();
@@ -431,6 +432,7 @@ function renderSquadBuilder() {
   renderBuilderPool(players, teams);
   renderBuilderRecommendations();
   renderBuilderSummary(playersById, teams);
+  renderBuilderSave();
 }
 
 function resetSquadBuilder() {

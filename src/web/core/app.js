@@ -178,6 +178,7 @@ function records() {
 
 function render() {
   const socialView = state.view === "social";
+  const squadsView = state.view === "squads";
   const matchweekView = state.view === "matchweek";
   const builderView = state.view === "builder";
   const statisticsView = state.view === "statistics";
@@ -207,7 +208,8 @@ function render() {
   $("builder-workspace").hidden = !loaded || !builderView;
   $("tier-workspace").hidden = !loaded || !tierView;
   $("social-workspace").hidden = !socialView;
-  if (socialView) {
+  $("squads-workspace").hidden = !squadsView;
+  if (socialView || squadsView) {
     for (const id of ["dataset-stats", "empty-state", "workspace"]) $(id).hidden = true;
   }
   $("view-title").textContent = homeView ? "Ana Sayfa" : tierView ? "Oyuncu Listesi" : playerView ? "Oyuncu Katılımları" : "Fikstür";
@@ -251,6 +253,13 @@ function render() {
     $("view-description").textContent = "Haftanın maçlarını konuş, kendi konunu aç, tribünün sesine katıl.";
     $("view-eyebrow").textContent = "SOSYAL · MAÇ TRİBÜNÜ";
     renderSocial();
+    return;
+  }
+  if (squadsView) {
+    $("view-title").textContent = "Kadrolar";
+    $("view-description").textContent = "Paylaşılan fantezi kadroları, maç haftalarına göre.";
+    $("view-eyebrow").textContent = "SOSYAL · KADROLAR";
+    renderSharedSquads();
     return;
   }
   if (homeView) { renderHome(); return; }
@@ -378,7 +387,7 @@ $("reset").addEventListener("click", () => { resetFilters(); render(); });
 ["search", "team", "position", "minutes"].forEach((id) => $(id).addEventListener(id === "search" || id === "minutes" ? "input" : "change", () => { state.page = 0; render(); }));
 $("previous").addEventListener("click", () => goToTablePage(state.page - 1));
 $("next").addEventListener("click", () => goToTablePage(state.page + 1));
-const siteViews = ["home", "standings", "fixtures", "matchweek", "builder", "statistics", "team-statistics", "tiers", "players", "social"];
+const siteViews = ["home", "standings", "fixtures", "matchweek", "builder", "statistics", "team-statistics", "tiers", "players", "social", "squads"];
 function navigateView(view) {
   state.view = siteViews.includes(view) ? view : "home";
   state.sort = "date"; state.direction = state.view === "fixtures" ? 1 : -1; state.page = 0;
@@ -402,6 +411,7 @@ setupDetailedStandings();
 setupSquadBuilder();
 setupBuilderRecommendations();
 setupBuilderSummary();
+setupBuilderSave();
 setupStatistics();
 setupTeamStatistics();
 setupMatchweek();
