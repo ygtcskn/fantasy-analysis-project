@@ -33,6 +33,27 @@ date in Turkish time and the eleven's expected fantasy points, highest first.
 A total that left out an eleven without a current projection carries a `*`, as
 on Kadro Kur.
 
+Beside it, **Gerçekleşen FP** is what the eleven actually scored that week:
+each starter's points (`points_total` in `points/player_match_points.csv`) in
+the week's finished matches, with "4 / 9 maç" for how much of the week that
+covers. It grows as each match ends and the site's data is refreshed by the
+download and pipeline run. Only the eleven score, with no captain and no bench
+substitutions, the same reading as Kadro Kur's summary; a starter whose club
+has played without him scores 0. The squad's page shows the same total and each
+starter's points under his rating. The author's own squads carry **Sil**, on
+the card and on the squad's page; the database lets nobody else delete them.
+
+Each card opens that squad's own page, `index.html?view=squads&squad=<id>`
+(`features/squads/squad-detail.js`), which the browser's back button and a
+shared link both reach. It shows the sharer, the week and the save time, then
+the eleven in its formation and the bench on the site's one pitch (shirt, name,
+season rating, as on Kadro Kur), with the budget, and beside it Kadro Kur's
+**Kadro beklentisi** and **Takımlara göre**. The expectation is the one saved
+with the squad, because the projections behind it are replaced after the week's
+deadline; players are looked up by Sportmonks ID in the season files, so one who
+has since left the league still shows. "← Tüm kadrolar" and the sidebar return
+to the week list.
+
 Squads are saved with **Kadroyu kaydet** under Kadro Kur's bench
 (`features/builder/save.js`), for the first matchweek whose fantasy deadline
 (one hour before its first kickoff, `fantasyDeadline` in `data/fantasy.js`) is
@@ -45,8 +66,11 @@ it. Saving again for the same week replaces that week's squad.
 Squads live in Supabase, in `shared_squads` (`supabase/shared_squads.sql`, run
 after `profiles.sql`), one per visitor per week, keyed by season and Sportmonks
 round ID; each holds the formation, the eleven (goalkeeper first) and bench as
-Sportmonks player IDs, the expected points when saved and how many of the eleven
-had a projection. Anyone can read them. The database fills in the author from
+Sportmonks player IDs, and, as they stood when saved, the eleven's expected
+points, goals, assists, cards and minutes, the bench's expected points, how many
+of the eleven had a projection and the fifteen's price. Columns added since the
+table was first made are added by running the file again; a squad saved before
+then shows "—" for them until it is saved again. Anyone can read them. The database fills in the author from
 the session and the profile, as for Maç Tribünü, and keeps a squad in its week.
 It knows no kickoffs, so the deadline is the page's rule only. The page lives in
 `features/squads/`.

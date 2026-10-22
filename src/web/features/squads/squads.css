@@ -1,6 +1,7 @@
-/* Kadrolar: purple matchweek bars, each over a grid of squad cards. */
-:root { --squad-card-line: #b9c6f0; }
-:root[data-theme="dark"] { --squad-card-line: #3d4b7d; }
+/* Kadrolar: purple matchweek bars, each over a grid of squad cards, and one
+   squad's own page (squad-detail.js). */
+:root { --squad-card-line: #b9c6f0; --squad-card-hover: #526ed3; }
+:root[data-theme="dark"] { --squad-card-line: #3d4b7d; --squad-card-hover: #8299f1; }
 
 #squads-workspace { padding-bottom: 32px; }
 .squads-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 16px; }
@@ -15,8 +16,21 @@
 .squad-week-current { padding: 3px 8px; border: 1px solid currentColor; border-radius: 999px; font-size: 10px; font-weight: 650; letter-spacing: .6px; text-transform: uppercase; }
 .squad-week-count { font-size: 12px; white-space: nowrap; }
 
-.squad-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
-.squad-card { display: flex; align-items: center; gap: 18px; min-width: 0; padding: 18px 20px; border: 2px solid var(--squad-card-line); border-radius: 10px; background: var(--surface); }
+/* Three to a row at most, each at least 380px wide, so fewer on narrower screens. */
+.squad-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, max(380px, calc((100% - 32px) / 3))), 1fr)); gap: 16px; }
+.squad-card { position: relative; display: flex; align-items: center; gap: 18px; min-width: 0; padding: 18px 20px; border: 2px solid var(--squad-card-line); border-radius: 10px; background: var(--surface); color: var(--ink); transition: border-color 150ms ease, background 150ms ease; }
+.squad-card:hover { border-color: var(--squad-card-hover); background: var(--surface-hover); }
+/* The nickname is the link and covers the whole card; "Sil" sits above it. */
+.squad-card-link { color: inherit; text-decoration: none; }
+.squad-card-link::after { content: ""; position: absolute; inset: 0; border-radius: inherit; }
+#squads-workspace .squad-card-link:focus-visible { outline: none; }
+.squad-card:has(.squad-card-link:focus-visible) { outline: 3px solid var(--focus); outline-offset: 3px; }
+.squad-card-side { display: flex; flex-direction: column; align-items: flex-end; justify-content: flex-end; gap: 10px; align-self: stretch; margin-left: auto; }
+.squad-delete { position: relative; z-index: 1; margin-bottom: auto; padding: 4px 10px; border: 1px solid color-mix(in srgb, var(--result-loss) 65%, transparent); border-radius: 6px; background: transparent; color: var(--result-loss); font-size: 11px; font-weight: 650; }
+.squad-delete:hover { background: color-mix(in srgb, var(--result-loss) 14%, transparent); }
+.squad-actual { display: grid; justify-items: end; gap: 1px; padding: 7px 12px; border: 1px solid color-mix(in srgb, var(--result-win) 45%, transparent); border-radius: 8px; background: color-mix(in srgb, var(--result-win) 13%, transparent); white-space: nowrap; }
+.squad-actual span, .squad-actual small { color: var(--muted); font-size: 10px; }
+.squad-actual strong { font-size: 20px; font-weight: 650; line-height: 1.2; font-variant-numeric: tabular-nums; }
 .squad-avatar { position: relative; display: grid; place-items: center; flex: 0 0 64px; width: 64px; height: 64px; border: 3px solid var(--squad-ring, var(--line)); border-radius: 50%; background: var(--surface-raised); overflow: hidden; }
 .squad-avatar-initial { font-size: 24px; font-weight: 650; color: var(--muted); }
 .squad-avatar .profile-crest { position: absolute; inset: 0; margin: auto; width: 36px; height: 36px; object-fit: contain; background: var(--surface-raised); }
@@ -30,13 +44,78 @@
 .squad-load-error { color: var(--result-loss); }
 #squads-status { color: var(--muted); font-size: 12px; }
 
-@media (max-width: 1100px) {
-  .squad-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+/* One squad's page: who and when, then the pitch beside the saved totals. */
+.squad-back { margin-bottom: 16px; text-decoration: none; }
+.squad-detail-head { display: flex; align-items: center; gap: 20px; margin-bottom: 20px; padding: 18px 22px; border: 2px solid var(--squad-card-line); border-radius: 10px; background: var(--surface); }
+.squad-avatar-large { flex-basis: 84px; width: 84px; height: 84px; }
+.squad-avatar-large .squad-avatar-initial { font-size: 32px; }
+.squad-avatar-large .profile-crest { width: 46px; height: 46px; }
+.squad-detail-identity { display: grid; gap: 6px; flex: 1; min-width: 0; }
+.squad-detail-identity h2 { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; font-size: 22px; overflow-wrap: anywhere; }
+.squad-detail-own { padding: 3px 8px; border: 1px solid var(--squad-card-hover); border-radius: 999px; color: var(--squad-card-hover); font-size: 10px; font-weight: 650; letter-spacing: .6px; text-transform: uppercase; }
+.squad-detail-meta { margin: 0; color: var(--muted); font-size: 12px; }
+.squad-detail-side { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 16px; }
+.squad-detail-points { display: grid; justify-items: end; gap: 2px; color: var(--muted); font-size: 11px; }
+.squad-detail-points strong { color: var(--ink); font-size: 30px; font-weight: 650; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.squad-detail-side .squad-actual strong { font-size: 24px; }
+.squad-detail-side .squad-delete { margin-bottom: 0; }
+.squad-detail-status { margin: -8px 0 12px; color: var(--muted); font-size: 12px; }
+.squad-detail-status:empty { display: none; }
+/* A starter's actual points this week, under his rating on the grass. */
+.squad-player-points { padding: 1px 6px; border-radius: 3px; background: #0b2f1acc; color: #eaffd6; font-size: 9px; font-weight: 750; text-shadow: none; }
+
+.squad-detail-layout { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr); align-items: start; gap: 28px; }
+.squad-pitch-panel, .squad-details { min-width: 0; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); overflow: hidden; }
+.squad-pitch-panel { border-top: 3px solid #c86158; }
+.squad-details { border-top: 3px solid #4f55c4; }
+.squad-pitch-heading, .squad-details-heading { display: flex; align-items: center; justify-content: space-between; gap: 15px; padding: 20px 22px 14px; }
+.squad-pitch-heading h3, .squad-details-heading h3 { margin: 0; font-size: 20px; }
+.squad-pitch-heading .eyebrow, .squad-details-heading .eyebrow { margin-bottom: 6px; font-size: 9px; }
+.squad-pitch-totals { display: flex; gap: 22px; margin: 0; text-align: center; }
+.squad-pitch-totals > div { display: grid; gap: 4px; }
+.squad-pitch-totals dt { color: var(--muted); font-size: 10px; }
+.squad-pitch-totals dd { margin: 0; font-size: 16px; font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.squad-pitch { min-height: 680px; margin: 0 20px 18px; }
+.squad-pitch-lines { min-height: 680px; display: flex; flex-direction: column; justify-content: space-around; gap: 13px; padding: 30px 12px; }
+.squad-pitch-line { min-width: 0; text-align: center; }
+.squad-pitch-line-players { display: flex; justify-content: space-evenly; align-items: start; gap: 7px; }
+.squad-pitch-player { display: grid; justify-items: center; align-content: start; gap: 4px; flex: 1 1 0; min-width: 0; max-width: 112px; }
+.squad-bench { padding: 0 22px 22px; }
+.squad-bench h3 { margin: 0 0 10px; font-size: 16px; }
+.squad-bench .squad-pitch-line-players { width: min(100%, 440px); margin-inline: auto; }
+.squad-bench .pitch-player-name { color: var(--ink); text-shadow: none; }
+
+.squad-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin: 0; padding: 0 22px 12px; }
+.squad-metric { padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-raised); }
+.squad-metric dt { color: var(--muted); font-size: 10px; font-weight: 600; }
+.squad-metric dd { margin: 4px 0 0; font-size: 22px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.squad-metric .squad-metric-detail { margin-top: 2px; color: var(--muted); font-size: 10px; font-weight: 500; }
+.squad-details-note { margin: 0; padding: 4px 22px 6px; color: var(--muted); font-size: 10px; line-height: 1.7; }
+.squad-clubs { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0 22px 22px; list-style: none; }
+.squad-club { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px 6px 10px; border: 1px solid var(--line); border-left: 4px solid var(--club-color, var(--muted)); border-radius: 6px; background: var(--surface-raised); font-size: 12px; font-weight: 600; }
+.squad-club .club-logo { width: 24px; height: 24px; flex: 0 0 24px; }
+.squad-club .club-logo img { width: 22px; height: 22px; }
+.squad-club-count { font-variant-numeric: tabular-nums; }
+
+@media (max-width: 920px) {
+  .squad-detail-layout { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 650px) {
   .squads-toolbar { align-items: stretch; flex-direction: column; gap: 12px; }
   .squads-toolbar h2 { font-size: 20px; }
   .squad-week-header { padding: 12px 14px; }
-  .squad-grid { grid-template-columns: minmax(0, 1fr); }
   .squad-card { padding: 14px 16px; gap: 14px; }
+  .squad-detail-head { flex-wrap: wrap; gap: 14px; padding: 16px; }
+  .squad-avatar-large { flex-basis: 64px; width: 64px; height: 64px; }
+  .squad-detail-side { flex-basis: 100%; justify-content: space-between; }
+  .squad-detail-points { justify-items: start; }
+  .squad-pitch-heading { flex-wrap: wrap; padding-inline: 14px; }
+  .squad-pitch { min-height: 560px; margin-inline: 6px; }
+  .squad-pitch-lines { min-height: 560px; padding-inline: 4px; }
+  .squad-pitch .pitch-shirt { transform: scale(.85); transform-origin: top center; }
+  .squad-bench { padding-inline: 14px; }
+  .squad-metrics, .squad-details-heading, .squad-clubs, .squad-details-note { padding-inline: 14px; }
+  .squad-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .squad-metric dd { font-size: 18px; }
 }

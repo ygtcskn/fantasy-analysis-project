@@ -136,6 +136,8 @@ async function loadLocalData() {
   if (state.view === "tiers") renderTierList();
   if (state.view === "statistics") renderStatistics();
   if (state.view === "team-statistics") renderTeamStatistics();
+  // Kadrolar's actual points come from the fantasy ledger loaded just above.
+  if (state.view === "squads") renderSharedSquads();
 }
 
 function options(select, values, first) {
@@ -399,6 +401,8 @@ document.querySelectorAll("[data-view]").forEach((link) => link.addEventListener
   if (location.protocol !== "file:") {
     const url = new URL(location.href);
     url.searchParams.set("view", link.dataset.view);
+    // A sidebar link opens the page itself, not the squad Kadrolar last showed.
+    url.searchParams.delete("squad");
     history.pushState(null, "", url);
   }
   navigateView(link.dataset.view);

@@ -1,7 +1,8 @@
-/* One pitch for every page: Kadro Kur, the elevens on Maç Haftası and the
-   team page all draw Kadro Kur's grass, lines, club shirts (core/kits.js) and
-   rating badge from here. A page decides only the pitch's size and how its
-   players are laid out. Loaded by index.html and team.html.
+/* One pitch for every page: Kadro Kur, the elevens on Maç Haftası, the team
+   page and a shared squad on Kadrolar all draw Kadro Kur's grass, lines, club
+   shirts (core/kits.js) and rating badge from here. A page decides only the
+   pitch's size and how its players are laid out. Loaded by index.html and
+   team.html.
 
    The grass is the same in both themes: it is a picture of a pitch, not a
    page surface, so it carries its own white ink. */
@@ -19,6 +20,7 @@
 /* Eight stripes from goal to goal, so a half pitch shows four. */
 .builder-pitch,
 .team-pitch,
+.squad-pitch,
 .matchweek-mini-pitch {
   --pitch-stripe: 12.5%;
   position: relative;

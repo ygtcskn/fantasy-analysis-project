@@ -51,6 +51,7 @@
   <script src="features/team-statistics/team-statistics.js" defer></script>
   <script src="features/social/social.js" defer></script>
   <script src="features/squads/squads.js" defer></script>
+  <script src="features/squads/squad-detail.js" defer></script>
   <script src="core/app.js" defer></script>
 </head>
 <body>
@@ -71,13 +72,16 @@
       <p id="social-status" role="status" aria-live="polite"></p>
     </section>
     <section id="squads-workspace" aria-label="Kadrolar" hidden>
-      <div class="squads-toolbar">
-        <div><p class="eyebrow">PAYLAŞILAN KADROLAR</p><h2>Herkesin ilk on biri, hafta hafta.</h2></div>
-        <button id="squads-refresh" type="button" class="secondary" aria-label="Kadroları yenile" title="Kadroları yenile">↻</button>
+      <div id="squads-list">
+        <div class="squads-toolbar">
+          <div><p class="eyebrow">PAYLAŞILAN KADROLAR</p><h2>Herkesin ilk on biri, hafta hafta.</h2></div>
+          <button id="squads-refresh" type="button" class="secondary" aria-label="Kadroları yenile" title="Kadroları yenile">↻</button>
+        </div>
+        <p class="squads-note">Herkes görebilir. Kartlarda paylaşanın takma adı, tuttuğu takımın arması, paylaşım tarihi ve ilk on birinin beklenen fantezi puanı görünür; e-posta görünmez. Her haftanın kadroları beklenen FP'ye göre sıralanır. Kadroyu sahada görmek için karta tıkla.</p>
+        <p id="squads-status" role="status" aria-live="polite"></p>
+        <div id="squads-weeks"></div>
       </div>
-      <p class="squads-note">Herkes görebilir. Kartlarda paylaşanın takma adı, tuttuğu takımın arması, paylaşım tarihi ve ilk on birinin beklenen fantezi puanı görünür; e-posta görünmez. Her haftanın kadroları beklenen FP'ye göre sıralanır.</p>
-      <div id="squads-weeks"></div>
-      <p id="squads-status" role="status" aria-live="polite"></p>
+      <div id="squads-detail" hidden></div>
     </section>
     <section id="home-workspace" class="home-grid" aria-label="Ana Sayfa">
       <section class="home-panel standings-panel" aria-labelledby="standings-title">

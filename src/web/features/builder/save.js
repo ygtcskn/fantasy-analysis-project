@@ -32,20 +32,32 @@ function builderOpenRound(now = Date.now()) {
 }
 
 // The eleven from the goalkeeper forward, then the bench, as the table keeps
-// them, with the eleven's expected points as Kadro Kur's summary adds them up.
+// them, with Kadro Kur's "Kadro beklentisi" totals and budget as they stand now.
 function builderSavedSquad() {
   const starterSlots = builderFormationRows().reverse().flatMap((row) => row.slots);
   const starters = starterSlots.map((slot) => builderState.selected.get(slot.key)).filter(Boolean);
   const bench = builderBenchSlots().map((slot) => builderState.selected.get(slot.key)).filter(Boolean);
-  const projections = starters.map((id) => builderFantasyData(builderPlayer(id) || { id }).projection);
-  const { total, count } = builderSummaryTotal(projections, "expected_points");
+  const projection = (id) => builderFantasyData(builderPlayer(id) || { id }).projection;
+  const starterProjections = starters.map(projection), benchProjections = bench.map(projection);
+  const total = (projections, field, digits = 2) => {
+    const value = builderSummaryTotal(projections, field).total;
+    return value === null ? null : Math.round(value * 10 ** digits) / 10 ** digits;
+  };
+  const budget = builderBudget();
   return {
     missing: starterSlots.length - starters.length,
     row: {
       formation: $("builder-formation").value,
       starters: starters.map(Number), bench: bench.map(Number),
-      expected_points: total === null ? null : Math.round(total * 100) / 100,
-      projected_starters: count,
+      expected_points: total(starterProjections, "expected_points"),
+      projected_starters: builderSummaryTotal(starterProjections, "expected_points").count,
+      expected_goals: total(starterProjections, "expected_player_goals"),
+      expected_assists: total(starterProjections, "expected_player_assists"),
+      expected_yellow_cards: total(starterProjections, "expected_yellow_cards"),
+      expected_red_cards: total(starterProjections, "expected_red_cards"),
+      expected_minutes: total(starterProjections, "expected_minutes", 0),
+      bench_expected_points: total(benchProjections, "expected_points"),
+      budget_million: budget.missing ? null : Math.round(budget.spent / 10_000) / 100,
     },
   };
 }

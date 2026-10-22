@@ -4,9 +4,10 @@
 // the current week first, kept in Supabase (supabase/shared_squads.sql).
 // Anyone can read; squads are saved from Kadro Kur (features/builder/save.js).
 // Each card shows who shared the squad, when, and the eleven's expected
-// fantasy points at that time.
+// fantasy points at that time, and opens that squad's own page
+// (index.html?view=squads&squad=<id>, drawn by squad-detail.js).
 
-const SQUAD_FEED_FIELDS = "id, round_id, author_nickname, author_team_id, expected_points, projected_starters, shared_at";
+const SQUAD_FEED_FIELDS = "id, season, round_id, user_id, author_nickname, author_team_id, starters, expected_points, projected_starters, shared_at";
 const squadFeedState = { loadedKey: "", request: 0, status: "idle", error: "", squads: [] };
 const squadFeedTimeFormat = new Intl.DateTimeFormat(LOCALE, { timeZone: MATCH_TIME_ZONE, dateStyle: "medium", timeStyle: "short" });
 
@@ -18,6 +19,8 @@ function squadFeedNode(tag, className, text) {
 }
 
 function squadFeedErrorText(error) {
+  // The database refused a delete: a session that has ended, or someone else's squad.
+  if (error?.code === "42501") return "Bu kadroyu yalnızca sahibi silebilir. Giriş yaptığından emin ol, sonra tekrar dene.";
   // A missing table, or one created before a column this page reads.
   if (["PGRST205", "42P01", "PGRST204", "42703"].includes(error?.code)) {
     return siteMode === "local"
@@ -64,27 +67,146 @@ function compareSharedSquads(a, b) {
   return String(b.shared_at).localeCompare(String(a.shared_at));
 }
 
-function squadFeedCard(squad) {
-  const card = squadFeedNode("article", "squad-card");
+// The sharer's club crest in a ring of the club's colour, over the first letter
+// of their nickname, which shows when there is no club or the crest fails.
+function squadAvatar(squad, crestSize = 36) {
   const avatar = squadFeedNode("span", "squad-avatar");
   avatar.setAttribute("aria-hidden", "true");
   avatar.append(squadFeedNode("span", "squad-avatar-initial", String(squad.author_nickname || "?").charAt(0).toLocaleUpperCase(LOCALE)));
   if (squad.author_team_id) {
     avatar.style.setProperty("--squad-ring", teamColor(squad.author_team_id));
-    avatar.append(profileCrest(squad.author_team_id, 36));
+    avatar.append(profileCrest(squad.author_team_id, crestSize));
   }
+  return avatar;
+}
+
+// "42,22", or "42,22*" when the total left out an eleven without a projection,
+// as Kadro Kur marks it.
+function squadPointsText(squad) {
+  const value = number(squad.expected_points), projected = number(squad.projected_starters) ?? 0;
+  return value === null ? "—" : `${displayNumber(value)}${projected < 11 ? "*" : ""}`;
+}
+
+// The eleven's actual fantasy points in the squad's week, from the published
+// points ledger (points/player_match_points.csv): each starter's points in the
+// week's finished matches, so the total grows as each match ends and the site's
+// data is refreshed. Only the eleven score, with no captain and no bench
+// substitutions, as in Kadro Kur. A starter whose club has played without him
+// scores 0. Null when the ledger is not loaded or the squad is from another
+// season. byPlayer holds each starter's points, or null while his club's match
+// is still to finish.
+function squadActualPoints(squad) {
+  if (!fantasyState.season || fantasyState.season !== state.seasonSlug || squad.season !== state.seasonSlug) return null;
+  const fixtures = (state.tables["fixtures.csv"] || []).filter((fixture) => String(fixture.round_id || fixture["round.id"] || "") === String(squad.round_id));
+  const finished = fixtures.filter(fixtureFinished);
+  const finishedIds = new Set(finished.map((fixture) => fixture.fixture_id));
+  const playedClubs = new Set(finished.flatMap((fixture) => [fixture.home_team_id, fixture.away_team_id]));
+  const byPlayer = new Map();
+  let total = 0;
+  for (const id of (squad.starters || []).map(String)) {
+    const rows = (fantasyState.matches.get(id) || []).filter((row) => finishedIds.has(row.fixture_id));
+    const player = buildTierPlayers().byId.get(id);
+    const club = player?.squadTeam || player?.club;
+    const points = rows.length ? rows.reduce((sum, row) => sum + (number(row.points_total) ?? 0), 0) : club && playedClubs.has(club) ? 0 : null;
+    byPlayer.set(id, points);
+    total += points ?? 0;
+  }
+  return { total, finished: finished.length, fixtures: fixtures.length, byPlayer };
+}
+
+// "Gerçekleşen FP" and how much of the week it covers.
+function squadActualBlock(squad) {
+  const block = squadFeedNode("div", "squad-actual");
+  const actual = squadActualPoints(squad);
+  const started = actual && actual.finished > 0;
+  block.append(squadFeedNode("span", "", "Gerçekleşen FP"), squadFeedNode("strong", "", started ? displayNumber(actual.total) : "—"),
+    squadFeedNode("small", "", !actual ? "Puanlar yüklenmedi" : started ? `${actual.finished} / ${actual.fixtures} maç` : "Maçlar başlamadı"));
+  block.title = "İlk 11'in bu haftaki fantezi puanları; her maç bitip site verisi yenilendikçe artar. Kaptan ve yedek değişikliği yok.";
+  return block;
+}
+
+// The author's own squads carry a "Sil" button; the database refuses anyone
+// else's delete in any case.
+function squadDeleteButton(squad, className = "squad-delete") {
+  const button = squadFeedNode("button", className, "Sil");
+  button.type = "button";
+  button.setAttribute("aria-label", "Kadronu sil");
+  button.title = "Kadronu sil";
+  button.addEventListener("click", () => deleteSharedSquad(squad, button));
+  return button;
+}
+
+function setSquadsStatus(text, error = false) {
+  const status = document.getElementById(sharedSquadParam() ? "squads-detail-status" : "squads-status");
+  if (!status) return;
+  status.textContent = text;
+  status.classList.toggle("squad-load-error", error);
+}
+
+async function deleteSharedSquad(squad, button) {
+  if (!confirm("Bu kadro silinsin mi? Kadrolar sayfasından kalkar; istersen Kadro Kur'dan yeniden kaydedebilirsin.")) return;
+  button.disabled = true;
+  try {
+    const client = await loadAuth();
+    // Row-level security lets only the author delete; a row it refuses is simply not deleted.
+    const { data, error } = await client.from("shared_squads").delete().eq("id", squad.id).select("id");
+    if (error) throw error;
+    if (!data.length) throw new Error("Bu kadro silinemedi.");
+    squadFeedState.squads = squadFeedState.squads.filter((item) => String(item.id) !== String(squad.id));
+    squadDetailState.id = "";
+    if (sharedSquadParam()) openSharedSquadPage(); else renderSharedSquads();
+    setSquadsStatus("Kadron silindi.");
+  } catch (error) {
+    button.disabled = false;
+    setSquadsStatus(squadFeedErrorText(error), true);
+  }
+}
+
+function squadFeedCard(squad) {
+  const card = squadFeedNode("article", "squad-card");
+  // The name is the link; it stretches over the whole card, under the button.
+  const link = squadFeedNode("a", "squad-card-link", squad.author_nickname);
+  link.href = `index.html?view=squads&squad=${encodeURIComponent(squad.id)}`;
+  link.setAttribute("aria-label", `${squad.author_nickname} kadrosunu aç`);
+  link.addEventListener("click", (event) => {
+    if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button !== 0) return;
+    event.preventDefault();
+    openSharedSquadPage(squad.id);
+  });
   const text = squadFeedNode("div", "squad-card-text");
+  const name = squadFeedNode("h3", "squad-card-name");
+  name.append(link);
   const time = squadFeedNode("time", "squad-card-date", squadFeedTimeFormat.format(new Date(squad.shared_at)));
   time.dateTime = squad.shared_at;
   const points = squadFeedNode("p", "squad-card-points");
-  // A total from fewer than all eleven is marked, as Kadro Kur marks it.
-  const value = number(squad.expected_points), projected = number(squad.projected_starters) ?? 0;
-  const partial = value !== null && projected < 11;
-  points.append(squadFeedNode("span", "", "Beklenen FP"), squadFeedNode("strong", "", value === null ? "—" : `${displayNumber(value)}${partial ? "*" : ""}`));
-  if (partial) points.title = `${projected} / 11 oyuncu tahminli; toplam eksik.`;
-  text.append(squadFeedNode("h3", "squad-card-name", squad.author_nickname), time, points);
-  card.append(avatar, text);
+  const projected = number(squad.projected_starters) ?? 0;
+  points.append(squadFeedNode("span", "", "Beklenen FP"), squadFeedNode("strong", "", squadPointsText(squad)));
+  if (number(squad.expected_points) !== null && projected < 11) points.title = `${projected} / 11 oyuncu tahminli; toplam eksik.`;
+  text.append(name, time, points);
+  const side = squadFeedNode("div", "squad-card-side");
+  if (siteAuth.user?.id && siteAuth.user.id === squad.user_id) side.append(squadDeleteButton(squad));
+  side.append(squadActualBlock(squad));
+  card.append(squadAvatar(squad), text, side);
   return card;
+}
+
+// The squad a page address names, or "" for the week list.
+function sharedSquadParam() {
+  const id = new URLSearchParams(location.search).get("squad") || "";
+  return /^\d+$/.test(id) ? id : "";
+}
+
+// One squad's page, or back to the list with no id. Each is its own address,
+// so the browser's back button and a shared link both work.
+function openSharedSquadPage(id = "") {
+  if (location.protocol !== "file:") {
+    const url = new URL(location.href);
+    url.searchParams.set("view", "squads");
+    if (id) url.searchParams.set("squad", id); else url.searchParams.delete("squad");
+    history.pushState(null, "", url);
+  }
+  renderSharedSquads();
+  document.getElementById("squads-workspace").scrollIntoView({ block: "start" });
 }
 
 function squadFeedWeek(name, squads, current) {
@@ -105,6 +227,13 @@ function squadFeedWeek(name, squads, current) {
 }
 
 function renderSharedSquads() {
+  const squadId = sharedSquadParam();
+  document.getElementById("squads-list").hidden = Boolean(squadId);
+  document.getElementById("squads-detail").hidden = !squadId;
+  if (squadId) {
+    renderSharedSquadDetail(squadId);
+    return;
+  }
   const container = document.getElementById("squads-weeks");
   container.replaceChildren();
   const rounds = squadFeedRounds();
@@ -145,6 +274,10 @@ function renderSharedSquads() {
 
 // A squad saved on Kadro Kur shows the next time this page is opened.
 document.addEventListener("shared-squad-saved", () => { squadFeedState.loadedKey = ""; });
+// Signing in or out changes whose squads carry "Sil" and "Senin kadron".
+document.addEventListener("site-auth-change", () => {
+  if (typeof state !== "undefined" && state.view === "squads") renderSharedSquads();
+});
 document.getElementById("squads-refresh").addEventListener("click", () => {
   squadFeedState.loadedKey = "";
   renderSharedSquads();

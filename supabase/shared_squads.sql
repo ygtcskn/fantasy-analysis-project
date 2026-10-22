@@ -28,17 +28,29 @@ create table if not exists public.shared_squads (
   starters bigint[] not null check (cardinality(starters) = 11),
   bench bigint[] not null default '{}' check (cardinality(bench) <= 4),
   -- The eleven's expected fantasy points when shared, summed from the published
-  -- projections as Kadro Kur shows it, and how many of the eleven had one; a
-  -- total from fewer than 11 is partial. Empty when no projection was current.
+  -- projections as Kadro Kur shows it. Empty when no projection was current.
   expected_points numeric(6, 2) check (expected_points between 0 and 300),
-  projected_starters smallint not null default 0 check (projected_starters between 0 and 11),
   -- When this squad was shared, or last changed.
   shared_at timestamptz not null default now(),
   constraint shared_squads_one_per_week unique (season, round_id, user_id)
 );
--- For a table created before this column existed.
-alter table public.shared_squads add column if not exists
-  projected_starters smallint not null default 0 check (projected_starters between 0 and 11);
+
+-- Columns added since, so running this file again brings an older table up to
+-- date. Kadro Kur's "Kadro beklentisi" as it stood when the squad was saved,
+-- because the projections behind it are gone once the week's deadline passes.
+-- Each total is over the eleven (the bench has its own), from the players who
+-- had a projection: projected_starters of them, so fewer than 11 is partial.
+-- Empty when nobody had one, or for a squad saved before the column existed.
+alter table public.shared_squads
+  add column if not exists projected_starters smallint not null default 0 check (projected_starters between 0 and 11),
+  add column if not exists expected_goals numeric(5, 2) check (expected_goals >= 0),
+  add column if not exists expected_assists numeric(5, 2) check (expected_assists >= 0),
+  add column if not exists expected_yellow_cards numeric(5, 2) check (expected_yellow_cards >= 0),
+  add column if not exists expected_red_cards numeric(5, 2) check (expected_red_cards >= 0),
+  add column if not exists expected_minutes numeric(6, 1) check (expected_minutes >= 0),
+  add column if not exists bench_expected_points numeric(5, 2) check (bench_expected_points >= 0),
+  -- The fifteen's price in millions of lira, at the prices of the day.
+  add column if not exists budget_million numeric(6, 2) check (budget_million >= 0);
 create index if not exists shared_squads_week on public.shared_squads (season, round_id, shared_at desc);
 create index if not exists shared_squads_author on public.shared_squads (user_id, shared_at desc);
 
@@ -121,6 +133,8 @@ create policy "Shared squads: author deletes" on public.shared_squads
 -- in its week.
 revoke all on public.shared_squads from anon, authenticated;
 grant select on public.shared_squads to anon, authenticated;
-grant insert (season, round_id, formation, starters, bench, expected_points, projected_starters) on public.shared_squads to authenticated;
-grant update (formation, starters, bench, expected_points, projected_starters) on public.shared_squads to authenticated;
+grant insert (season, round_id, formation, starters, bench, expected_points, projected_starters, expected_goals, expected_assists,
+  expected_yellow_cards, expected_red_cards, expected_minutes, bench_expected_points, budget_million) on public.shared_squads to authenticated;
+grant update (formation, starters, bench, expected_points, projected_starters, expected_goals, expected_assists,
+  expected_yellow_cards, expected_red_cards, expected_minutes, bench_expected_points, budget_million) on public.shared_squads to authenticated;
 grant delete on public.shared_squads to authenticated;
