@@ -18,8 +18,9 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
-# Downloaded, generated, and local data
-data/
+# Downloaded, generated, and local data. Only the top-level folder: the
+# website's src/web/data/ is code and must reach GitHub, which publishes it.
+/data/
 tmp/
 temp/
 *.sqlite

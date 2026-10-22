@@ -94,7 +94,17 @@ function saveErrorText(error) {
   return message ? `Bir sorun çıktı: ${message}` : "Bir sorun çıktı. Tekrar dene.";
 }
 
+// A click always ends in a dialog or a line under the button, even when
+// something unexpected breaks, never in silence.
 async function saveBuilderSquad() {
+  try {
+    await saveBuilderSquadSteps();
+  } catch (error) {
+    builderSaveStatus(saveErrorText(error), true);
+  }
+}
+
+async function saveBuilderSquadSteps() {
   if (builderSaveState.busy) return;
   if (!siteAuth.user) stashBuilderDraft();
   if (!await profileReady("Kadronu kaydetmek için giriş yap. Sahadaki kadron bu sekmede seni bekler.",
