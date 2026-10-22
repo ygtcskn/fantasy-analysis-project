@@ -118,7 +118,9 @@ function socialForm(draftKey, isTopic, onSubmit) {
   const form = socialNode("form", "social-form");
   form.noValidate = true;
   form.dataset.draft = draftKey;
-  form.append(socialNode("p", "social-form-author", `Yazan: ${siteProfile.data?.nickname || "—"}`));
+  const author = socialNode("p", "social-form-author", "Yazan: ");
+  author.append(profileAvatar(siteProfile.data, 20), siteProfile.data?.nickname || "—");
+  form.append(author);
   const title = isTopic ? socialField(form, "Konu başlığı", "title", false, 120, draft.title) : null;
   const body = socialField(form, isTopic ? "Ne düşünüyorsun?" : "Yanıtın", "body", true, 3000, draft.body);
   const error = socialNode("p", "social-form-error");
@@ -175,12 +177,15 @@ async function deleteSocialPost(table, post, removeLocally) {
   }
 }
 
+// The author as everywhere a person appears: their photo, else their initial.
+function socialAuthorAvatar(post, size) {
+  return profileAvatar({ nickname: post.author_nickname, avatar_path: post.author_avatar_path }, size);
+}
+
 function socialPost(post, table, removeLocally) {
   const article = socialNode("article", "social-post");
   const meta = socialNode("p", "social-post-meta");
-  const badge = typeof profileBadge === "function"
-    && profileBadge({ avatar_path: post.author_avatar_path, favorite_team_id: post.author_team_id }, 22);
-  if (badge) meta.append(badge);
+  meta.append(socialAuthorAvatar(post, 22));
   const time = socialNode("time", "", socialTimeFormat.format(new Date(post.created_at)));
   time.dateTime = post.created_at;
   meta.append(socialNode("strong", "", post.author_nickname), document.createTextNode(" · "), time);
@@ -200,8 +205,9 @@ function socialTopicRow(topic, siblings) {
   });
   const summary = socialNode("summary", "social-topic-row");
   const identity = socialNode("span", "social-topic-identity");
-  identity.append(socialNode("strong", "", topic.title),
-    socialNode("small", "", `${topic.author_nickname} · ${socialDayFormat.format(new Date(topic.created_at))}`));
+  const byline = socialNode("small", "social-topic-byline");
+  byline.append(socialAuthorAvatar(topic, 18), `${topic.author_nickname} · ${socialDayFormat.format(new Date(topic.created_at))}`);
+  identity.append(socialNode("strong", "", topic.title), byline);
   summary.append(socialNode("span", "social-topic-icon", "↳"), identity, socialNode("span", "social-reply-count", `${topic.replies.length} yanıt`));
   const content = socialNode("div", "social-discussion");
   const replies = socialNode("div", "social-replies");

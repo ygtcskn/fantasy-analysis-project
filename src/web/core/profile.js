@@ -71,24 +71,28 @@ function avatarUrl(path) {
   return `${new URL(SITE_AUTH.url).origin}/storage/v1/object/public/${AVATAR_BUCKET}/${path.split("/").map(encodeURIComponent).join("/")}`;
 }
 
-// How a person appears beside their name: their photo, else their club's
-// crest, else nothing. A photo that no longer loads, say one removed by
-// moderation, falls back to the crest. person has avatar_path and favorite_team_id.
-function profileBadge(person, size) {
-  const crest = () => (person?.favorite_team_id ? profileCrest(person.favorite_team_id, size) : null);
-  if (!person?.avatar_path) return crest();
-  const img = document.createElement("img");
-  img.className = "profile-avatar";
-  img.width = size;
-  img.height = size;
-  img.alt = "";
-  img.decoding = "async";
-  img.addEventListener("error", () => {
-    const fallback = crest();
-    if (fallback) img.replaceWith(fallback); else img.remove();
-  }, { once: true });
-  img.src = avatarUrl(person.avatar_path);
-  return img;
+// How a person appears wherever the site shows one - the sidebar, the profile,
+// Maç Tribünü, shared squads: their photo in a circle, else the first letter of
+// their nickname in the same circle. Never a club's crest; a crest stands for
+// a club. A photo that no longer loads, say one removed by moderation, leaves
+// the letter. person is { nickname, avatar_path }.
+function profileAvatar(person, size) {
+  const avatar = document.createElement("span");
+  avatar.className = "profile-avatar";
+  avatar.setAttribute("aria-hidden", "true");
+  avatar.style.setProperty("--avatar-size", `${size}px`);
+  avatar.textContent = String(person?.nickname || "?").charAt(0).toLocaleUpperCase(LOCALE);
+  if (person?.avatar_path) {
+    const img = document.createElement("img");
+    img.width = size;
+    img.height = size;
+    img.alt = "";
+    img.decoding = "async";
+    img.addEventListener("error", () => img.remove(), { once: true });
+    img.src = avatarUrl(person.avatar_path);
+    avatar.append(img);
+  }
+  return avatar;
 }
 
 // A square, centre-cropped, 256-pixel copy of the chosen picture. Drawing it
@@ -150,11 +154,8 @@ async function removeAvatarFiles(storage, userId, keep = null) {
 
 function showProfileAvatar() {
   const dialog = document.getElementById("profile-dialog"), profile = siteProfile.data;
-  const badge = profile?.avatar_path ? profileBadge(profile, 72) : null;
-  const placeholder = document.createElement("span");
-  placeholder.className = "profile-avatar-empty";
-  placeholder.textContent = (profile?.nickname || siteAuth.user?.email || "?").charAt(0).toLocaleUpperCase("tr");
-  dialog.querySelector(".profile-avatar-preview").replaceChildren(badge || placeholder);
+  const person = { nickname: profile?.nickname || siteAuth.user?.email, avatar_path: profile?.avatar_path };
+  dialog.querySelector(".profile-avatar-preview").replaceChildren(profileAvatar(person, 72));
   dialog.querySelector("[data-avatar-remove]").hidden = !profile?.avatar_path;
 }
 
@@ -378,7 +379,7 @@ function openProfileDialog(welcome = false) {
   dialog.querySelector("#profile-title").textContent = welcome ? "Hoş geldin" : "Profil";
   dialog.querySelector("#profile-help").textContent = welcome
     ? "Bir takma ad, tuttuğun takım ve istersen bir fotoğraf seç. İstediğin zaman sol menüdeki Profil'den değiştirebilirsin."
-    : "Maç Tribünü'ne yazdıklarında takma adın ve fotoğrafın (yoksa takımının arması) görünür; e-postan görünmez.";
+    : "Maç Tribünü'nde ve paylaştığın kadrolarda takma adın ve profil fotoğrafın görünür; e-postan görünmez.";
   dialog.querySelector("#profile-nickname").value = profile?.nickname || "";
   dialog.querySelector("#profile-email").textContent = `Giriş e-postası: ${siteAuth.user.email || "—"}`;
   const select = dialog.querySelector("#profile-team");

@@ -1,6 +1,7 @@
 -- Kadrolar: the fantasy squads visitors share, one per visitor per matchweek,
 -- shown to everyone by src/web/features/squads/squads.js.
--- Run once in Supabase -> SQL Editor -> New query -> Run, after profiles.sql.
+-- Run once in Supabase -> SQL Editor -> New query -> Run, after profiles.sql
+-- (which adds the photo column this copies). Safe to run again after it changes.
 -- Safe to run again.
 --
 -- Anyone can read. Only a signed-in visitor with a nickname can share, and only
@@ -50,7 +51,10 @@ alter table public.shared_squads
   add column if not exists expected_minutes numeric(6, 1) check (expected_minutes >= 0),
   add column if not exists bench_expected_points numeric(5, 2) check (bench_expected_points >= 0),
   -- The fifteen's price in millions of lira, at the prices of the day.
-  add column if not exists budget_million numeric(6, 2) check (budget_million >= 0);
+  add column if not exists budget_million numeric(6, 2) check (budget_million >= 0),
+  -- The author's profile photo (profiles.avatar_path, avatars.sql), copied like
+  -- the nickname so the page shows it without reading anyone's profile.
+  add column if not exists author_avatar_path text;
 create index if not exists shared_squads_week on public.shared_squads (season, round_id, shared_at desc);
 create index if not exists shared_squads_author on public.shared_squads (user_id, shared_at desc);
 
@@ -64,6 +68,7 @@ declare
   -- Named apart from the columns, so no query can mistake one for the other.
   v_nickname text;
   v_team bigint;
+  v_avatar text;
 begin
   if tg_op = 'UPDATE' then
     new.user_id := old.user_id;
@@ -80,13 +85,14 @@ begin
   if new.user_id is null then
     raise exception 'sign_in_required' using errcode = '42501';
   end if;
-  select p.nickname, p.favorite_team_id into v_nickname, v_team
+  select p.nickname, p.favorite_team_id, p.avatar_path into v_nickname, v_team, v_avatar
     from public.profiles p where p.id = new.user_id;
   if v_nickname is null then
     raise exception 'nickname_required';
   end if;
   new.author_nickname := v_nickname;
   new.author_team_id := v_team;
+  new.author_avatar_path := v_avatar;
   return new;
 end;
 $$;
@@ -95,14 +101,16 @@ drop trigger if exists shared_squads_author on public.shared_squads;
 create trigger shared_squads_author before insert or update on public.shared_squads
   for each row execute function public.shared_squad_author();
 
--- A changed nickname or club shows on the author's earlier squads too. A
--- cleared nickname leaves the squads signed with the last one.
+-- A changed nickname, club or photo shows on the author's earlier squads too.
+-- A cleared nickname leaves the squads signed with the last one.
 create or replace function public.shared_squads_follow_profile() returns trigger
 language plpgsql security definer set search_path = '' as $$
 begin
-  if new.nickname is distinct from old.nickname or new.favorite_team_id is distinct from old.favorite_team_id then
+  if new.nickname is distinct from old.nickname or new.favorite_team_id is distinct from old.favorite_team_id
+      or new.avatar_path is distinct from old.avatar_path then
     update public.shared_squads
-      set author_nickname = coalesce(new.nickname, author_nickname), author_team_id = new.favorite_team_id
+      set author_nickname = coalesce(new.nickname, author_nickname), author_team_id = new.favorite_team_id,
+          author_avatar_path = new.avatar_path
       where user_id = new.id;
   end if;
   return new;

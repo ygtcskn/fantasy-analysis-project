@@ -138,40 +138,84 @@ const PlayerDistribution = (() => {
   return { quantile, bandwidth, density, bucket, chart };
 })();
 
-// Page wiring: one row per axis of the Ayrıntılı Ölçütler wheel, from the
-// reference renderStatisticsRadars just built. Depends on the page helpers
-// ($, displayNumber) and on radar-page.js (statisticsUnit, statisticsReferenceLabel).
-// Each metric label is a button: clicking it ranks the players in the panel
-// beside the chart (renderMetricRanking below). The last render is kept so a
-// click redraws only these two, not the whole profile.
+// Page wiring for the Dağılım ve Sıralama section under the profile: the
+// distribution chart (one row per axis of the Ayrıntılı Ölçütler wheel) and,
+// beside it, the players ranked on the metric whose label was clicked. The
+// role buttons in the section's header pick the comparison group for both
+// halves. Depends on the page helpers ($, displayNumber) and on radar-page.js
+// (statisticsUnit, statisticsReferenceLabel, statisticsBarLabel). The last
+// render is kept so a click redraws only this section, not the whole profile.
 const distributionState = { radar: null, selected: null };
+const STATISTICS_OUTFIELD_GROUPS = ["CB", "FB", "DM", "CM", "AM", "W", "FW", "DEF", "MID"];
+
+// The section's comparison group: the role picked in its header, else the
+// primary's own - the radars' group, reused as it is. Another role rebuilds
+// the same reference (season, competition, minute bar, earlier seasons and the
+// small-sample prior) for that role, and both players are ranked in it as
+// guests. "Tüm saha oyuncuları" pools every outfield role on the outfield wheel.
+function statisticsSectionView(radar) {
+  const own = radar.reference.position;
+  const role = statisticsState.rankRole || own;
+  if (role === own) {
+    return { role, own, reference: radar.reference, profile: radar.profile, results: radar.results, guest: radar.guest };
+  }
+  const positions = role === "ALL" ? STATISTICS_OUTFIELD_GROUPS : [role];
+  const profile = RadarScoring.axes(role === "ALL" ? "MID" : role);
+  const reference = RadarScoring.createReference(radar.prepared, { position: role, scope: radar.reference.scope },
+    profile, { ...radar.reference.config, positions }, radar.peerPool || []);
+  reference.historyRounds = radar.reference.historyRounds;
+  const evaluate = (who) => profile.map((axis) => RadarScoring.evaluate(who, axis, reference, { guest: true }));
+  return { role, own, reference, profile, results: evaluate(radar.player),
+    guest: radar.secondary ? { player: radar.secondary, results: evaluate(radar.secondary) } : null };
+}
+
+// Clicks on metric labels and role buttons, wired once.
+function setupDistributionSection() {
+  const container = $("statistics-distribution-chart");
+  if (container.dataset.metricPicker) return;
+  container.dataset.metricPicker = "1";
+  const pick = (event) => {
+    const label = event.target.closest?.("[data-dist-metric]");
+    if (!label) return;
+    if (event.type === "keydown") {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+    }
+    selectDistributionMetric(label.dataset.distMetric);
+  };
+  container.addEventListener("click", pick);
+  container.addEventListener("keydown", pick);
+  document.querySelectorAll("[data-rank-role]").forEach((button) => button.addEventListener("click", () => {
+    // Picking the primary's own role goes back to following the primary.
+    const own = distributionState.radar?.reference?.position;
+    statisticsState.rankRole = button.dataset.rankRole === own ? null : button.dataset.rankRole;
+    renderPlayerDistribution(distributionState.radar, distributionState.selected);
+  }));
+}
+
+function renderSectionRoles(view) {
+  document.querySelectorAll("[data-rank-role]").forEach((button) =>
+    button.setAttribute("aria-pressed", String(Boolean(view) && button.dataset.rankRole === view.role)));
+  $("statistics-ranking-group").textContent = view
+    ? RadarScoring.positionLabels[view.role] || view.role : "—";
+}
 
 function renderPlayerDistribution(radar, selected) {
   Object.assign(distributionState, { radar, selected });
+  setupDistributionSection();
   const container = $("statistics-distribution-chart");
-  if (!container.dataset.metricPicker) {
-    container.dataset.metricPicker = "1";
-    const pick = (event) => {
-      const label = event.target.closest?.("[data-dist-metric]");
-      if (!label) return;
-      if (event.type === "keydown") {
-        if (event.key !== "Enter" && event.key !== " ") return;
-        event.preventDefault();
-      }
-      selectDistributionMetric(label.dataset.distMetric);
-    };
-    container.addEventListener("click", pick);
-    container.addEventListener("keydown", pick);
-  }
   if (!radar?.reference) {
     container.replaceChildren();
     $("statistics-distribution-note").textContent = radar?.note || "Dağılım için radar verisi yok.";
-    renderMetricRanking(radar);
+    renderSectionRoles(null);
+    renderMetricRanking(radar, null);
     return;
   }
-  const { player, reference, profile, results, guest } = radar;
-  // The ranked metric survives a change of player while his wheel has it; a
-  // goalkeeper's wheel has other axes, so it falls back to the first.
+  const view = statisticsSectionView(radar);
+  const { reference, profile, results, guest } = view, player = radar.player;
+  renderSectionRoles(view);
+  // The ranked metric survives a change of player or group while the wheel
+  // has it; a goalkeeper's wheel has other axes, so it falls back to the first.
   if (!profile.some((metric) => metric.id === statisticsState.rankMetric)) statisticsState.rankMetric = profile[0]?.id ?? null;
   const detail = (who, metric, result, count) => `${who.name} · ${metric.label}: ${displayNumber(result.value)} ${statisticsUnit(metric)}`
     + (result.prior ? ` (gözlenen ${displayNumber(result.observedValue)}, kendi payı %${displayNumber(Math.round(result.reliability * 100))})` : "")
@@ -185,17 +229,21 @@ function renderPlayerDistribution(radar, selected) {
       compare: other ? { value: Number.isFinite(other.value) ? other.value : null, score: other.score,
         detail: detail(guest.player, metric, other, values.length) } : null };
   });
-  $("statistics-distribution-chart").innerHTML = PlayerDistribution.chart(rows, RadarChart.display,
+  container.innerHTML = PlayerDistribution.chart(rows, RadarChart.display,
     guest ? STATISTICS_SERIES.map((series) => series.line) : null);
+  const same = view.role === view.own;
   $("statistics-distribution-note").textContent = `${selected?.name || player.name} · ${statisticsReferenceLabel(reference)}. `
     + "Her satırda eğri emsallerin o ölçütteki dağılımı, kesikli çizgi oyuncunun değeri, renkli bölüm geride bıraktığı emsaller, "
-    + "sağdaki sayı yüzdeliği; Ayrıntılı Ölçütler radarıyla aynı emsaller ve aynı radar puanı. Renk yüzdeliği gösterir: turuncu düşük, "
-    + "nötr orta, lacivert yüksek. Düşük değerin iyi olduğu ölçütlerde (ör. yenilen gol) renkli bölüm oyuncunun değerinden yukarı uzanır. "
+    + "sağdaki sayı yüzdeliği. "
+    + (same ? "Ayrıntılı Ölçütler radarıyla aynı emsaller ve aynı radar puanı. "
+      : `Grup radarlardan farklı: ${player.name} bu grupta konuk olarak sıralanır; radarlar oyuncunun kendi grubunu kullanır. `)
+    + "Renk yüzdeliği gösterir: turuncu düşük, nötr orta, lacivert yüksek. Düşük değerin iyi olduğu ölçütlerde (ör. yenilen gol) "
+    + "renkli bölüm oyuncunun değerinden yukarı uzanır. "
     + "Değerler ve eğriler az dakikalı oranlar emsal ortalamasına çekildikten sonraki değerlerdir; gözlenen değer satırın üzerinde bekleyince görünür. "
     + (guest ? `Mavi çizgi ${guest.player.name}; aynı emsallere göre sıralanır, renkli bölüm ${player.name} içindir. ` : "")
-    + "Bir ölçütün adına tıklayın: yandaki Sıralama, oyuncuları o ölçütte en iyiden en kötüye dizer. "
+    + "Bir ölçütün adına tıklayın: Sıralama, oyuncuları o ölçütte en iyiden en kötüye dizer. "
     + (radar.pool || "");
-  renderMetricRanking(radar);
+  renderMetricRanking(radar, view);
 }
 
 function selectDistributionMetric(id) {
@@ -203,30 +251,29 @@ function selectDistributionMetric(id) {
   renderPlayerDistribution(distributionState.radar, distributionState.selected);
   // The chart was redrawn, so focus returns to the same label.
   $("statistics-distribution-chart").querySelector(`[data-dist-metric="${CSS.escape(id)}"]`)?.focus({ preventScroll: true });
-  // Stacked on a narrow screen, the ranking sits far above the chart.
-  const panel = $("statistics-ranking"), box = panel?.getBoundingClientRect();
-  if (box && (box.bottom < 0 || box.top > window.innerHeight)) {
+  // Stacked on a narrow screen, the ranking sits above the chart.
+  const panel = $("statistics-ranking-title").closest("section"), box = panel.getBoundingClientRect();
+  if (box.bottom < 0 || box.top > window.innerHeight) {
     panel.scrollIntoView({ block: "start", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
   }
 }
 
-// The players of the distribution's reference group in this season, best to
-// worst on the picked metric: the same adjusted value and the same percentile
-// the chart shows, so the two never disagree. Lower-is-better metrics are
-// already reversed in the percentile. The primary and secondary player are
-// listed even when they are short of the minute bar (flagged), in their
-// colours; clicking a name compares, as in the player list.
-function renderMetricRanking(radar) {
+// The players of the section's group in this season, best to worst on the
+// picked metric: the same adjusted value and the same percentile the chart
+// shows, so the two never disagree. Lower-is-better metrics are already
+// reversed in the percentile. The primary and secondary player are listed even
+// when they are short of the minute bar or outside the group (flagged), in
+// their colours; clicking a name compares, as in the player list.
+function renderMetricRanking(radar, view) {
   const body = $("statistics-ranking-body");
-  if (!body) return;
-  const metric = radar?.profile?.find((entry) => entry.id === statisticsState.rankMetric);
-  if (!radar?.reference || !metric) {
+  const metric = view?.profile.find((entry) => entry.id === statisticsState.rankMetric);
+  if (!radar?.reference || !view || !metric) {
     body.replaceChildren();
     $("statistics-ranking-metric").textContent = "—";
     $("statistics-ranking-note").textContent = radar?.note || "Sıralama için radar verisi yok.";
     return;
   }
-  const { reference, player, guest } = radar;
+  const { reference, guest } = view, player = radar.player;
   const { players: league, teams } = leaguePlayers();
   const known = new Map(league.map((entry) => [entry.id, entry]));
   const listed = new Map(reference.peers.filter((peer) => peer.scope?.key === reference.scope?.key)
@@ -234,7 +281,7 @@ function renderMetricRanking(radar) {
   for (const extra of [player, guest?.player]) if (extra && !listed.has(extra.id)) listed.set(extra.id, extra);
   const better = metric.direction === "lower_better" ? (a, b) => a - b : (a, b) => b - a;
   const ranked = [...listed.values()]
-    .map((entry) => ({ entry, result: RadarScoring.evaluate(entry, metric, reference, { guest: entry.id === guest?.player.id }) }))
+    .map((entry) => ({ entry, result: RadarScoring.evaluate(entry, metric, reference, { guest: true }) }))
     .filter(({ result }) => Number.isFinite(result.score) && Number.isFinite(result.value))
     .sort((a, b) => b.result.score - a.result.score || better(a.result.value, b.result.value)
       || a.entry.name.localeCompare(b.entry.name, "tr"));
@@ -251,11 +298,13 @@ function renderMetricRanking(radar) {
     club.append(createTeamLogo([...(profile?.teams || [])][0] || "unknown", teams, false));
     const open = element("button", "statistics-player-button", statisticsShortName(entry.name));
     open.type = "button";
-    open.title = entry.name + (result.smallSample ? ` · ${displayNumber(entry.minutes)} dk, emsal eşiğinin altında` : "");
+    open.title = entry.name + (result.guest ? " · bu grubun dışında, konuk olarak sıralandı" : "")
+      + (result.smallSample ? ` · ${displayNumber(entry.minutes)} dk, emsal eşiğinin altında` : "");
     open.setAttribute("aria-label", `${entry.name} ile karşılaştır`);
     open.addEventListener("click", () => statisticsPick(entry.id));
     club.append(open);
-    if (result.smallSample) club.append(element("small", "statistics-ranking-flag", "az dk"));
+    if (result.guest) club.append(element("small", "statistics-ranking-flag", "konuk"));
+    else if (result.smallSample) club.append(element("small", "statistics-ranking-flag", "az dk"));
     identity.append(club);
     const value = element("td", "numeric", displayNumber(result.value));
     value.append(element("small", "statistics-ranking-unit", ` ${unit}`));
@@ -271,9 +320,8 @@ function renderMetricRanking(radar) {
   }
   body.replaceChildren(rows);
   $("statistics-ranking-metric").textContent = metric.label;
-  $("statistics-ranking-note").textContent = `${RadarScoring.positionLabels[reference.position] || reference.position} · `
-    + `${statisticsBarLabel(reference.config.minimumMinutes, reference.position)} · bu sezon ${ranked.length} oyuncu, en iyiden en kötüye. `
-    + "Değer ve puan Dağılım ile aynıdır"
+  $("statistics-ranking-note").textContent = `${statisticsBarLabel(reference.config.minimumMinutes, reference.position)}`
+    + ` · bu sezon ${ranked.length} oyuncu, en iyiden en kötüye. Değer ve puan Dağılım ile aynıdır`
     + (metric.direction === "lower_better" ? "; düşük değer daha iyidir. " : metric.direction === "context"
       ? "; bağlam ölçütü: yüksek değer daha fazla etkinliktir. " : ". ")
     + "Bir isme tıklayarak karşılaştırın.";

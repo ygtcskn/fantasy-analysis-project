@@ -67,7 +67,7 @@
         <div><p class="eyebrow">HAFTANIN SOHBETİ</p><h2>Maçlar biter, sohbet devam eder.</h2></div>
         <div class="social-toolbar-actions"><label>Maç haftası<select id="social-round"></select></label><button id="social-refresh" type="button" class="secondary" aria-label="Konuları yenile" title="Konuları yenile">↻</button></div>
       </div>
-      <p class="social-session-note">Herkes okuyabilir. Konu açmak ve yanıt yazmak için giriş yapıp bir takma ad seç; yazılarında takma adın ve tuttuğun takımın arması görünür, e-postan görünmez.</p>
+      <p class="social-session-note">Herkes okuyabilir. Konu açmak ve yanıt yazmak için giriş yapıp bir takma ad seç; yazılarında takma adın ve profil fotoğrafın görünür, e-postan görünmez.</p>
       <div id="social-matches"></div>
       <p id="social-status" role="status" aria-live="polite"></p>
     </section>
@@ -77,7 +77,7 @@
           <div><p class="eyebrow">PAYLAŞILAN KADROLAR</p><h2>Herkesin ilk on biri, hafta hafta.</h2></div>
           <button id="squads-refresh" type="button" class="secondary" aria-label="Kadroları yenile" title="Kadroları yenile">↻</button>
         </div>
-        <p class="squads-note">Herkes görebilir. Kartlarda paylaşanın takma adı, tuttuğu takımın arması, paylaşım tarihi ve ilk on birinin beklenen fantezi puanı görünür; e-posta görünmez. Her haftanın kadroları beklenen FP'ye göre sıralanır. Kadroyu sahada görmek için karta tıkla.</p>
+        <p class="squads-note">Herkes görebilir. Kartlarda paylaşanın takma adı, profil fotoğrafı, paylaşım tarihi ve ilk on birinin beklenen fantezi puanı görünür; e-posta görünmez. Her haftanın kadroları beklenen FP'ye göre sıralanır. Kadroyu sahada görmek için karta tıkla.</p>
         <p id="squads-status" role="status" aria-live="polite"></p>
         <div id="squads-weeks"></div>
       </div>
@@ -177,7 +177,6 @@
         </section>
       </div>
       <div class="statistics-lower">
-        <div class="statistics-left">
         <section id="statistics-list-panel" class="statistics-players" aria-labelledby="statistics-list-title">
           <div class="builder-pool-heading"><h3 id="statistics-list-title">Oyuncular</h3></div>
           <div class="builder-filters">
@@ -205,16 +204,6 @@
             <tbody id="statistics-list-body"></tbody>
           </table></div>
         </section>
-        <section id="statistics-ranking" class="statistics-players statistics-ranking" aria-labelledby="statistics-ranking-title">
-          <div class="builder-pool-heading"><h3 id="statistics-ranking-title">Sıralama</h3><span id="statistics-ranking-metric" class="badge">—</span></div>
-          <p id="statistics-ranking-note" class="builder-rating-note" role="status"></p>
-          <div class="statistics-list-scroll" tabindex="0" aria-label="Kaydırılabilir ölçüt sıralaması"><table class="statistics-table statistics-ranking-table">
-            <caption class="sr-only">Dağılımda seçilen ölçütte oyuncular, en iyiden en kötüye. Bir isme tıklayarak karşılaştırın.</caption>
-            <thead><tr><th scope="col" class="numeric">#</th><th scope="col">Oyuncu</th><th scope="col" class="numeric">Değer</th><th scope="col" class="numeric" title="Dağılımdaki yüzdelik">Puan</th></tr></thead>
-            <tbody id="statistics-ranking-body"></tbody>
-          </table></div>
-        </section>
-        </div>
         <section class="statistics-profile" aria-labelledby="statistics-profile-title">
           <div class="builder-pool-heading"><h3 id="statistics-profile-title">Oyuncu Profili</h3><div id="statistics-profile-name" class="statistics-profile-players" aria-live="polite">—</div></div>
           <p id="statistics-profile-note" class="builder-rating-note" role="status"></p>
@@ -249,11 +238,37 @@
             <div id="statistics-ratings-chart" class="statistics-chart"></div>
             <p id="statistics-ratings-note" class="builder-rating-note"></p>
           </section>
-          <section class="statistics-distribution" aria-labelledby="statistics-distribution-title">
-            <h4 id="statistics-distribution-title">Dağılım · Emsallere Göre</h4>
-            <div id="statistics-distribution-chart" class="statistics-chart"></div>
-            <p id="statistics-distribution-note" class="builder-rating-note"></p>
-          </section>
+        </section>
+        <section id="statistics-ranking" class="statistics-metrics" aria-labelledby="statistics-metrics-title">
+          <div class="builder-pool-heading statistics-metrics-heading">
+            <h3 id="statistics-metrics-title">Dağılım ve Sıralama</h3>
+            <div class="builder-role-filters" role="group" aria-label="Karşılaştırma grubu">
+              <button type="button" data-rank-role="ALL" aria-label="Tüm saha oyuncuları" title="Tüm saha oyuncuları" aria-pressed="false"><img src="assets/roles/all.svg" alt=""></button>
+              <button type="button" data-rank-role="GK" aria-label="Kaleciler" title="Kaleciler" aria-pressed="false"><img src="assets/roles/goalkeeper.svg" alt=""></button>
+              <button type="button" data-rank-role="DEF" aria-label="Defans oyuncuları" title="Defans oyuncuları" aria-pressed="false"><img src="assets/roles/defender.svg" alt=""></button>
+              <button type="button" data-rank-role="MID" aria-label="Orta saha oyuncuları" title="Orta saha oyuncuları" aria-pressed="false"><img src="assets/roles/midfielder.svg" alt=""></button>
+              <button type="button" data-rank-role="FW" aria-label="Forvetler" title="Forvetler" aria-pressed="false"><img src="assets/roles/attacker.svg" alt=""></button>
+            </div>
+            <span id="statistics-ranking-group" class="badge">—</span>
+          </div>
+          <div class="statistics-metrics-body">
+            <section class="statistics-ranking" aria-labelledby="statistics-ranking-title">
+              <div class="statistics-ranking-frame">
+                <div class="statistics-detailed-heading"><h4 id="statistics-ranking-title">Sıralama</h4><span id="statistics-ranking-metric" class="badge">—</span></div>
+                <p id="statistics-ranking-note" class="builder-rating-note" role="status"></p>
+                <div class="statistics-list-scroll" tabindex="0" aria-label="Kaydırılabilir ölçüt sıralaması"><table class="statistics-table statistics-ranking-table">
+                  <caption class="sr-only">Dağılımda seçilen ölçütte oyuncular, en iyiden en kötüye. Bir isme tıklayarak karşılaştırın.</caption>
+                  <thead><tr><th scope="col" class="numeric">#</th><th scope="col">Oyuncu</th><th scope="col" class="numeric">Değer</th><th scope="col" class="numeric" title="Dağılımdaki yüzdelik">Puan</th></tr></thead>
+                  <tbody id="statistics-ranking-body"></tbody>
+                </table></div>
+              </div>
+            </section>
+            <section class="statistics-distribution" aria-labelledby="statistics-distribution-title">
+              <h4 id="statistics-distribution-title">Dağılım · Emsallere Göre</h4>
+              <div id="statistics-distribution-chart" class="statistics-chart"></div>
+              <p id="statistics-distribution-note" class="builder-rating-note"></p>
+            </section>
+          </div>
         </section>
       </div>
     </section>

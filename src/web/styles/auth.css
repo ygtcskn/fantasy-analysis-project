@@ -35,11 +35,12 @@
 .profile-team-crest { display: grid; place-items: center; flex: none; width: 28px; height: 28px; }
 .profile-form button[type=submit] { margin-top: 8px; }
 
-/* Profile photos (core/profile.js): round everywhere they appear, cropped to
-   fill. Without a photo the dialog shows the visitor's initial. */
-.profile-avatar { flex: none; border-radius: 50%; object-fit: cover; background: var(--surface-raised); }
+/* A person wherever the site shows one (profileAvatar in core/profile.js): a
+   circle with their nickname's first letter, covered by their photo when they
+   have one. The size comes from the element's --avatar-size. */
+.profile-avatar { --avatar-size: 24px; position: relative; display: inline-grid; place-items: center; flex: none; width: var(--avatar-size); height: var(--avatar-size); overflow: hidden; border: 1px solid var(--line); border-radius: 50%; background: var(--surface-raised); color: var(--muted); font-size: calc(var(--avatar-size) * .42); font-weight: 600; line-height: 1; }
+.profile-avatar img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .profile-avatar-row { display: flex; align-items: center; gap: 16px; margin-bottom: 18px; }
 .profile-avatar-preview { display: grid; place-items: center; flex: none; width: 72px; height: 72px; }
-.profile-avatar-empty { display: grid; place-items: center; width: 72px; height: 72px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface-raised); color: var(--muted); font-size: 28px; }
 .profile-avatar-label { margin: 0 0 8px; font-size: 11px; font-weight: 600; color: var(--muted); }
 .profile-avatar-buttons { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }

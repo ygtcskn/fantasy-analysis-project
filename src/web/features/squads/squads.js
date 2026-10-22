@@ -7,7 +7,7 @@
 // fantasy points at that time, and opens that squad's own page
 // (index.html?view=squads&squad=<id>, drawn by squad-detail.js).
 
-const SQUAD_FEED_FIELDS = "id, season, round_id, user_id, author_nickname, author_team_id, starters, expected_points, projected_starters, shared_at";
+const SQUAD_FEED_FIELDS = "id, season, round_id, user_id, author_nickname, author_team_id, author_avatar_path, starters, expected_points, projected_starters, shared_at";
 const squadFeedState = { loadedKey: "", request: 0, status: "idle", error: "", squads: [] };
 const squadFeedTimeFormat = new Intl.DateTimeFormat(LOCALE, { timeZone: MATCH_TIME_ZONE, dateStyle: "medium", timeStyle: "short" });
 
@@ -67,16 +67,11 @@ function compareSharedSquads(a, b) {
   return String(b.shared_at).localeCompare(String(a.shared_at));
 }
 
-// The sharer's club crest in a ring of the club's colour, over the first letter
-// of their nickname, which shows when there is no club or the crest fails.
-function squadAvatar(squad, crestSize = 36) {
-  const avatar = squadFeedNode("span", "squad-avatar");
-  avatar.setAttribute("aria-hidden", "true");
-  avatar.append(squadFeedNode("span", "squad-avatar-initial", String(squad.author_nickname || "?").charAt(0).toLocaleUpperCase(LOCALE)));
-  if (squad.author_team_id) {
-    avatar.style.setProperty("--squad-ring", teamColor(squad.author_team_id));
-    avatar.append(profileCrest(squad.author_team_id, crestSize));
-  }
+// The sharer as everywhere a person appears (core/profile.js): their photo,
+// else the first letter of their nickname. Not their club's crest.
+function squadAvatar(squad, size = 64) {
+  const avatar = profileAvatar({ nickname: squad.author_nickname, avatar_path: squad.author_avatar_path }, size);
+  avatar.classList.add("squad-avatar");
   return avatar;
 }
 

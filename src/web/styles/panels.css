@@ -376,7 +376,7 @@
 
 .statistics-profile .builder-pool-heading { padding: 14px 16px 8px; }
 .statistics-profile h3 { font-size: 16px; }
-.statistics-profile h4 { margin: 0 0 8px; font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: .3px; }
+:is(.statistics-profile, .statistics-metrics) h4 { margin: 0 0 8px; font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: .3px; }
 .statistics-profile > .builder-rating-note { padding: 0 16px 10px; margin: 0; color: var(--muted); }
 .statistics-facts, .statistics-timeline, .statistics-ratings { min-width: 0; border: 1px solid var(--line); border-radius: 8px; padding: 12px; background: var(--surface-raised); }
 .statistics-facts { border-top: 2px solid #d8433c; }
@@ -431,9 +431,26 @@
   text-overflow: ellipsis;
 }
 #team-statistics-workspace .statistics-lower { grid-template-columns: minmax(0, calc((100% - 40px) / 3)) minmax(0, 1fr); }
-/* The left column: Oyuncular above Sıralama, which ranks the players on the
-   metric picked in the Dağılım chart beside it. */
-#statistics-workspace .statistics-left { display: grid; gap: 20px; align-content: start; min-width: 0; }
+/* Dağılım ve Sıralama: one panel under the player list and the profile, full
+   width. Its header carries the role buttons that pick the comparison group;
+   the ranking (left) fills exactly the height of the distribution (right) -
+   its frame is positioned, so it never stretches the row - and scrolls. */
+#statistics-workspace .statistics-metrics { grid-column: 1 / -1; min-width: 0; border: 1px solid var(--line); border-top: 3px solid #b0a8dd;
+  border-radius: 10px; background: var(--surface); color: var(--ink); overflow: hidden; }
+.statistics-metrics-heading h3 { margin-right: auto; }
+.statistics-metrics-body { display: grid; grid-template-columns: minmax(300px, 1fr) minmax(0, 1.9fr); gap: 16px; padding: 0 16px 16px; }
+.statistics-metrics .statistics-distribution { margin: 0; }
+.statistics-ranking { position: relative; min-width: 0; min-height: 420px; border: 1px solid var(--line); border-top: 2px solid #8896d6;
+  border-radius: 8px; background: var(--surface-raised); }
+.statistics-ranking-frame { position: absolute; inset: 0; display: flex; flex-direction: column; padding: 12px; }
+.statistics-ranking-frame .builder-rating-note { padding: 0 0 8px; margin: 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.statistics-ranking-frame .statistics-list-scroll { flex: 1 1 0; min-height: 0; max-height: none; background: transparent; }
+@media (max-width: 1100px) {
+  .statistics-metrics-body { grid-template-columns: minmax(0, 1fr); }
+  .statistics-ranking { min-height: 0; }
+  .statistics-ranking-frame { position: static; }
+  .statistics-ranking-frame .statistics-list-scroll { flex: none; max-height: 520px; }
+}
 #statistics-workspace .statistics-ranking-table { table-layout: fixed; }
 #statistics-workspace .statistics-ranking-table th:nth-child(1) { width: 13%; }
 #statistics-workspace .statistics-ranking-table th:nth-child(2) { width: 49%; }

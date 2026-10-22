@@ -75,7 +75,7 @@ function squadDetailPlayer(id, goalkeeper, points) {
 
 function squadDetailHeader(squad, roundName) {
   const header = squadFeedNode("header", "squad-detail-head");
-  const avatar = squadAvatar(squad, 46);
+  const avatar = squadAvatar(squad, 84);
   avatar.classList.add("squad-avatar-large");
   const identity = squadFeedNode("div", "squad-detail-identity");
   const title = squadFeedNode("h2", "", squad.author_nickname);

@@ -31,9 +31,9 @@
 .squad-actual { display: grid; justify-items: end; gap: 1px; padding: 7px 12px; border: 1px solid color-mix(in srgb, var(--result-win) 45%, transparent); border-radius: 8px; background: color-mix(in srgb, var(--result-win) 13%, transparent); white-space: nowrap; }
 .squad-actual span, .squad-actual small { color: var(--muted); font-size: 10px; }
 .squad-actual strong { font-size: 20px; font-weight: 650; line-height: 1.2; font-variant-numeric: tabular-nums; }
-.squad-avatar { position: relative; display: grid; place-items: center; flex: 0 0 64px; width: 64px; height: 64px; border: 3px solid var(--squad-ring, var(--line)); border-radius: 50%; background: var(--surface-raised); overflow: hidden; }
-.squad-avatar-initial { font-size: 24px; font-weight: 650; color: var(--muted); }
-.squad-avatar .profile-crest { position: absolute; inset: 0; margin: auto; width: 36px; height: 36px; object-fit: contain; background: var(--surface-raised); }
+/* The sharer's avatar is profileAvatar (core/profile.js, styles/auth.css), as
+   everywhere a person appears; only its border is heavier here. */
+.squad-avatar { border-width: 2px; }
 .squad-card-text { display: grid; gap: 4px; min-width: 0; }
 .squad-card-name { margin: 0; font-size: 15px; font-weight: 650; overflow-wrap: anywhere; }
 .squad-card-date { font-size: 12px; color: var(--muted); }
@@ -47,9 +47,6 @@
 /* One squad's page: who and when, then the pitch beside the saved totals. */
 .squad-back { margin-bottom: 16px; text-decoration: none; }
 .squad-detail-head { display: flex; align-items: center; gap: 20px; margin-bottom: 20px; padding: 18px 22px; border: 2px solid var(--squad-card-line); border-radius: 10px; background: var(--surface); }
-.squad-avatar-large { flex-basis: 84px; width: 84px; height: 84px; }
-.squad-avatar-large .squad-avatar-initial { font-size: 32px; }
-.squad-avatar-large .profile-crest { width: 46px; height: 46px; }
 .squad-detail-identity { display: grid; gap: 6px; flex: 1; min-width: 0; }
 .squad-detail-identity h2 { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; font-size: 22px; overflow-wrap: anywhere; }
 .squad-detail-own { padding: 3px 8px; border: 1px solid var(--squad-card-hover); border-radius: 999px; color: var(--squad-card-hover); font-size: 10px; font-weight: 650; letter-spacing: .6px; text-transform: uppercase; }
@@ -107,7 +104,7 @@
   .squad-week-header { padding: 12px 14px; }
   .squad-card { padding: 14px 16px; gap: 14px; }
   .squad-detail-head { flex-wrap: wrap; gap: 14px; padding: 16px; }
-  .squad-avatar-large { flex-basis: 64px; width: 64px; height: 64px; }
+  .squad-avatar-large { --avatar-size: 64px !important; }
   .squad-detail-side { flex-basis: 100%; justify-content: space-between; }
   .squad-detail-points { justify-items: start; }
   .squad-pitch-heading { flex-wrap: wrap; padding-inline: 14px; }

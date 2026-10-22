@@ -443,6 +443,9 @@ function renderStatisticsRadars(selected, players, secondary = null) {
     ? `${secondary.name} ${guest && keeper(guest) ? "kaleci" : "saha oyuncusu"}; kaleci ile saha oyuncusunun radarları farklı olduğu için karşılaştırılamaz.`
     : "");
   // Handed back so other player charts reuse this exact population and score.
+  // `prepared`, `peerPool` and `secondary` let the Dağılım ve Sıralama
+  // section rebuild the same reference for another role.
   return { player, reference, profile, results, pool: statisticsPoolNote(),
-    guest: comparable ? { player: guest, results: guestResults } : null };
+    guest: comparable ? { player: guest, results: guestResults } : null,
+    prepared, peerPool: pool, secondary: guest };
 }

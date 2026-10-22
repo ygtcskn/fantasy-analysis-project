@@ -24,7 +24,8 @@ const RadarScoring = (() => {
   };
   const positionLabels = { GK: "Kaleci", CB: "Stoper", FB: "Bek / kanat bek",
     DM: "Defansif orta saha", CM: "Merkez orta saha", AM: "Ofansif orta saha",
-    W: "Kanat", FW: "Forvet", DEF: "Defans (genel)", MID: "Orta saha (genel)", TEAM: "Takım" };
+    W: "Kanat", FW: "Forvet", DEF: "Defans (genel)", MID: "Orta saha (genel)", TEAM: "Takım",
+    ALL: "Tüm saha oyuncuları" };
   const categories = { attacking: "Hücum", creation: "Üretim", progression: "İlerleme",
     possession: "Top kullanımı", defending: "Savunma", duels: "Mücadele",
     goalkeeping: "Kalecilik", discipline: "Hata ve disiplin", attribute: "Genel nitelik" };
@@ -399,7 +400,10 @@ const RadarScoring = (() => {
   // bar; the target's plotted values never leave its own season.
   function createReference(players, target, selectedAxes, options = {}, pool = []) {
     const config = settings(options);
-    const eligible = (player) => target.position && player.position === target.position
+    // A group is one role, or - with `options.positions` - several pooled
+    // under one label, such as every outfield role.
+    const positions = config.positions || [target.position];
+    const eligible = (player) => target.position && positions.includes(player.position)
       && Number.isFinite(player.minutes) && player.minutes > 0 && player.minutes >= config.minimumMinutes;
     const current = players.filter((player) => eligible(player)
       && player.scope?.key && player.scope.key === target.scope?.key);
@@ -407,7 +411,7 @@ const RadarScoring = (() => {
       && player.scope?.competitionId && player.scope.competitionId === target.scope?.competitionId
       && player.scope.seasonId !== target.scope?.seasonId);
     const peers = [...current, ...earlier];
-    const reference = { config, position: target.position, scope: target.scope, peers, peerCount: peers.length,
+    const reference = { config, position: target.position, positions, scope: target.scope, peers, peerCount: peers.length,
       seasonPeers: current.length, historyPeers: earlier.length,
       historySeasons: [...new Set(earlier.map((player) => player.season))].sort(), priors: new Map() };
     reference.metrics = new Map(selectedAxes.map((metric) => [metric.id,
@@ -482,16 +486,20 @@ const RadarScoring = (() => {
     const value = (observed.rawValue + prior.mean * prior.weight) / (exposure + prior.weight) * (percentage ? 100 : 90);
     return { ...observed, observedValue: observed.value, value, prior, reliability: exposure / (exposure + prior.weight) };
   }
+  function inReferenceGroup(player, reference) {
+    return (reference.positions || [reference.position]).includes(player.position);
+  }
   // `options.guest` ranks a player from another role against this reference -
   // the comparison overlay, where both players share the primary's scale. The
   // season and competition must still match.
   function evaluate(player, metric, reference, options = {}) {
     const observed = adjusted(player, metric, reference);
     const ranked = score(observed.value, reference.metrics.get(metric.id) || [], metric, reference.config);
-    const sameGroup = (player.position === reference.position || Boolean(options.guest))
+    const inGroup = inReferenceGroup(player, reference);
+    const sameGroup = (inGroup || Boolean(options.guest))
       && player.scope?.key === reference.scope?.key;
     return { ...observed, metric, score: sameGroup ? ranked.score : null,
-      guest: Boolean(options.guest) && player.position !== reference.position,
+      guest: Boolean(options.guest) && !inGroup,
       status: !sameGroup ? "incompatible_group" : observed.status === "available" ? ranked.status : observed.status,
       sampleSize: ranked.sampleSize, positiveN: ranked.positiveN, zeroShare: ranked.zeroShare,
       zeroApplied: ranked.zeroApplied, minimumMinutes: reference.config.minimumMinutes, peerCount: reference.peerCount,
@@ -501,7 +509,7 @@ const RadarScoring = (() => {
   return { defaults, positionGroups, positionLabels, categories, metrics, profiles, axes,
     numeric, nonnegative, groupFor, positionFor, fixtureScope, scopes, finished, roundNumber, playedRounds,
     throughRound, preparePlayers, covered, unplayed, matchValue, requiredAttempts, tally, observation, settings,
-    percentile, distribution, score, createReference, shrinkage, sampleVariance, estimatePrior, priorFor, adjusted, evaluate };
+    percentile, distribution, score, createReference, inReferenceGroup, shrinkage, sampleVariance, estimatePrior, priorFor, adjusted, evaluate };
 })();
 
 
@@ -668,10 +676,11 @@ const RadarAttributes = (() => {
       position: reference.position, scope: reference.scope,
       loadings: model.loadings, dropped: model.dropped, explained: model.explained, status: model.status,
       smallSample: !(player.minutes > 0) || player.minutes < reference.config.minimumMinutes };
-    if ((player.position !== reference.position && !options.guest) || player.scope?.key !== reference.scope?.key) {
+    const inGroup = RadarScoring.inReferenceGroup(player, reference);
+    if ((!inGroup && !options.guest) || player.scope?.key !== reference.scope?.key) {
       return { ...result, status: "incompatible_group" };
     }
-    result.guest = Boolean(options.guest) && player.position !== reference.position;
+    result.guest = Boolean(options.guest) && !inGroup;
     const own = members.map((metric) => RadarScoring.adjusted(player, metric, reference));
     // Only the members the component kept are needed from the player.
     const needed = model.active || members.map((_, index) => index);

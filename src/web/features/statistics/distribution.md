@@ -1,13 +1,13 @@
 # Distribution panel (`features/statistics/distribution.js`)
 
-The **Dağılım · Emsallere Göre** panel at the bottom of the player profile on
-İstatistikler (`index.html?view=statistics`): for the selected player, one row
+The **Dağılım · Emsallere Göre** chart in the Dağılım ve Sıralama section under
+the player profile on İstatistikler (`index.html?view=statistics`): for the selected player, one row
 per metric of his Ayrıntılı Ölçütler wheel - sixteen for outfielders, ten for
 goalkeepers.
 
 | File | Role |
 | --- | --- |
-| `distribution.js` | `PlayerDistribution` (pure: quantiles, bandwidth, density, the SVG) and `renderPlayerDistribution` (page wiring). |
+| `distribution.js` | `PlayerDistribution` (pure: quantiles, bandwidth, density, the SVG) and the section's page wiring: `renderPlayerDistribution`, the role buttons and `renderMetricRanking`. |
 | `distribution.css` | The panel and the percentile colours, with light and dark values. |
 
 `src/web/index.html` loads them as `features/statistics/...`; `src/web/serve.py`
@@ -47,21 +47,34 @@ who recorded the event at all, while the curve shows everyone, zeros included;
 the two can therefore look different at the low end, and the tooltip gives the
 number of peer values behind each row.
 
-## Ranking by a metric
+## Dağılım ve Sıralama
 
-Each metric label is a button (`data-dist-metric`; mouse, Enter or Space). It
-picks the metric the **Sıralama** panel ranks - the left column's second panel,
-under Oyuncular, stretched to end level with this chart. The panel lists this
-season's players of the same reference group (role and minute bar) best to
-worst, by the same small-sample-adjusted value and the same percentile the chart
-shows, so a player's number never differs between the two; lower-is-better
-metrics are already reversed in the percentile, and context metrics rank more
-activity first. The primary and secondary player are always listed, in their
-colours, flagged "az dk" when short of the minute bar. Equal percentiles share
-a rank. Clicking a name there compares, as in the player list. The panel opens
-on the first metric, keeps the picked one while the wheel has it, and falls back
-to the first for a goalkeeper's wheel. A click redraws only the chart and the
-panel, then returns focus to the label.
+The chart shares one full-width section with the **Sıralama** table, under the
+player list and the profile: the table on the left fills exactly the chart's
+height (its frame is positioned, so it never stretches the row) and scrolls;
+stacked on a narrow screen it sits above the chart.
+
+**Role buttons** in the section's header pick the comparison group for both
+halves: Tüm saha oyuncuları (every outfield role pooled, on the outfield
+wheel), Kaleci, Defans, Orta saha or Forvet. By default the group is the primary
+player's own - the radars' reference, reused as it is - and picking that role
+again returns to following the primary. Another role rebuilds the same
+reference for it (season, competition, minute bar, earlier seasons cut at the
+same round, the small-sample prior) through `createReference(..., { positions })`,
+and both players are ranked in it as guests; the note says the group then
+differs from the radars, which always keep the player's own.
+
+**Metric labels** are buttons (`data-dist-metric`; mouse, Enter or Space). The
+picked one ranks this season's players of the section's group best to worst, by
+the same small-sample-adjusted value and the same percentile the chart shows,
+so a player's number never differs between the two; lower-is-better metrics
+are already reversed in the percentile, and context metrics rank more activity
+first. The primary and secondary player are always listed, in their colours,
+flagged "konuk" when outside the group or "az dk" when short of the minute bar.
+Equal percentiles share a rank. Clicking a name compares, as in the player
+list. The table opens on the first metric, keeps the picked one while the wheel
+has it, and falls back to the first on a goalkeeper's wheel. A click redraws
+only this section, then returns focus to the label.
 
 ## Density
 

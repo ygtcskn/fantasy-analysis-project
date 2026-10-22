@@ -219,6 +219,20 @@ test("a compared player from another role is ranked on the primary's reference",
   assert.equal(radar.evaluate(b, radar.metrics.goals, reference, { guest: true }).guest, false);
 });
 
+test("a reference can pool several roles under one label", () => {
+  const forward = player("fw", { goals: 3 }), midfielder = player("mid", { goals: 1 }, { position: "MID" });
+  const keeper = player("gk", { goals: 0 }, { position: "GK" });
+  const pooled = radar.createReference([forward, midfielder, keeper], { position: "ALL", scope },
+    [radar.metrics.goals], { positions: ["MID", "FW"] });
+  assert.deepEqual(pooled.peers.map((entry) => entry.id), ["fw", "mid"]);
+  assert.equal(radar.positionLabels.ALL, "Tüm saha oyuncuları");
+  // Members of any pooled role are in the group; others need the guest option.
+  assert.equal(radar.evaluate(forward, radar.metrics.goals, pooled).guest, false);
+  assert.equal(radar.evaluate(forward, radar.metrics.goals, pooled).score, 75);
+  assert.equal(radar.evaluate(keeper, radar.metrics.goals, pooled).status, "incompatible_group");
+  assert.equal(radar.evaluate(keeper, radar.metrics.goals, pooled, { guest: true }).guest, true);
+});
+
 test("short samples stay outside the reference but can be shown with a warning", () => {
   const a = player("a", { goals: 1 }), b = player("b", { goals: 2 });
   const short = player("short", { goals: 1 }, { minutes: 90 });

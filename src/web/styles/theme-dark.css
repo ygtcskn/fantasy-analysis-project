@@ -215,6 +215,7 @@
 :root[data-theme="dark"] .statistics-players,
 :root[data-theme="dark"] .statistics-reserved,
 :root[data-theme="dark"] .statistics-profile,
+:root[data-theme="dark"] .statistics-metrics,
 :root[data-theme="dark"] .team-analysis,
 :root[data-theme="dark"] .team-panel {
   border: 1px solid var(--line);
@@ -228,6 +229,7 @@
 :root[data-theme="dark"] .statistics-radar-detailed,
 :root[data-theme="dark"] .statistics-facts,
 :root[data-theme="dark"] .statistics-distribution,
+:root[data-theme="dark"] .statistics-ranking,
 :root[data-theme="dark"] .statistics-timeline,
 :root[data-theme="dark"] .statistics-ratings,
 :root[data-theme="dark"] .builder-recommendations,
@@ -255,6 +257,7 @@
   line-height: 1.3;
 }
 :root[data-theme="dark"] .statistics-profile h4,
+:root[data-theme="dark"] .statistics-metrics h4,
 :root[data-theme="dark"] .ta-block h4,
 :root[data-theme="dark"] .statistics-detailed-heading h4 {
   color: var(--muted);

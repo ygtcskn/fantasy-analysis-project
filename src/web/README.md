@@ -27,8 +27,8 @@ Maç Tribünü, lists the fantasy squads visitors have shared. Each matchweek is
 purple bar, newest first: the current week always (the same week Ana Sayfa and
 Maç Tribünü open on, `currentRoundIndex` in `core/match-rules.js`), then every
 earlier or later week someone shared a squad for. Under each bar, three cards
-to a row (two, then one, on narrower screens) show the sharer's club crest in a
-ring of the club's colour (or the nickname's first letter), nickname, share
+to a row (two, then one, on narrower screens) show the sharer's profile photo
+(or the nickname's first letter, as everywhere a person appears), nickname, share
 date in Turkish time and the eleven's expected fantasy points, highest first.
 A total that left out an eleven without a current projection carries a `*`, as
 on Kadro Kur.
@@ -334,15 +334,16 @@ ratings (1-10, not a zero-minute record) as "Reyting" in the season totals
 and the tier list - and matches below it are drawn paler. The note gives the
 highest and lowest rating and counts records without a valid rating.
 
-**Dağılım · Emsallere Göre,** at the bottom of the profile. For each metric of
+**Dağılım · Emsallere Göre,** under the profile, full width. For each metric of
 the Ayrıntılı Ölçütler wheel, the spread of the comparison players as a smooth
 curve, the player's value marked on it, the peers he outperforms coloured by
 percentile, and his percentile on the right - the same peers and the same
 numbers as the wheel. It lives in `features/statistics/distribution.js`; see
 [features/statistics/distribution.md](features/statistics/distribution.md).
-Clicking a metric's name fills **Sıralama**, the panel beside it under the
-player list, with this season's players of the same group ranked best to worst
-on that metric, by the chart's own value and percentile.
+It shares the full-width **Dağılım ve Sıralama** section with a ranking table:
+clicking a metric's name ranks this season's players best to worst on it, by
+the chart's own value and percentile, and the role buttons in the section's
+header choose the comparison group for both (the primary's own by default).
 
 All of these charts are inline SVG with no charting library, and their colours
 are CSS variables so they follow the theme like everything else.
@@ -517,7 +518,7 @@ sidebar: "Giriş yap" when signed out, the email and "Çıkış yap" when signed
   `supabase/profiles.sql`. Each visitor can read and change only their own row;
   the database enforces that and the nickname rules, and the page repeats them
   only to explain mistakes. Signed in, the sidebar shows the nickname (else the
-  email) with the club's crest, then "Profil" and "Çıkış yap". Until a
+  email) with their profile photo, then "Profil" and "Çıkış yap". Until a
   nickname is saved, the profile opens first as "Hoş geldin": right after
   signing in (in the tab the email link opened and in the tab that asked for
   it), and otherwise once per browser session. A new field means a column and its
@@ -531,11 +532,15 @@ sidebar: "Giriş yap" when signed out, the email and "Çıkış yap" when signed
   to it. Only the owner can upload to or delete from their folder, at most
   three files at a time; the bucket takes only images up to 512 KB. Each upload
   gets a new name, so browsers can keep a photo for good. "Kaldır" removes it.
-  `profileBadge()` draws a person everywhere they appear: the photo, else the
-  club's crest; a photo that no longer loads falls back to the crest.
-  Maç Tribünü posts copy the photo like the nickname (`author_avatar_path`), and
-  a change follows onto earlier posts. Moderation: delete the file in Supabase
-  → Storage → avatars.
+  `profileAvatar()` draws a person everywhere one appears - the sidebar, the
+  profile, Maç Tribünü posts, topic lines and forms, shared squads and their
+  pages: the photo in a circle, else the nickname's first letter in the same
+  circle. Never a club's crest, which stands for a club; a photo that no
+  longer loads leaves the letter. Maç Tribünü posts and shared squads copy the
+  photo like the nickname (`author_avatar_path`, filled in by the database),
+  and a change follows onto earlier ones. A new place that shows a person uses
+  `profileAvatar()` and, if it stores the author, copies `author_avatar_path`.
+  Moderation: delete the file in Supabase → Storage → avatars.
 - **For features** - `siteAuth.user` is the signed-in user or `null`, and
   `document` receives a `site-auth-change` event whenever it changes. Anything
   members-only must also be enforced by Supabase (row-level security), never
