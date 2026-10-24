@@ -118,9 +118,24 @@ own "Fantezi analizi güncellendi" date shows the last successful update.
 5. **First upload.** `python src/sync_data.py push`, then
    `python src/sync_data.py push --path data/raw/sportmonks/2026-2027`.
 6. **GitHub secrets.** Repository -> **Settings** -> **Secrets and variables** ->
-   **Actions** -> **New repository secret**, one each:
-   `SPORTMONKS_API_TOKEN`, `CLOUDFLARE_API_TOKEN` (step 3),
-   `CLOUDFLARE_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`.
+   **Actions** -> **Secrets** tab -> **New repository secret**. Either one secret
+   named `FANTEZI_ANALIZ_SECRET` holding these lines, as in `.env`:
+
+   ```
+   SPORTMONKS_API_TOKEN=...
+   R2_ACCOUNT_ID=...
+   R2_ACCESS_KEY_ID=...
+   R2_SECRET_ACCESS_KEY=...
+   R2_BUCKET=fantezianaliz-data
+   CLOUDFLARE_API_TOKEN=...
+   CLOUDFLARE_ACCOUNT_ID=...
+   ```
+
+   or one secret per value, named `SPORTMONKS_API_TOKEN`, `CLOUDFLARE_API_TOKEN`
+   (step 3), `CLOUDFLARE_ACCOUNT_ID`, `R2_ACCESS_KEY_ID` and
+   `R2_SECRET_ACCESS_KEY`. Repository secrets, not Environment secrets or
+   Variables. A set secret shows as `***` in a run's log; a blank means the run
+   cannot see it.
 7. **Push** the workflow, then **Actions** -> **Update fantezianaliz.com** ->
    **Run workflow** with **Update now** ticked, and watch the first run.
 

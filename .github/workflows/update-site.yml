@@ -51,6 +51,19 @@ jobs:
           cache: pip
           cache-dependency-path: src/odds/requirements.txt
 
+      # The settings may also come as one secret, FANTEZI_ANALIZ_SECRET, holding
+      # .env lines (NAME=value). The scripts read .env for any setting the
+      # environment leaves empty. The file exists on GitHub's machine for this
+      # run only; nothing uploads it.
+      - name: Write the settings secret
+        env:
+          SETTINGS: ${{ secrets.FANTEZI_ANALIZ_SECRET }}
+        run: |
+          if [ -n "$SETTINGS" ]; then
+            printf '%s\n' "$SETTINGS" > .env
+            echo "Settings written from FANTEZI_ANALIZ_SECRET."
+          fi
+
       # The quick part, run every hour: only the few files the decision needs.
       - name: Read the schedule's state from R2
         run: |

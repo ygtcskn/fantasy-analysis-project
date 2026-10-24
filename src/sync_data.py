@@ -45,10 +45,12 @@ def settings():
     missing = [name for name, value in values.items() if not value]
     if missing and os.environ.get("GITHUB_ACTIONS") == "true":
         # The workflow fills these from repository secrets, R2_ACCOUNT_ID from
-        # CLOUDFLARE_ACCOUNT_ID and R2_BUCKET from the workflow itself.
+        # CLOUDFLARE_ACCOUNT_ID and R2_BUCKET from the workflow itself, or from
+        # NAME=value lines in the one FANTEZI_ANALIZ_SECRET secret.
         secrets = sorted({"R2_ACCOUNT_ID": "CLOUDFLARE_ACCOUNT_ID"}.get(name, name) for name in missing)
-        raise SystemExit(f"Missing GitHub secrets: {', '.join(secrets)}. Add them under Settings -> "
-                         "Secrets and variables -> Actions -> Secrets -> Repository secrets.")
+        raise SystemExit(f"Missing settings: {', '.join(missing)}. Add repository secrets {', '.join(secrets)} "
+                         "under Settings -> Secrets and variables -> Actions -> Secrets, or put "
+                         f"{', '.join(name + '=...' for name in missing)} lines in FANTEZI_ANALIZ_SECRET.")
     if missing:
         raise SystemExit(f"Add {', '.join(missing)} to the environment or the project .env file.")
     return values
