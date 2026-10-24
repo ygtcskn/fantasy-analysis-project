@@ -1,0 +1,103 @@
+# Keeps fantezianaliz.com up to date without anyone's computer. Every hour from
+# 13:00 to 02:00 Turkish time, GitHub asks src/update_site.py whether a match
+# has reached a checkpoint (or a day has passed); only then does it download,
+# forecast, rebuild and upload the site. Cloudflare R2 holds the data between
+# runs (src/sync_data.py). Setup, secrets and the commands for this computer:
+# fullrun.md, "Automatic updates".
+name: Update fantezianaliz.com
+
+on:
+  schedule:
+    # 10:05-23:05 UTC is 13:05-02:05 in Turkey (UTC+3 all year).
+    - cron: "5 10-23 * * *"
+  workflow_dispatch:
+    inputs:
+      now:
+        description: "Update now, whatever the schedule says"
+        type: boolean
+        default: false
+
+# One update at a time; a second waits instead of racing the first for R2.
+concurrency:
+  group: update-site
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  SEASON: "2026/2027"
+  SEASON_FOLDER: "2026-2027"
+  SPORTMONKS_API_TOKEN: ${{ secrets.SPORTMONKS_API_TOKEN }}
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  # R2 lives in the same Cloudflare account as the site.
+  R2_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+  R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+  R2_BUCKET: fantezianaliz-data
+  NOW_FLAG: ${{ inputs.now && '--now' || '' }}
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: src/odds/requirements.txt
+
+      # The quick part, run every hour: only the few files the decision needs.
+      - name: Read the schedule's state from R2
+        run: |
+          pip install --quiet boto3
+          python src/sync_data.py pull \
+            --path data/temp/site_update/update_runs.csv \
+            --path data/final/sportmonks/$SEASON_FOLDER/fixtures.csv \
+            --path data/final/sportmonks/$SEASON_FOLDER/download_status.csv \
+            --path data/final/odds/predictions.csv
+
+      - name: Is an update due?
+        id: due
+        run: python src/update_site.py --season "$SEASON" --check $NOW_FLAG
+
+      # The update itself, only when due.
+      - uses: actions/setup-node@v4
+        if: steps.due.outputs.due == 'true'
+        with:
+          node-version: "22"
+
+      - name: Install the update's Python packages
+        if: steps.due.outputs.due == 'true'
+        run: pip install --quiet -r src/odds/requirements.txt
+
+      - name: Fetch all data from R2
+        if: steps.due.outputs.due == 'true'
+        run: python src/sync_data.py pull
+
+      - name: Update the site
+        id: update
+        if: steps.due.outputs.due == 'true'
+        run: python src/update_site.py --season "$SEASON" --skip-database $NOW_FLAG
+
+      # The run history goes back even after a failure, so the next run waits
+      # two hours before retrying instead of repeating the download every hour.
+      - name: Save the run history to R2
+        if: always() && steps.due.outputs.due == 'true'
+        run: python src/sync_data.py push --path data/temp/site_update
+
+      - name: Save the new data to R2
+        if: steps.update.outcome == 'success'
+        run: python src/sync_data.py push --path data/final --path data/raw/sportmonks/$SEASON_FOLDER
+
+      - name: Keep the log of a failed update
+        if: failure() && steps.due.outputs.due == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: update-log
+          path: data/temp/site_update/logs/
+          retention-days: 14

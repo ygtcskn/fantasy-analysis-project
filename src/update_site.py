@@ -40,7 +40,10 @@ LOCK = STATE / "update.lock"
 RUN_COLUMNS = ["started_at_utc", "finished_at_utc", "season", "status", "reason",
                "steps", "failed_step", "message", "log_file"]
 PREDICTIONS = ROOT / "data" / "final" / "odds" / "predictions.csv"
-ODDS_PYTHON = ROOT / ".venv" / "Scripts" / "python.exe"
+# The odds model's environment (XGBoost, Optuna): the project's .venv on this
+# computer. Where there is none, as on GitHub's servers, the packages are
+# installed in the Python running this script.
+ODDS_PYTHONS = (ROOT / ".venv" / "Scripts" / "python.exe", ROOT / ".venv" / "bin" / "python")
 
 # Each match is fetched again when these have passed since kickoff. The first
 # allows for 90 minutes, half time, stoppage time and Sportmonks filing the
@@ -196,6 +199,8 @@ def main():
     parser.add_argument("--season", default="2026/2027")
     parser.add_argument("--now", action="store_true", help="Update now, whatever the schedule says.")
     parser.add_argument("--check", action="store_true", help="Only say whether an update is due; run nothing.")
+    parser.add_argument("--skip-database", action="store_true",
+                        help="Leave SQLite out of the pipeline, as the cloud update does; the site never reads it.")
     args = parser.parse_args()
     # Club names are Turkish; a redirected Windows console may not encode them.
     # sys.stdout is None under pythonw.exe, as when Task Scheduler runs this.
@@ -212,6 +217,10 @@ def main():
     if args.check:
         print(f"Update due: {reason}." if reason else f"Nothing to do: {why_not}")
         print(f"Odds forecast (from the saved fixtures): {'would run' if odds_due(season, now) else 'not needed'}.")
+        # GitHub Actions reads the answer to decide whether to run the update.
+        if output := os.environ.get("GITHUB_OUTPUT"):
+            with open(output, "a", encoding="utf-8") as stream:
+                print(f"due={'true' if reason else 'false'}", file=stream)
         return 0
     if not reason:
         print(f"Nothing to do: {why_not}")
@@ -243,11 +252,11 @@ def main():
             run_step("download", [python, "src/fetch/download_season.py", "--season", args.season, "--refresh"], log, env)
             steps.append("download")
             if odds_due(season, utc_now()):
-                if not ODDS_PYTHON.is_file():
-                    raise StepFailed("odds", f"{ODDS_PYTHON.relative_to(ROOT)} not found; create the odds environment first")
-                run_step("odds", [str(ODDS_PYTHON), "src/odds/run.py", "predict"], log, env)
+                odds_python = next((str(path) for path in ODDS_PYTHONS if path.is_file()), python)
+                run_step("odds", [odds_python, "src/odds/run.py", "predict"], log, env)
                 steps.append("odds")
-            run_step("pipeline", [python, "src/run_pipeline.py", "--season", args.season], log, env)
+            run_step("pipeline", [python, "src/run_pipeline.py", "--season", args.season,
+                                  *(["--skip-database"] if args.skip_database else [])], log, env)
             steps.append("pipeline")
             run_step("build", [python, "src/web/build_static.py", "--season", args.season], log, env)
             steps.append("build")

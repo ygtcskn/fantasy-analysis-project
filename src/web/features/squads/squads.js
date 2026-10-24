@@ -7,7 +7,10 @@
 // fantasy points at that time, and opens that squad's own page
 // (index.html?view=squads&squad=<id>, drawn by squad-detail.js).
 
-const SQUAD_FEED_FIELDS = "id, season, round_id, user_id, author_nickname, author_team_id, author_avatar_path, starters, expected_points, projected_starters, shared_at";
+// Every column, as Maç Tribünü reads its posts: a column added to
+// supabase/shared_squads.sql later (author_avatar_path) is used once the file
+// has been run again, and its absence until then never empties the page.
+const SQUAD_FEED_FIELDS = "*";
 const squadFeedState = { loadedKey: "", request: 0, status: "idle", error: "", squads: [] };
 const squadFeedTimeFormat = new Intl.DateTimeFormat(LOCALE, { timeZone: MATCH_TIME_ZONE, dateStyle: "medium", timeStyle: "short" });
 
