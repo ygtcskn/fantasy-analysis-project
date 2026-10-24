@@ -43,6 +43,12 @@ SINGLE_PART_LIMIT = 256 * 1024 * 1024
 def settings():
     values = {name: local_setting(name) for name in SETTINGS}
     missing = [name for name, value in values.items() if not value]
+    if missing and os.environ.get("GITHUB_ACTIONS") == "true":
+        # The workflow fills these from repository secrets, R2_ACCOUNT_ID from
+        # CLOUDFLARE_ACCOUNT_ID and R2_BUCKET from the workflow itself.
+        secrets = sorted({"R2_ACCOUNT_ID": "CLOUDFLARE_ACCOUNT_ID"}.get(name, name) for name in missing)
+        raise SystemExit(f"Missing GitHub secrets: {', '.join(secrets)}. Add them under Settings -> "
+                         "Secrets and variables -> Actions -> Secrets -> Repository secrets.")
     if missing:
         raise SystemExit(f"Add {', '.join(missing)} to the environment or the project .env file.")
     return values
