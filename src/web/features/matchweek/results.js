@@ -91,102 +91,89 @@ function matchweekResultPlayers(fixture) {
   return (state.tables["player_match_stats.csv"] || []).filter((row) => row.fixture_id === fixture.fixture_id);
 }
 
-function matchweekResultStatistics(fixture, teams) {
+// This match's Sportmonks statistics, home against away, each with a bar.
+function matchweekResultStatisticsCard(fixture, sides, teams) {
   const snapshot = matchweekCompletedSnapshot(fixture);
   const confirmed = snapshot?.filter((row) => row.record_type === "statistic") || [];
   if (!confirmed.length) loadMatchweekResultMetrics();
   const rows = confirmed.length ? confirmed : matchweekResults.metrics
     .filter((row) => row.fixture_id === fixture.fixture_id && (!row.source || row.source === "statistics"));
-  const section = element("section"), table = element("table", "matchweek-comparison");
-  table.append(element("caption", "", "Bu maçın istatistikleri"));
-  const head = element("thead"), titles = element("tr"), body = element("tbody");
-  [teamName(fixture.home_team_id, teams), "İstatistik", teamName(fixture.away_team_id, teams)].forEach((label) => {
-    const cell = element("th", "", label); cell.scope = "col"; titles.append(cell);
-  });
-  head.append(titles);
+  const section = matchweekCard("matchweek-preview-wide", "Maç istatistikleri");
+  section.append(matchweekVersusHeader(sides, teams));
+  // Sportmonks leaves a card count out when it is zero: for a side with this
+  // match's statistics recorded, a missing card count is 0.
+  const recorded = sides.map((team) => rows.some((metric) => metric.team_id === team));
+  const cardTypes = new Set(["84", "83", "85"]);
   for (const [type, label, percent] of liveStatistics) {
-    const row = element("tr"), title = element("th", "", label); title.scope = "row";
-    const values = [fixture.home_team_id, fixture.away_team_id].map((team) => {
+    const values = sides.map((team, index) => {
       const matching = rows.filter((metric) => metric.team_id === team && metric.type_id === String(type));
+      if (!matching.length && recorded[index] && cardTypes.has(String(type))) return 0;
       const value = matching.length === 1 ? number(matching[0].value) : null;
-      return value === null || value < 0 || (percent && value > 100) ? "—" : percent ? percentText(value) : displayNumber(value);
+      return value === null || value < 0 || (percent && value > 100) ? null : value;
     });
-    row.append(element("td", "", values[0]), title, element("td", "", values[1])); body.append(row);
+    section.append(matchweekVersusRow(label, values.map((value) => ({
+      value: value === null ? "—" : percent ? percentText(value) : displayNumber(value), note: "" })), values));
   }
-  table.append(head, body); section.append(table);
-  section.append(element("p", "message", !confirmed.length && matchweekResults.metricsStatus === "loading"
-    ? "Maç istatistikleri yükleniyor…" : "Seçilen maçın Sportmonks istatistikleri. — henüz sağlanmayan veya doğrulanamayan değer."));
+  if (!confirmed.length && matchweekResults.metricsStatus === "loading") section.append(element("p", "message", "Maç istatistikleri yükleniyor…"));
   return section;
 }
 
-function matchweekFantasyPlayers(fixture, team, players) {
-  const available = state.seasonSlug && fantasyState.season === state.seasonSlug;
-  const ledger = available ? [...fantasyState.matches.values()].flat()
-    .filter((row) => row.fixture_id === fixture.fixture_id && row.season === state.seasonSlug) : [];
-  const candidates = new Map();
-  for (const player of players) {
-    if (player.fixture_id === fixture.fixture_id && player.team_id === team && player.player_id && (["1", "true"].includes(String(player.started).toLowerCase()) || number(player.minutes_played) > 0)) {
-      candidates.set(player.player_id, playerName(player.player_id, player.name));
+// Each side's players in this match from the fantasy ledger, best first:
+// fantasy points (bonus included), position and Sportmonks match rating.
+function matchweekMatchFantasy(fixture) {
+  const sides = [fixture.home_team_id, fixture.away_team_id];
+  return sides.map((team, index) => {
+    if (!state.seasonSlug || fantasyState.season !== state.seasonSlug) return [];
+    const players = [];
+    for (const [id, rows] of fantasyState.matches) {
+      const row = rows.find((item) => item.fixture_id === fixture.fixture_id && item.team_id === team && item.opponent_id === sides[1 - index]);
+      const points = number(row?.points_total);
+      if (points === null) continue;
+      players.push({ id, name: playerName(id, row.player_name), position: row.fantasy_position, points,
+        rating: validMatchRating(row), minutes: number(row.minutes_played) });
     }
-  }
-  for (const row of ledger) {
-    if (row.team_id === team && row.player_id && !candidates.has(row.player_id)) candidates.set(row.player_id, playerName(row.player_id, row.player_name));
-  }
-  const opponent = fixture.home_team_id === team ? fixture.away_team_id : fixture.home_team_id;
-  return [...candidates].map(([id, name]) => {
-    const matching = ledger.filter((row) => row.player_id === id);
-    const entry = matching.length === 1 && matching[0].team_id === team && matching[0].opponent_id === opponent ? matching[0] : null;
-    return { id, name, points: number(entry?.points_total) };
-  }).sort((a, b) => (b.points ?? -Infinity) - (a.points ?? -Infinity) || a.name.localeCompare(b.name, "tr"));
-}
-
-function matchweekResultFantasyPoints(fixture, teams, players) {
-  const section = element("section", "matchweek-result-players");
-  section.append(element("h3", "", "Fantezi Lig · Oyuncu Puanları"));
-  for (const team of [fixture.home_team_id, fixture.away_team_id]) {
-    const table = element("table", "matchweek-comparison");
-    table.append(element("caption", "", teamName(team, teams)));
-    const head = element("thead"), titles = element("tr"), body = element("tbody");
-    for (const label of ["Oyuncu", "Fantezi puanı"]) {
-      const cell = element("th", "", label); cell.scope = "col"; titles.append(cell);
-    }
-    head.append(titles);
-    const eligible = matchweekFantasyPlayers(fixture, team, players);
-    for (const player of eligible) {
-      const row = element("tr");
-      row.append(element("td", "", player.name), element("td", "", player.points === null ? "—" : displayNumber(player.points)));
-      body.append(row);
-    }
-    if (!eligible.length) { const cell = element("td", "message", "Bu maçın fantezi oyuncu puanları henüz yayımlanmadı."); cell.colSpan = 2; const row = element("tr"); row.append(cell); body.append(row); }
-    table.append(head, body); section.append(table);
-  }
-  section.append(element("p", "message", "Seçilen maçın kaydedilmiş fantezi puanları · Bonus dahil. — henüz yayımlanmayan veya doğrulanamayan puan."));
-  return section;
+    return players.sort((a, b) => b.points - a.points || (b.rating ?? 0) - (a.rating ?? 0) || a.name.localeCompare(b.name, "tr"));
+  });
 }
 
 function renderMatchweekResult(fixture, teams, content) {
-  // Laid out like an upcoming match's analysis: no repeated scoreline (the row
-  // above shows it), statistics beside this match's elevens, the extra tables
-  // side by side, and the explanation folded away.
-  const players = matchweekResultPlayers(fixture), lineups = element("div", "matchweek-lineups");
-  [fixture.home_team_id, fixture.away_team_id].forEach((id, index) => {
-    if (index) lineups.append(element("span", "matchweek-versus", "VS"));
-    lineups.append(matchweekLastXI(id, fixture, teams, { players, title: "İlk 11 · Bu maç" }));
-  });
-  const overview = element("div", "matchweek-analysis-grid");
-  overview.append(matchweekResultStatistics(fixture, teams), lineups);
-  const extra = element("div", "matchweek-analysis-extra");
-  extra.append(matchweekResultFantasyPoints(fixture, teams, players), matchweekLeagueComparison(fixture, teams));
-  content.append(overview, extra);
+  // The same cards as an upcoming match's analysis, told from the result:
+  // this match's elevens and statistics, the season around it, then the
+  // fantasy points the match itself produced. The row above shows the score.
+  const sides = [fixture.home_team_id, fixture.away_team_id];
+  const players = matchweekResultPlayers(fixture), scores = currentFixtureScores();
+  const histories = sides.map((id) => matchweekTeamHistory(id, fixture));
+  const xi = matchweekElevensCard(sides, "Bu maçın ilk 11'leri", (id) => matchweekLastXI(id, fixture, teams, { players, title: "İlk 11 · Bu maç" }));
+
+  const fantasy = matchweekMatchFantasy(fixture);
+  const fantasyCard = matchweekCard("matchweek-preview-fantasy", "Fantezi puanları · Bu maç");
+  fantasyCard.append(matchweekVersusHeader(sides, teams));
+  for (const [key, label] of [["ALL", "Takım toplamı"], ["KL", "Kaleci"], ["DEF", "Defans"], ["OS", "Orta saha"], ["FOR", "Forvet"]]) {
+    const values = fantasy.map((team) => team.length
+      ? team.filter((player) => key === "ALL" || player.position === key).reduce((sum, player) => sum + player.points, 0) : null);
+    fantasyCard.append(matchweekVersusRow(label, values.map((value) => ({ value: value === null ? "—" : displayNumber(value), note: "" })),
+      values.every((value) => value !== null && value >= 0) ? values : null));
+  }
+  const best = sides.map((id, index) => matchweekPlayersCard(id, index, teams, "Maçın en iyileri", fantasy[index].slice(0, 5),
+    "Bu maçın fantezi puanları henüz yayımlanmadı.",
+    (player) => `${player.name} · ${player.position || "Mevki yok"}${player.minutes === null ? "" : ` · ${displayNumber(player.minutes)} dk`}`));
+
+  const cards = [xi, matchweekResultStatisticsCard(fixture, sides, teams), matchweekSeasonStatsCard(fixture, sides, teams),
+    matchweekFormCard(sides, histories, teams, scores), matchweekTrendCard(fixture, sides, teams), fantasyCard, ...best];
   const snapshot = matchweekCompletedSnapshot(fixture);
   if (snapshot) {
-    const events = element("section", "live-events matchweek-result-events"), list = element("ol");
+    const events = matchweekCard("matchweek-preview-wide live-events", "Maç olayları"), list = element("ol");
     list.tabIndex = 0;
     list.setAttribute("aria-label", "Bu maçın olayları, en yeni önce");
     renderLiveEvents(snapshot.find((row) => row.record_type === "fixture"), teams, snapshot, list);
-    events.append(element("h3", "", "Maç olayları"), list); content.append(events);
+    events.append(list); cards.push(events);
   }
   const notes = element("details", "matchweek-notes");
-  notes.append(element("summary", "", "Açıklamalar"), element("p", "", "İlk 11 bu maçın kayıtlarına aittir."));
-  content.append(notes);
+  notes.append(element("summary", "", "Açıklamalar"),
+    element("p", "", "İlk 11 ve maç istatistikleri bu maçın Sportmonks kayıtlarıdır. — henüz sağlanmayan veya doğrulanamayan değer."),
+    element("p", "", matchweekSeasonStatsNote),
+    element("p", "", matchweekFormNote),
+    element("p", "", "Fantezi puanları bu maçın kaydedilmiş oyuncu puanlarıdır (bonus dahil); mevki satırları o mevkideki oyuncuların toplamıdır. Maçın en iyileri bu maçta en çok fantezi puanı (FP) alan oyunculardır; reyting, oyuncunun bu maçtaki Sportmonks reytingidir."),
+    element("p", "", matchweekTrendNote));
+  content.append(matchweekCardGrid(sides, cards), notes);
 }

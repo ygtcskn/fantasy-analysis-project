@@ -150,46 +150,15 @@ function renderMatchweekAnalysis(selection, teams) {
     content.append(element("p", "", `Kaydedilmiş skor: ${homeScore} – ${awayScore}`));
   }
   // Laid out top to bottom: last elevens face to face, the season's league
-  // statistics side by side, each club's last five beside a slot for a chart,
-  // then the fantasy comparison and each club's best fantasy picks.
+  // statistics side by side, each club's last five beside its fantasy points
+  // per game, then the fantasy comparison and each club's best fantasy picks.
+  // A finished match reuses these cards (results.js).
   const sides = [fixture.home_team_id, fixture.away_team_id];
   const histories = sides.map((id) => matchweekTeamHistory(id, fixture));
-  const card = (className, title) => {
-    const section = element("section", `matchweek-card ${className}`);
-    if (title) section.append(element("h3", "", title));
-    return section;
-  };
-  const lineups = element("div", "matchweek-lineups");
-  sides.forEach((id, index) => {
-    if (index) lineups.append(element("span", "matchweek-versus", "VS"));
-    lineups.append(matchweekLastXI(id, histories[index][0], teams));
-  });
-  const xi = card("matchweek-preview-xi");
-  xi.setAttribute("aria-label", "Son 11'ler");
-  xi.append(lineups);
-
-  const stats = card("matchweek-preview-stats", "Sezon istatistikleri");
-  stats.append(matchweekVersusHeader(sides, teams));
-  for (const row of matchweekLeagueRanks(fixture)) {
-    const values = row.sides.map((side) => side ? side.value : null);
-    const line = matchweekVersusRow(row.versusLabel, row.sides.map((side, index) => side
-      ? { value: String(side.value), note: `${side.rank}.`, title: row.card
-        ? `${side.games}/${side.played} maçta kart verisi · ${row.teams} takım arasında ${side.rank}.`
-        : `${side.played} maç · ${row.teams} takım arasında ${side.rank}.` }
-      : { value: "—", note: "", title: `${teamName(sides[index], teams)} için yeterli veri yok` }), values);
-    stats.append(line);
-  }
-
-  const form = card("matchweek-preview-form", "Son 5 maç");
-  const formTeams = element("div", "matchweek-form-teams");
-  sides.forEach((id, index) => formTeams.append(matchweekLastFive(id, histories[index], teams, scores)));
-  form.append(formTeams);
-
-  const graph = card("matchweek-preview-graph", "Fantezi puanları · Maç başına");
-  graph.append(matchweekFantasyTrend(fixture, sides, teams));
+  const xi = matchweekElevensCard(sides, "Son 11'ler", (id, index) => matchweekLastXI(id, histories[index][0], teams));
 
   const fantasy = matchweekFantasyTeams(fixture);
-  const fantasyCard = card("matchweek-preview-fantasy", "Fantezi istatistikleri");
+  const fantasyCard = matchweekCard("matchweek-preview-fantasy", "Fantezi istatistikleri");
   fantasyCard.append(matchweekVersusHeader(sides, teams));
   for (const [key, label] of matchweekFantasyGroups) {
     if (key === "UNKNOWN" && fantasy.every((team) => !team.buckets.get(key).count)) continue;
@@ -201,44 +170,104 @@ function renderMatchweekAnalysis(selection, teams) {
         title: `${bucket.available}/${bucket.count} oyuncunun tahmini${partial ? " · Kısmi toplam" : ""}` };
     })));
   }
-  const best = sides.map((id, index) => {
-    const section = card(`matchweek-preview-players matchweek-preview-players-${index ? "away" : "home"}`);
-    const heading = element("h3", "matchweek-card-club");
-    heading.append(createTeamLogo(id, teams, false), element("span", "", teamName(id, teams)));
-    section.append(heading, element("p", "matchweek-card-subtitle", "En iyi oyuncular · Sezon"));
-    const players = matchweekSeasonPlayers(id, fixture).slice(0, 5);
-    if (!players.length) section.append(element("p", "message", "Bu sezon için fantezi puanı yok."));
-    else {
-      const list = element("ol", "matchweek-best-players"), head = element("li", "matchweek-best-head");
-      head.setAttribute("aria-hidden", "true");
-      head.append(element("span", "", "Oyuncu"), element("span", "", "Reyting"), element("span", "", "FP"));
-      list.append(head);
-      for (const player of players) {
-        const item = element("li"), name = element("span", "matchweek-best-name", player.name);
-        item.title = `${player.name} · ${player.position || "Mevki yok"} · ${player.matches} maç · ${displayNumber(player.points / player.matches)} FP / maç · Reyting ${player.ratings} maçın ortalaması`;
-        item.setAttribute("aria-label", `${player.name}: reyting ${ratingText(player.rating)}, fantezi puanı ${displayNumber(player.points)}`);
-        item.append(name, element("span", "matchweek-best-rating", ratingText(player.rating)), element("strong", "", displayNumber(player.points)));
-        list.append(item);
-      }
-      section.append(list);
-    }
-    return section;
-  });
+  const best = sides.map((id, index) => matchweekPlayersCard(id, index, teams, "En iyi oyuncular · Sezon",
+    matchweekSeasonPlayers(id, fixture).slice(0, 5), "Bu sezon için fantezi puanı yok.",
+    (player) => `${player.name} · ${player.position || "Mevki yok"} · ${player.matches} maç · ${displayNumber(player.points / player.matches)} FP / maç · Reyting ${player.ratings} maçın ortalaması`));
 
-  const preview = element("div", "matchweek-preview");
-  // Each club is drawn in its own colour; the away side falls back to its
-  // second colour when the two would be hard to tell apart.
-  teamColorPair(...sides).forEach((color, index) => preview.style.setProperty(`--matchweek-${index ? "away" : "home"}`, color));
-  preview.append(xi, stats, form, graph, fantasyCard, ...best);
   const notes = element("details", "matchweek-notes");
   notes.append(element("summary", "", "Açıklamalar"),
     element("p", "", "Son 11, geçmiş maçın kadrosudur; tahmini kadro değildir."),
-    element("p", "", "Sezon istatistikleri kaydedilmiş sezonun tamamlanmış maçlarındaki toplamlardır. Altındaki sayı lig sırasıdır: en yüksek toplam 1. olur, eşit toplamlar aynı sırayı alır. Kartlar, maç sonucu tablosu ve canlı maç merkezindeki gibi takım istatistiğinden sayılır: Sportmonks ikinci sarıyı da sarı kart sayar; kırmızı kart, doğrudan veya ikinci sarıdan her oyundan atılmadır. İstatistiği kaydedilmiş bir maçta boş kart değeri 0 kabul edilir."),
-    element("p", "", "Son 5 maç, seçilen maçtan önceki tamamlanmış sezon maçlarıdır, yeniden eskiye. G: galibiyet, B: beraberlik, M: mağlubiyet; İ: iç saha, D: deplasman."),
+    element("p", "", matchweekSeasonStatsNote),
+    element("p", "", matchweekFormNote),
     element("p", "", "Fantezi değerleri bu maç için beklenen oyuncu puanlarıdır, Kadro Kur'dakiyle aynı: sakatlık ve ceza bildirimi dikkate alınır, oynamayacak oyuncu 0 sayılır, durumu belirsiz oyuncunun tahmini gösterilmez. En iyi 3, en yüksek beklenen puanlı 3 oyuncunun toplamıdır; mevki satırları o mevkideki tüm oyuncuların toplamıdır. * kısmi toplam: bazı oyuncuların geçerli tahmini yok. Bu değerler üstteki maç sonucu modeli seçimiyle değişmez."),
-    element("p", "", "Fantezi puanları grafiği, takımın her tamamlanmış maçta oyuncularının aldığı fantezi puanlarının toplamıdır (bonus dahil); yatay eksen hafta, dikey eksen puandır. Her takım kendi rengiyle çizilir. Ayrıntı için bir haftanın üzerine gelin."),
+    element("p", "", matchweekTrendNote),
     element("p", "", "En iyi oyuncular, bu sezon kulüp için aldıkları toplam fantezi puanına (FP) göre sıralanır. Reyting, Sportmonks maç reytinglerinin ortalamasıdır (yalnızca süre alınan ve reytingi olan maçlar). Son maçını başka bir kulüpte oynayan ve ligden ayrılan oyuncular listelenmez."));
-  content.append(preview, notes);
+  content.append(matchweekCardGrid(sides, [xi, matchweekSeasonStatsCard(fixture, sides, teams),
+    matchweekFormCard(sides, histories, teams, scores), matchweekTrendCard(fixture, sides, teams), fantasyCard, ...best]), notes);
+}
+
+const matchweekSeasonStatsNote = "Sezon istatistikleri kaydedilmiş sezonun tamamlanmış maçlarındaki toplamlardır. Altındaki sayı lig sırasıdır: en yüksek toplam 1. olur, eşit toplamlar aynı sırayı alır. Kartlar, maç sonucu tablosu ve canlı maç merkezindeki gibi takım istatistiğinden sayılır: Sportmonks ikinci sarıyı da sarı kart sayar; kırmızı kart, doğrudan veya ikinci sarıdan her oyundan atılmadır. İstatistiği kaydedilmiş bir maçta boş kart değeri 0 kabul edilir.";
+const matchweekFormNote = "Son 5 maç, seçilen maçtan önceki tamamlanmış sezon maçlarıdır, yeniden eskiye. G: galibiyet, B: beraberlik, M: mağlubiyet; İ: iç saha, D: deplasman.";
+const matchweekTrendNote = "Fantezi puanları grafiği, takımın seçilen maçtan önceki her tamamlanmış maçta oyuncularının aldığı fantezi puanlarının toplamıdır (bonus dahil); yatay eksen hafta, dikey eksen puandır. Her takım kendi rengiyle çizilir. Ayrıntı için bir haftanın üzerine gelin.";
+
+function matchweekCard(className, title) {
+  const section = element("section", `matchweek-card ${className}`);
+  if (title) section.append(element("h3", "", title));
+  return section;
+}
+
+// The cards of one match, each club drawn in its own colour; the away side
+// falls back to its second colour when the two would be hard to tell apart.
+function matchweekCardGrid(sides, cards) {
+  const grid = element("div", "matchweek-preview");
+  teamColorPair(...sides).forEach((color, index) => grid.style.setProperty(`--matchweek-${index ? "away" : "home"}`, color));
+  grid.append(...cards);
+  return grid;
+}
+
+// The two elevens face to face; draw(id, index) returns one club's pitch.
+function matchweekElevensCard(sides, label, draw) {
+  const lineups = element("div", "matchweek-lineups");
+  sides.forEach((id, index) => {
+    if (index) lineups.append(element("span", "matchweek-versus", "VS"));
+    lineups.append(draw(id, index));
+  });
+  const xi = matchweekCard("matchweek-preview-xi");
+  xi.setAttribute("aria-label", label);
+  xi.append(lineups);
+  return xi;
+}
+
+function matchweekSeasonStatsCard(fixture, sides, teams) {
+  const stats = matchweekCard("matchweek-preview-stats", "Sezon istatistikleri");
+  stats.append(matchweekVersusHeader(sides, teams));
+  for (const row of matchweekLeagueRanks(fixture)) {
+    const values = row.sides.map((side) => side ? side.value : null);
+    stats.append(matchweekVersusRow(row.versusLabel, row.sides.map((side, index) => side
+      ? { value: String(side.value), note: `${side.rank}.`, title: row.card
+        ? `${side.games}/${side.played} maçta kart verisi · ${row.teams} takım arasında ${side.rank}.`
+        : `${side.played} maç · ${row.teams} takım arasında ${side.rank}.` }
+      : { value: "—", note: "", title: `${teamName(sides[index], teams)} için yeterli veri yok` }), values));
+  }
+  return stats;
+}
+
+function matchweekFormCard(sides, histories, teams, scores) {
+  const form = matchweekCard("matchweek-preview-form", "Son 5 maç");
+  const formTeams = element("div", "matchweek-form-teams");
+  sides.forEach((id, index) => formTeams.append(matchweekLastFive(id, histories[index], teams, scores)));
+  form.append(formTeams);
+  return form;
+}
+
+function matchweekTrendCard(fixture, sides, teams) {
+  const graph = matchweekCard("matchweek-preview-graph", "Fantezi puanları · Maç başına");
+  graph.append(matchweekFantasyTrend(fixture, sides, teams));
+  return graph;
+}
+
+// One club's five best players: name, Sportmonks rating and fantasy points.
+// describe(player) is the hover text.
+function matchweekPlayersCard(teamId, index, teams, subtitle, players, empty, describe) {
+  const section = matchweekCard(`matchweek-preview-players matchweek-preview-players-${index ? "away" : "home"}`);
+  const heading = element("h3", "matchweek-card-club");
+  heading.append(createTeamLogo(teamId, teams, false), element("span", "", teamName(teamId, teams)));
+  section.append(heading, element("p", "matchweek-card-subtitle", subtitle));
+  if (!players.length) { section.append(element("p", "message", empty)); return section; }
+  const list = element("ol", "matchweek-best-players"), head = element("li", "matchweek-best-head");
+  head.setAttribute("aria-hidden", "true");
+  head.append(element("span", "", "Oyuncu"), element("span", "", "Reyting"), element("span", "", "FP"));
+  list.append(head);
+  for (const player of players) {
+    const item = element("li");
+    item.title = describe(player);
+    item.setAttribute("aria-label", `${player.name}: reyting ${ratingText(player.rating)}, fantezi puanı ${displayNumber(player.points)}`);
+    item.append(element("span", "matchweek-best-name", player.name), element("span", "matchweek-best-rating", ratingText(player.rating)),
+      element("strong", "", displayNumber(player.points)));
+    list.append(item);
+  }
+  section.append(list);
+  return section;
 }
 
 // A row of club logos over the two value columns of a side-by-side card.
@@ -439,8 +468,10 @@ function matchweekFantasyTrend(fixture, sides, teams) {
   canvas.append(svg);
   plot.append(scale, canvas);
 
-  // The same numbers as a table for screen readers.
-  const table = element("table", "sr-only");
+  // The same numbers as a table for screen readers. A table ignores overflow,
+  // so it is hidden inside a div; on the table itself the caption showed.
+  const hidden = element("div", "sr-only"), table = element("table");
+  hidden.append(table);
   table.append(element("caption", "", "Hafta hafta takım fantezi puanları"));
   const head = element("tr");
   for (const label of ["Hafta", teamName(sides[0], teams), teamName(sides[1], teams)]) { const cell = element("th", "", label); cell.scope = "col"; head.append(cell); }
@@ -450,7 +481,7 @@ function matchweekFantasyTrend(fixture, sides, teams) {
     row.append(name, ...series.map((games) => element("td", "", games.has(round) ? displayNumber(games.get(round).points) : "—")));
     table.append(row);
   }
-  wrap.append(legend, element("p", "matchweek-trend-axis-y", "Takım toplam fantezi puanı"), plot, table, element("p", "matchweek-trend-axis", "Hafta →"));
+  wrap.append(legend, element("p", "matchweek-trend-axis-y", "Takım toplam fantezi puanı"), plot, hidden, element("p", "matchweek-trend-axis", "Hafta →"));
   return wrap;
 }
 
@@ -521,29 +552,6 @@ function matchweekLeagueRanks(fixture) {
     });
     return { metric, label, versusLabel, card, teams: eligible.length, sides };
   });
-}
-
-function matchweekLeagueComparison(fixture, teams) {
-  const section = element("section", "matchweek-fantasy-comparison"), table = element("table", "matchweek-comparison");
-  table.append(element("caption", "", "Lig sıralamaları · Sezon geneli"));
-  const head = element("thead"), header = element("tr"), body = element("tbody");
-  for (const label of [teamName(fixture.home_team_id, teams), "En çok…", teamName(fixture.away_team_id, teams)]) {
-    const cell = element("th", "", label); cell.scope = "col"; header.append(cell);
-  }
-  head.append(header);
-  for (const { label, card, teams: count, sides } of matchweekLeagueRanks(fixture)) {
-    const row = element("tr"), title = element("th", "", label); title.scope = "row";
-    const cells = sides.map((side) => {
-      const cell = element("td");
-      if (!side) { cell.textContent = "—"; return cell; }
-      cell.append(element("strong", "", `${side.rank}. sıra`), element("span", "matchweek-fantasy-coverage", `${side.value} toplam · ${displayNumber(side.value / side.games)} / maç`),
-        element("span", "matchweek-fantasy-coverage", card ? `${side.games}/${side.played} maçta kart verisi · ${count} takım arasında` : `${side.games} maç · ${count} takım arasında`));
-      return cell;
-    });
-    row.append(cells[0], title, cells[1]); body.append(row);
-  }
-  table.append(head, body); section.append(table, element("p", "message", "Sıralamalar kaydedilmiş sezonun tamamlanmış maçlarında toplam değere göre büyükten küçüğedir; eşit toplamlar aynı sırayı alır. Seçilen maç tarihinden bağımsız güncel sezon verisidir. Gol yeme ve kart sıralamasında 1. olmak en yüksek sayıyı gösterir. Kartlar takım istatistiğinden sayılır: Sportmonks ikinci sarıyı da sarı kart sayar; kırmızı kart, doğrudan veya ikinci sarıdan her oyundan atılmadır. İstatistiği kaydedilmiş bir maçta boş kart değeri 0 kabul edilir. Maç başına değer yalnızca kart verisi bulunan maçlara bölünür."));
-  return section;
 }
 
 function matchweekTeamHistory(teamId, selected) {

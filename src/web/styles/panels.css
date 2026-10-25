@@ -34,22 +34,11 @@
 .matchweek-result { box-sizing: border-box; display: grid; place-content: center; justify-items: center; gap: 1px; width: 182px; height: 44px; padding: 0 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-raised, #f4eef9); }
 .matchweek-result strong { font-size: 17px; line-height: 1.15; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .matchweek-result small { color: var(--muted); font-size: 10px; }
-.matchweek-result-players { margin-top: 24px; }
-.matchweek-result-players h3 { font-size: 15px; }
-.matchweek-result-events { margin: 24px 0; }
-.matchweek-analysis .matchweek-result-events { margin: 12px 0 0; }
-.matchweek-analysis .matchweek-result-players { margin-top: 0; }
-.matchweek-analysis .matchweek-analysis-grid > * { min-width: 0; margin-top: 0; }
-.matchweek-result-events h3 { font-size: 15px; }
-.matchweek-result-players .matchweek-comparison th:first-child, .matchweek-result-players .matchweek-comparison td:first-child { width: 72%; text-align: left; }
 .matchweek-selectable { cursor: pointer; }
 .matchweek-selected > td { box-shadow: inset 0 2px #9060d5, inset 0 -2px #9060d5; }
 .matchweek-analysis { margin: 0; padding: 14px 16px 12px; border-left: 3px solid #9060d5; background: var(--surface-raised, #f7f2fc); white-space: normal; cursor: default; }
 .matchweek-analysis > h2 { margin: 0 0 10px; font-size: 13px; }
 .matchweek-fixtures .matchweek-details-cell { padding: 0; }
-.matchweek-analysis-grid { display: grid; grid-template-columns: minmax(260px, 0.75fr) minmax(0, 1.5fr); gap: 20px; align-items: start; }
-.matchweek-analysis-extra { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 12px; }
-.matchweek-analysis-extra > * { margin-top: 0; min-width: 0; }
 /* Upcoming match: XI vs XI and season statistics across the full width, last
    five beside a chart slot, then fantasy totals and each club's best players.
    The cards follow the panel's own width, not the window's. */
@@ -58,7 +47,7 @@
 .matchweek-preview { --matchweek-home: #9a6be3; --matchweek-away: #14a38c; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; align-items: stretch; }
 .matchweek-card { box-sizing: border-box; min-width: 0; margin: 0; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-bg, var(--surface)); }
 .matchweek-card > h3 { margin: 0 0 10px; font-size: 13px; }
-.matchweek-preview-xi, .matchweek-preview-stats { grid-column: 1 / -1; }
+.matchweek-preview-xi, .matchweek-preview-stats, .matchweek-preview-wide { grid-column: 1 / -1; }
 .matchweek-preview-form, .matchweek-preview-graph { grid-column: span 3; }
 .matchweek-preview-fantasy, .matchweek-preview-players { grid-column: span 2; }
 @container (max-width: 560px) {
@@ -140,13 +129,9 @@
 .matchweek-analysis .matchweek-mini-player { overflow-wrap: normal; word-break: normal; }
 .matchweek-analysis .matchweek-mini-player { max-width: 92px; font-size: 9px; }
 .matchweek-analysis .matchweek-mini-player .pitch-shirt { max-width: 54px; }
-.matchweek-analysis .matchweek-comparison caption { padding: 2px 0 8px; font-size: 12px; }
-.matchweek-analysis .matchweek-comparison th, .matchweek-analysis .matchweek-comparison td { padding: 3px 6px; font-size: 11px; line-height: 1.35; }
-.matchweek-analysis .matchweek-comparison thead th:nth-child(2), .matchweek-analysis .matchweek-comparison tbody th { width: 46%; }
 .matchweek-notes { margin-top: 10px; color: var(--muted); font-size: 11px; }
 .matchweek-notes summary { cursor: pointer; font-weight: 600; }
 .matchweek-notes p { margin: 6px 0 0; }
-@media (max-width: 900px) { .matchweek-analysis-grid, .matchweek-analysis-extra { grid-template-columns: minmax(0, 1fr); } }
 .matchweek-lineups { display: grid; grid-template-columns: minmax(0, 1fr) 28px minmax(0, 1fr); gap: 8px; align-items: start; margin: 20px 0; }
 .matchweek-last-xi { min-width: 0; }
 .matchweek-last-xi h3 { margin: 0; font-size: 13px; }
@@ -158,11 +143,6 @@
 /* Names on the small pitches follow the player box's size and wrapping. */
 .matchweek-mini-player .pitch-player-name { font-size: inherit; line-height: inherit; overflow-wrap: inherit; }
 .matchweek-mini-player svg { width: 100%; height: auto; }
-.matchweek-comparison { width: 100%; table-layout: fixed; white-space: normal; }
-.matchweek-comparison caption { text-align: left; padding: 12px 0; font-weight: 700; }
-.matchweek-fantasy-comparison { margin-top: 20px; }
-.matchweek-fantasy-coverage { display: block; margin-top: 4px; color: var(--muted); font-size: 10px; font-weight: 400; }
-.matchweek-comparison th, .matchweek-comparison td { text-align: center; position: static; padding: 12px 6px; overflow-wrap: anywhere; font-size: 12px; }
 @media (max-width: 540px) { .matchweek-lineups { grid-template-columns: minmax(0, 1fr); }.matchweek-versus { padding: 8px; }.matchweek-mini-player { font-size: 10px; } }
 .matchweek-odd { box-sizing: border-box; display: grid; place-content: center; gap: 2px; width: 58px; height: 44px; padding: 0; border-radius: 5px; text-align: center; background: var(--surface-raised); color: var(--ink); font-size: 10px; box-shadow: inset 0 -3px var(--odd-color, var(--line)); }
 .matchweek-odd strong { font-size: 12px; font-variant-numeric: tabular-nums; }
