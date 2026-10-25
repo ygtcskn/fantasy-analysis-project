@@ -12,7 +12,7 @@ import csv
 from collections import defaultdict
 from pathlib import Path
 
-from src.tables.common import season_folder, write_csv
+from src.shared import nonnegative, season_folder, write_csv
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -32,16 +32,6 @@ def read_required(path: Path) -> tuple[list[str], list[dict]]:
         return reader.fieldnames, list(reader)
 
 
-def number(value: str) -> float | None:
-    if value is None or not str(value).strip():
-        return None
-    try:
-        result = float(value)
-    except (TypeError, ValueError):
-        return None
-    return result if result >= 0 and result < float("inf") else None
-
-
 def formatted(value: float) -> str:
     return str(int(value)) if value.is_integer() else format(value, ".12g")
 
@@ -54,12 +44,12 @@ def player_key_passes(rows: list[dict]) -> str:
     Published team values always take precedence because player and team feeds
     can differ by one or two events.
     """
-    played = [row for row in rows if (number(row.get("minutes_played")) or 0) > 0]
+    played = [row for row in rows if (nonnegative(row.get("minutes_played")) or 0) > 0]
     covered = [row for row in played if any(str(row.get(key) or "").strip()
                 for key in ("passes", "touches", "shots_total", "fouls"))]
     if len(played) < 11 or len(covered) < 11:
         return ""
-    observed = [number(row.get("key_passes")) for row in played]
+    observed = [nonnegative(row.get("key_passes")) for row in played]
     if not any(value is not None and value > 0 for value in observed):
         return ""
     return formatted(sum(value or 0 for value in observed))

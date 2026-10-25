@@ -1,6 +1,5 @@
 """User-run Sportmonks season downloader. All saved data is CSV."""
 import argparse
-from datetime import datetime, timezone
 from pathlib import Path
 
 if __package__:
@@ -11,6 +10,8 @@ else:
     from sportmonks import Client, AccessError, RequestError, FINAL_DATA, RAW_DATA, league, token
     from csv_store import read_tree, write_tree, write_table
     from export_csv import export_tables
+# Importing csv_store above puts the project folder on the path.
+from src.shared import season_folder, season_label, utc_now, utc_stamp  # noqa: E402
 
 
 def schedule_fixtures(value):
@@ -79,13 +80,13 @@ class Download:
         sid = self.season["id"]
         self.raw_folder.mkdir(parents=True, exist_ok=True)
         self.final_folder.mkdir(parents=True, exist_ok=True)
-        write_table(self.final_folder / "download_status.csv", [{"status": "in_progress", "season": self.season["name"], "started_at_utc": datetime.now(timezone.utc).isoformat()}])
+        write_table(self.final_folder / "download_status.csv", [{"status": "in_progress", "season": self.season["name"], "started_at_utc": utc_stamp(utc_now())}])
         try:
             self.collect(sid)
             counts = export_tables(self.final_folder, self.fixtures, self.resources)
             write_table(self.final_folder / "unavailable.csv", self.gaps, ["resource", "include", "reason"])
             write_table(self.final_folder / "included_feeds.csv", [{"include": name} for name in sorted(self.includes)], ["include"])
-            write_table(self.final_folder / "download_status.csv", [{"status": "complete", "season": self.season["name"], "finished_at_utc": datetime.now(timezone.utc).isoformat(), "network_requests": self.client.calls}])
+            write_table(self.final_folder / "download_status.csv", [{"status": "complete", "season": self.season["name"], "finished_at_utc": utc_stamp(utc_now()), "network_requests": self.client.calls}])
             print(f"Raw provider captures saved to {self.raw_folder}")
             print(f"Final CSV tables saved to {self.final_folder}")
             for name in ("fixtures", "players", "player_match_stats", "events"):
@@ -153,11 +154,12 @@ def main():
     parser.add_argument("--refresh", action="store_true", help="Ignore CSV response cache")
     parser.add_argument("--rebuild-csv", action="store_true", help="Rebuild tables from raw CSV files without API calls")
     args = parser.parse_args()
-    if not (len(args.season)==9 and args.season[4]=='/' and args.season[:4].isdigit() and args.season[5:].isdigit()):
-        parser.error("Use a season name such as 2026/2027.")
-    season_folder = args.season.replace("/", "-")
-    raw_folder = RAW_DATA / season_folder
-    final_folder = FINAL_DATA / season_folder
+    try:
+        args.season, folder = season_label(args.season), season_folder(args.season)
+    except ValueError as error:
+        parser.error(str(error))
+    raw_folder = RAW_DATA / folder
+    final_folder = FINAL_DATA / folder
     client = None
     try:
         if args.rebuild_csv:

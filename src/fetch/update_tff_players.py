@@ -6,10 +6,8 @@ and never guessed. The canonical table retains every TFF row and leaves the
 Sportmonks ID blank until that identity is safely matched or manually reviewed.
 """
 import argparse
-from datetime import datetime, timezone
 from difflib import SequenceMatcher
 from pathlib import Path
-import re
 import unicodedata
 
 if __package__:
@@ -18,6 +16,8 @@ if __package__:
 else:
     from csv_store import read_table, write_table
     from parse_tff_table import ROOT
+# Importing csv_store above puts the project folder on the path.
+from src.shared import season_folder, utc_now, utc_stamp  # noqa: E402
 
 
 def words(value):
@@ -481,7 +481,7 @@ def update_from_snapshot(snapshot, sportmonks_dir, canonical, overrides_path,
                     if row["match_status"] == "matched"]
     if len(set(assigned_ids)) != len(assigned_ids):
         raise MatchIncomplete("Matched Sportmonks IDs are not unique.")
-    updated = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    updated = utc_stamp(utc_now())
     canonical_rows = []
     for row, report in zip(snapshot_rows, reports):
         player_id = report["sportmonks_player_id"]
@@ -515,13 +515,11 @@ def main():
                      default=ROOT / "config" / "tff_player_overrides.csv")
     args = cli.parse_args()
     try:
-        if not re.fullmatch(r"\d{4}/\d{4}", args.season):
-            raise ValueError("Season must look like 2026/2027.")
+        folder = season_folder(args.season)
         raw_tff_dir = ROOT / "data" / "raw" / "tff_fantasy"
         temp_tff_dir = ROOT / "data" / "temp" / "tff_fantasy"
         snapshot = args.snapshot or latest_snapshot(raw_tff_dir)
-        sportmonks_dir = (ROOT / "data" / "final" / "sportmonks" /
-                          args.season.replace("/", "-"))
+        sportmonks_dir = ROOT / "data" / "final" / "sportmonks" / folder
         report = temp_tff_dir / "tff_player_match_report.csv"
         candidates = temp_tff_dir / "tff_player_match_candidates.csv"
         total, matched, unresolved = update_from_snapshot(

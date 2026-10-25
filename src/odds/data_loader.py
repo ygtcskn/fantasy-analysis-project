@@ -19,21 +19,21 @@ from __future__ import annotations
 import csv
 import hashlib
 import io
-import math
 import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from pathlib import Path
 
+from src.shared import CALLED_OFF_STATES, FINISHED_STATES, UTC, number, parse_utc, utc_stamp
 
-UTC = timezone.utc
 RESULT_AVAILABILITY_BUFFER = timedelta(hours=3)
 REQUIRED_FILES = ("fixtures.csv", "fixture_scores.csv", "teams.csv")
 OPTIONAL_FILES = ("fixture_participants.csv", "fixture_periods.csv", "fixture_metadata.csv",
                   "team_metrics.csv", "file_inventory.csv")
 SEASON_PATTERN = re.compile(r"^\d{4}-\d{4}$")
-TERMINAL_STATES = {"FT", "AET", "FT_PEN", "CANCELLED", "WO", "AWARDED", "DELETED"}
+# A season is over when every fixture is final or called off.
+TERMINAL_STATES = FINISHED_STATES | CALLED_OFF_STATES
 STATE_IDS = {"1": "NS", "5": "FT", "7": "AET", "8": "FT_PEN", "10": "POSTPONED",
              "11": "SUSPENDED", "12": "CANCELLED", "13": "TBA", "14": "WO",
              "15": "ABANDONED", "17": "AWARDED", "18": "INTERRUPTED", "20": "DELETED"}
@@ -102,26 +102,12 @@ class SnapshotError(ValueError):
         self.stable = stable
 
 
-def _utc(value: str) -> datetime:
-    result = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    return result.replace(tzinfo=UTC) if result.tzinfo is None else result.astimezone(UTC)
-
-
 def _id(value: str) -> bool:
     return bool(re.fullmatch(r"[1-9]\d*", value))
 
 
 def _integer(value: str) -> int | None:
     return int(value) if re.fullmatch(r"\d+", value) else None
-
-
-def _number(value: str) -> float | None:
-    """Finite decimal, or None. Percentages arrive already stripped of '%'."""
-    try:
-        result = float(value)
-    except (TypeError, ValueError):
-        return None
-    return result if math.isfinite(result) else None
 
 
 def _bool(value: str) -> bool | None:
@@ -172,7 +158,7 @@ def _snapshot(folder: Path) -> tuple[dict[str, bytes], list[dict], datetime]:
         raise SnapshotError("download_status_season_mismatch", export_status=export_status,
                             export_complete=True)
     try:
-        completed = _utc(status.get("finished_at_utc", ""))
+        completed = parse_utc(status.get("finished_at_utc", ""))
     except ValueError as exc:
         raise SnapshotError("missing_or_invalid_capture_completion_time", export_status=export_status,
                             export_complete=True) from exc
@@ -201,8 +187,8 @@ def _snapshot(folder: Path) -> tuple[dict[str, bytes], list[dict], datetime]:
         raise SnapshotError(str(exc), export_status=export_status, export_complete=True) from exc
     sources = [{"season": folder.name, "path": str((folder / name).resolve()),
                 "sha256": hashlib.sha256(contents[name]).hexdigest(), "bytes": len(contents[name]),
-                "last_write_utc": datetime.fromtimestamp(before[name][3] / 1_000_000_000, UTC).isoformat(),
-                "capture_completed_at_utc": completed.isoformat(), "snapshot_accepted": True}
+                "last_write_utc": utc_stamp(datetime.fromtimestamp(before[name][3] / 1_000_000_000, UTC)),
+                "capture_completed_at_utc": utc_stamp(completed), "snapshot_accepted": True}
                for name in names]
     return contents, sources, completed
 
@@ -241,7 +227,7 @@ def _state(row: dict[str, str]) -> tuple[str, bool]:
 
 
 def _kickoff(row: dict[str, str]) -> datetime:
-    values = [_utc(row[key]) for key in ("kickoff", "starting_at") if row.get(key)]
+    values = [parse_utc(row[key]) for key in ("kickoff", "starting_at") if row.get(key)]
     if row.get("starting_at_timestamp"):
         timestamp = _integer(row["starting_at_timestamp"])
         if timestamp is None:
@@ -377,7 +363,7 @@ def _load_one(dataset: Dataset, season: str, contents: dict[str, bytes],
                 orphan_metric_fixtures.add(fid)
                 _exclude(dataset, season, fid, "team_metrics.csv", "orphan_related_record")
             continue
-        value = _number(row["value"])
+        value = number(row["value"])
         if value is None:
             continue
         bucket = stats_by_fixture[fid].setdefault(row["team_id"], {})
@@ -557,8 +543,8 @@ def _load_one(dataset: Dataset, season: str, contents: dict[str, bytes],
                                                 if value is not None}
                                       for team_id, values in stats_by_fixture.get(fid, {}).items()}))
     if kickoff_values:
-        coverage["first_kickoff_utc"] = min(kickoff_values).isoformat()
-        coverage["last_kickoff_utc"] = max(kickoff_values).isoformat()
+        coverage["first_kickoff_utc"] = utc_stamp(min(kickoff_values))
+        coverage["last_kickoff_utc"] = utc_stamp(max(kickoff_values))
     coverage["notes"] = "; ".join(notes)
 
 
@@ -604,7 +590,7 @@ def load_seasons(input_root: Path, seasons: list[str] | None = None, league_id: 
             _exclude(dataset, season, "", "download_status.csv", "season_snapshot_rejected", str(exc))
             continue
         coverage.update(export_status="complete", export_complete=True, snapshot_stable=True,
-                        capture_completed_at_utc=completed.isoformat())
+                        capture_completed_at_utc=utc_stamp(completed))
         dataset.sources.extend(sources)
         try:
             _load_one(dataset, season, contents, completed, coverage, league_id, fixture_occurrences)

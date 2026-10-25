@@ -1,8 +1,8 @@
 "use strict";
 
 // One definition, for every page, of when a match counts, when a player row is
-// an appearance and what a blank statistic means. src/tables/common.py and the
-// fantasy ledger (src/points) apply the same rules, so a figure the browser
+// an appearance and what a blank statistic means. src/shared.py holds the same
+// lists for the pipeline - change the two together - so a figure the browser
 // draws agrees with the one the pipeline publishes. Standalone: team.html loads
 // it without the rest of the site.
 
@@ -66,7 +66,7 @@ function currentRoundIndex(rounds, now = Date.now()) {
 }
 
 // The same rule for a team's match statistics (team_metrics.csv), covered when
-// any of these is recorded - src/tables/common.py's TEAM_COVERAGE_COLUMNS.
+// any of these is recorded - TEAM_COVERAGE_COLUMNS in src/shared.py.
 // Team card counts come only from here, on every page: Sportmonks counts a
 // second yellow as a yellow card, and any dismissal as a red card.
 const TEAM_COVERAGE_COLUMNS = ["passes", "shots_total", "fouls", "ball_possession", "duels_won"];

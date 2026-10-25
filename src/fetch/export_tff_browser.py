@@ -5,7 +5,6 @@ in the project .env enable normal form login. Otherwise sign in interactively.
 No passwords or login sessions are exported.
 """
 import argparse
-from datetime import datetime, timezone
 from pathlib import Path
 import os
 import re
@@ -19,6 +18,8 @@ else:
     from csv_store import write_table
     from parse_tff_table import ROOT, parse_table
     from update_tff_players import update_from_snapshot
+# Importing csv_store above puts the project folder on the path.
+from src.shared import season_folder, utc_now  # noqa: E402
 
 URL = "https://tfffantezilig.com/istatistikler"
 EXTRA_COLUMNS = (
@@ -241,8 +242,7 @@ def export(args, sync_playwright):
             write_table(args.output, records, columns)
             print(f"Saved snapshot with {len(records)} players to {args.output.resolve()}")
             temp_tff_dir = ROOT / "data" / "temp" / "tff_fantasy"
-            sportmonks_dir = (ROOT / "data" / "final" / "sportmonks" /
-                              args.season.replace("/", "-"))
+            sportmonks_dir = ROOT / "data" / "final" / "sportmonks" / args.season
             canonical = ROOT / "data" / "final" / "tff_fantasy" / "tff_players.csv"
             total, matched, unresolved = update_from_snapshot(
                 args.output, sportmonks_dir, canonical,
@@ -265,10 +265,12 @@ def main():
     cli.add_argument("--login-timeout", type=int, default=300, help="Seconds allowed for interactive login")
     cli.add_argument("--overwrite", action="store_true")
     args = cli.parse_args()
-    if not re.fullmatch(r"\d{4}/\d{4}", args.season):
-        cli.error("Season must look like 2026/2027.")
+    try:
+        args.season = season_folder(args.season)
+    except ValueError as error:
+        cli.error(str(error))
     if args.output is None:
-        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+        stamp = utc_now().strftime("%Y%m%dT%H%M%S%fZ")
         args.output = (ROOT / "data" / "raw" / "tff_fantasy" /
                        f"players_{stamp}.csv")
     if args.max_pages < 1 or args.login_timeout < 1 or (args.expected_rows is not None and args.expected_rows < 1):

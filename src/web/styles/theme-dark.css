@@ -54,34 +54,25 @@
 :root[data-theme="dark"] .detail-summary > div,
 :root[data-theme="dark"] .home-panel,
 :root[data-theme="dark"] .detailed-standings,
-:root[data-theme="dark"] .tier-lane,
 :root[data-theme="dark"] .team-panel,
 :root[data-theme="dark"] .builder-pitch-panel,
 :root[data-theme="dark"] .builder-pool { background: var(--surface); }
-:root[data-theme="dark"] .filters,
-:root[data-theme="dark"] .builder-toolbar { background: var(--surface-soft); }
+:root[data-theme="dark"] .filters { background: var(--surface-soft); }
 :root[data-theme="dark"] input,
 :root[data-theme="dark"] select { border-color: var(--line); background: var(--field); color: var(--ink); }
 :root[data-theme="dark"] .table-container,
 :root[data-theme="dark"] .table-container table,
 :root[data-theme="dark"] .history-table,
 :root[data-theme="dark"] .builder-table-wrap { background: var(--surface); }
-:root[data-theme="dark"] th,
-:root[data-theme="dark"] .tier-columns,
-:root[data-theme="dark"] .tier-lane-heading { background: var(--surface-raised); }
+:root[data-theme="dark"] th { background: var(--surface-raised); }
 :root[data-theme="dark"] td,
-:root[data-theme="dark"] .player-row,
 :root[data-theme="dark"] .team-game-row,
 :root[data-theme="dark"] .team-best-player { border-bottom-color: var(--line); }
 :root[data-theme="dark"] tbody tr:hover,
-:root[data-theme="dark"] .player-row:hover,
-:root[data-theme="dark"] .player-row:focus-visible,
 :root[data-theme="dark"] .team-game-row:hover,
 :root[data-theme="dark"] .team-logo-link:hover { background: var(--surface-hover); }
-:root[data-theme="dark"] .player-row,
 :root[data-theme="dark"] .builder-player-button,
 :root[data-theme="dark"] .player-name-button { color: var(--ink); }
-:root[data-theme="dark"] .player-row { background: var(--surface); }
 :root[data-theme="dark"] .eyebrow { color: #c29af4; }
 :root[data-theme="dark"] a.team-link:hover { color: #cba7fa; }
 :root[data-theme="dark"] .secondary,
@@ -91,7 +82,6 @@
 :root[data-theme="dark"] .primary { background: var(--accent); color: #160d20; }
 :root[data-theme="dark"] .primary:hover { background: #cba7fa; }
 :root[data-theme="dark"] .primary span { color: #160d20; }
-:root[data-theme="dark"] .page-number[aria-current="page"] { border-color: var(--accent); background: var(--accent); color: #160d20; }
 :root[data-theme="dark"] .empty-state { border-color: #524160; background: var(--surface); }
 :root[data-theme="dark"] .empty-state .file-symbol,
 :root[data-theme="dark"] .file-list code,
@@ -121,17 +111,13 @@
 :root[data-theme="dark"] .builder-player-add:hover { background: #402b51; }
 :root[data-theme="dark"] .builder-player-details-row > td { background: #150d20; }
 :root[data-theme="dark"] .builder-player-details { background: #1b1126; }
-:root[data-theme="dark"] .builder-fantasy-breakdown thead th { background: #24172f; }
-:root[data-theme="dark"] .builder-fantasy-breakdown tbody th { background: transparent; }
 :root[data-theme="dark"] .builder-availability-caution { background: #3d2730; color: #ffc395; border-color: #6b4446; }
-:root[data-theme="dark"] .builder-detail-add { background: var(--accent); border-color: var(--accent); color: #120b1a; }
 :root[data-theme="dark"] .builder-remove { background: #21172d; color: #ff9b91; }
 :root[data-theme="dark"] .builder-remove:hover { background: #40233a; }
 :root[data-theme="dark"] .statistics-card-scorers { --statistics-accent: #a97bd0; }
 :root[data-theme="dark"] .statistics-card-assists { --statistics-accent: #7b8cff; }
 :root[data-theme="dark"] .statistics-card-fantasy { --statistics-accent: #8fb6e0; }
 :root[data-theme="dark"] .statistics-players { border-top-color: #e8c33a; }
-:root[data-theme="dark"] .statistics-reserved { border-top-color: #c9c4e6; }
 :root[data-theme="dark"] .statistics-player-button:hover { color: #cba7fa; }
 :root[data-theme="dark"] { --statistics-plot-line: #9c8bf0; --statistics-plot-fill: #9c8bf03d;
   --statistics-plot-compare: #60c6ff; --statistics-plot-compare-fill: #60c6ff33;
@@ -213,7 +199,6 @@
 :root[data-theme="dark"] .builder-summary,
 :root[data-theme="dark"] .statistics-card,
 :root[data-theme="dark"] .statistics-players,
-:root[data-theme="dark"] .statistics-reserved,
 :root[data-theme="dark"] .statistics-profile,
 :root[data-theme="dark"] .statistics-metrics,
 :root[data-theme="dark"] .team-analysis,
@@ -343,7 +328,7 @@
 :root[data-theme="dark"] :is(.home-panel, .detailed-standings, .fixtures-view #workspace, .tier-ranking-table, .history-table) :is(th, td):not(.no-results) {
   padding: var(--cell-pad);
 }
-:root[data-theme="dark"] :is(.statistics-table, .statistics-metric-table, .builder-table, .builder-recommendations table, .matchweek-standings table) :is(th, td):not(.no-results) {
+:root[data-theme="dark"] :is(.statistics-table, .builder-table, .builder-recommendations table, .matchweek-standings table) :is(th, td):not(.no-results) {
   padding: var(--cell-pad-compact);
 }
 /* The three ranking tables on both statistics pages share one spacing scheme. */

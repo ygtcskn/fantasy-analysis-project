@@ -3,37 +3,27 @@
 HTTP responses are decoded in memory by the clients. No structured values are
 encoded into CSV cells: nested data is stored as typed scalar rows instead.
 """
-import csv
-import os
 from pathlib import Path
+import sys
+
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:  # Run as a file, the project root is not on the path.
+    sys.path.insert(0, str(ROOT))
+from src.shared import read_csv, write_csv  # noqa: E402
 
 
 def write_table(path, rows, columns=None):
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
+    """``columns`` first, then any other key alphabetically; cells must be scalars."""
     rows = list(rows)
     fields = list(columns or [])
     fields.extend(sorted({key for row in rows for key in row} - set(fields)))
-    if not fields:
-        fields = ["id"]
-    temp = path.with_suffix(path.suffix + ".tmp")
-    try:
-        with temp.open("w", encoding="utf-8-sig", newline="") as handle:
-            writer = csv.DictWriter(handle, fieldnames=fields)
-            writer.writeheader()
-            for row in rows:
-                if any(isinstance(value, (dict, list, tuple)) for value in row.values()):
-                    raise ValueError("CSV cells must be scalar; flatten nested data first.")
-                writer.writerow(row)
-        os.replace(temp, path)
-    finally:
-        if temp.exists():
-            temp.unlink()
+    if any(isinstance(value, (dict, list, tuple)) for row in rows for value in row.values()):
+        raise ValueError("CSV cells must be scalar; flatten nested data first.")
+    write_csv(path, rows, fields or ["id"])
 
 
 def read_table(path):
-    with Path(path).open(encoding="utf-8-sig", newline="") as handle:
-        return list(csv.DictReader(handle))
+    return read_csv(path, required=True)
 
 
 def scalar_fields(data, prefix=""):

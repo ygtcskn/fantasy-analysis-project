@@ -25,9 +25,10 @@ import math
 from collections import defaultdict
 from pathlib import Path
 
-from src.tables.common import (ROOT, blank, covered, is_finished, nonnegative,
-                               number, read_csv, text, write_csv)
+from src.shared import (blank, counted, covered, is_finished, nonnegative, number, read_csv,
+                        write_csv)
 
+ROOT = Path(__file__).resolve().parents[2]
 SPIDER_ROOT = ROOT / "data/final/spider"
 SOURCE_ROOT = ROOT / "data/final/sportmonks"
 OUTPUT = ROOT / "data/temp/radar_reliability.csv"
@@ -93,14 +94,6 @@ COLUMNS = ("window_rounds", "position", "metric", "seasons", "players", "early_m
            "percentile_error_adjusted", "reading")
 
 
-def counted(row: dict, column: str):
-    """Shared omitted-zero rule: a blank is none only on a covered match."""
-    value = nonnegative(row.get(column))
-    if value is not None:
-        return value
-    return 0.0 if column in row and blank(row.get(column)) and covered(row) else None
-
-
 def match_value(row: dict, kind: str, columns: tuple) -> float | None:
     if kind == "sum":
         parts = [counted(row, column) for column in columns]
@@ -161,6 +154,18 @@ def tally(rows: list[dict], metric: str) -> dict | None:
         residual = sum((value - rate * weight) ** 2 for value, weight in used)
         variance = residual / exposure ** 2 * len(used) / (len(used) - 1)
     return {"events": events, "exposure": exposure, "variance": variance}
+
+
+def text(value, digits: int = 2) -> str:
+    """A report number as plain text: no trailing zeros, "" when unknown."""
+    if value is None:
+        return ""
+    result = number(value)
+    if result is None:
+        return str(value)
+    if result == int(result) and abs(result) < 1e15:
+        return str(int(result))
+    return f"{round(result, digits):g}"
 
 
 def scale(metric: str) -> float:

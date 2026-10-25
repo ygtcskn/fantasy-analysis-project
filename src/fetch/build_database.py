@@ -2,7 +2,6 @@
 import argparse
 from contextlib import closing
 import csv
-from datetime import datetime, timezone
 import math
 import os
 from pathlib import Path
@@ -14,6 +13,8 @@ if __package__:
     from .sportmonks import DATA, ROOT
 else:
     from sportmonks import DATA, ROOT
+# Importing sportmonks above puts the project folder on the path.
+from src.shared import utc_now, utc_stamp  # noqa: E402
 
 SKIP = {"download_status", "included_feeds", "unavailable", "file_inventory", "validation"}
 PRIMARY_KEYS = {
@@ -146,7 +147,7 @@ def import_fantasy(db, root, season, run_id, inputs):
                 db.execute(f"CREATE INDEX {quote('idx_' + table + '_' + field)} "
                            f"ON {quote(table)} ({quote(field)})")
         db.execute("INSERT INTO import_log VALUES (?,?,?)", (
-            path.relative_to(root).as_posix(), count, datetime.now(timezone.utc).isoformat()))
+            path.relative_to(root).as_posix(), count, utc_stamp(utc_now())))
         counts[table] = count
     return counts
 
@@ -192,7 +193,7 @@ def build_database(csv_dir, output, tff_csv=None, sportmonks_prefix="",
                     for field in ("fixture_id", "player_id", "team_id", "season_id"):
                         if field in fields and keys != (field,):
                             db.execute(f"CREATE INDEX {quote('idx_' + table + '_' + field)} ON {quote(table)} ({quote(field)})")
-                    db.execute("INSERT INTO import_log VALUES (?,?,?)", (path.name, count, datetime.now(timezone.utc).isoformat()))
+                    db.execute("INSERT INTO import_log VALUES (?,?,?)", (path.name, count, utc_stamp(utc_now())))
                     counts[table] = count
                 if tff_csv is not None:
                     tff_csv = Path(tff_csv).resolve()
@@ -222,7 +223,7 @@ def build_database(csv_dir, output, tff_csv=None, sportmonks_prefix="",
                     db.execute("CREATE INDEX idx_tff_players_sportmonks_player_id "
                                "ON tff_players (sportmonks_player_id)")
                     db.execute("INSERT INTO import_log VALUES (?,?,?)", (
-                        tff_csv.name, count, datetime.now(timezone.utc).isoformat()))
+                        tff_csv.name, count, utc_stamp(utc_now())))
                     counts[table] = count
                 if fantasy is not None:
                     counts.update(import_fantasy(db, *fantasy[:4]))

@@ -489,9 +489,10 @@ test("an omitted counting column is a zero on a covered match and unknown otherw
   assert.equal(radar.observation(uncovered, radar.metrics.goals).status, "partial_coverage");
   assert.equal(radar.covered({ minutes_played: "90" }), false);
   assert.equal(radar.covered({ touches: "1" }), true);
-  // An absent column is never an omission, and an invalid one is never a zero.
-  assert.equal(radar.observation(player("c", { touches: "40" }), radar.metrics.goals).status, "partial_coverage");
-  assert.equal(radar.observation(player("d", { touches: "40", goals: "-1" }), radar.metrics.goals).status, "partial_coverage");
+  // An absent column is never an omission, and an invalid one is never a zero:
+  // with no other match to go on, the player has no value at all.
+  assert.equal(radar.observation(player("c", { touches: "40" }), radar.metrics.goals).status, "missing");
+  assert.equal(radar.observation(player("d", { touches: "40", goals: "-1" }), radar.metrics.goals).status, "missing");
 });
 
 test("combined axes need every part of the match and add them at match level", () => {
@@ -502,8 +503,14 @@ test("combined axes need every part of the match and add them at match level", (
   const observed = radar.observation(target, radar.metrics.goal_contribution);
   assert.equal(observed.rawValue, 3);
   close(observed.value, 1.5);
-  const partial = player("b", {}, { rows: [{ minutes_played: "90", touches: "40", goals: "1" }], minutes: 90 });
+  // A match missing one part is unknown, not the part it has.
+  const partial = player("b", {}, { rows: [
+    { minutes_played: "90", touches: "40", goals: "1", assists: "" },
+    { minutes_played: "90", touches: "40", goals: "1" },
+  ], minutes: 180 });
   assert.equal(radar.observation(partial, radar.metrics.goal_contribution).status, "partial_coverage");
+  const none = player("c", {}, { rows: [{ minutes_played: "90", touches: "40", goals: "1" }], minutes: 90 });
+  assert.equal(radar.observation(none, radar.metrics.goal_contribution).status, "missing");
 });
 
 test("an omitted percentage denominator is only zero attempts when nothing was made", () => {
@@ -747,8 +754,9 @@ test("radar settings reject nonsensical thresholds", () => {
     { minimumPeers: 2.5 }, { zeroShareThreshold: 2 }, { zeroShareThreshold: -0.1 }]) {
     assert.throws(() => radar.settings(options));
   }
-  // There is one scoring rule; nothing else is configurable.
-  assert.deepEqual(Object.keys(radar.defaults).sort(), ["minimumMinutes", "minimumPeers", "zeroShareThreshold"]);
+  // There is one scoring rule; besides its thresholds, only the small-sample
+  // adjustment can be switched off.
+  assert.deepEqual(Object.keys(radar.defaults).sort(), ["minimumMinutes", "minimumPeers", "shrinkage", "zeroShareThreshold"]);
 });
 
 const chartAxes = radar.axes("FW").slice(0, 6);

@@ -1,4 +1,4 @@
-"""Rebuild fantasy points, projections, website tables and SQLite from saved CSVs.
+"""Rebuild fantasy points, projections, radar statistics and SQLite from saved CSVs.
 
 Run this after refreshing Sportmonks and the reviewed TFF player table.
 No downloads, browser exports or provider requests are triggered here.
@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import argparse
 import csv
-from datetime import datetime, timezone
 import hashlib
 import os
 from pathlib import Path
@@ -22,9 +21,8 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from src.points import run as points
+from src.shared import read_csv, season_folder, utc_now, utc_stamp, write_csv
 from src.player_projections import run as projections
-from src.tables import common as tables_common
-from src.tables import run as tables
 from src.spider.build_spider_stats import build_season as build_spider_stats
 from src.fetch.build_database import build_database
 
@@ -51,7 +49,7 @@ def tag_generation(path: Path, run_id: str) -> None:
             raise ValueError(f"Output has no CSV header: {path}")
         columns = [key for key in reader.fieldnames if key != "pipeline_run_id"] + ["pipeline_run_id"]
         rows = [dict(row, pipeline_run_id=run_id) for row in reader]
-    points.write_csv(path, rows, columns)
+    write_csv(path, rows, columns)
 
 
 def publish_file(source: Path, target: Path) -> None:
@@ -75,21 +73,21 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
     run = None
     try:
-        season = points.season_folder(args.season)
+        season = season_folder(args.season)
         data_root = args.data_root.resolve()
         inputs = data_root / "final/sportmonks"
         tff_csv = data_root / "final/tff_fantasy/tff_players.csv"
-        status = points.read_csv(inputs / season / "download_status.csv")
+        status = read_csv(inputs / season / "download_status.csv")
         if len(status) != 1 or status[0].get("status") != "complete":
             raise ValueError("Finish the target Sportmonks season download first.")
         if not tff_csv.is_file():
             raise ValueError("Refresh the reviewed TFF player CSV first.")
         before = input_manifest(data_root, args.rules)
-        generated = datetime.now(timezone.utc)
+        generated = utc_now()
         run_id = f"{generated:%Y%m%dT%H%M%SZ}_{uuid.uuid4().hex[:8]}"
         run = data_root / "temp/fantasy_pipeline/runs" / run_id
         stage = run / "publish"
-        points.write_csv(run / "input_manifest.csv", before)
+        write_csv(run / "input_manifest.csv", before)
         points_args = ["--input-root", str(inputs), "--tff-players", str(tff_csv),
                        "--rules", str(args.rules), "--tff-season", season,
                        "--reconcile-season", season,
@@ -117,18 +115,9 @@ def main(argv=None) -> int:
                           Path("player_projections") / season / "team_fixture_projections.csv"]
         for relative in relative_files:
             tag_generation(stage / relative, run_id)
-        # Every season total, ranking and percentile the website shows. Built
-        # from the same staged points, so a table never mixes this run's
-        # statistics with the previous run's fantasy points.
-        print("3/4 Building the website tables...")
-        built = tables_common.Season(season, inputs, stage / "tables", stage)
-        _, failed = tables.build_season(built)
-        if failed:
-            raise ValueError(f"{failed} table(s) failed; final files were not published.")
-        relative_files.extend(Path("tables") / season / path.name
-                              for path in sorted((stage / "tables" / season).glob("*.csv")))
         # Radar scoring needs the current season and every saved earlier season
         # prepared before the browser forms a common reference population.
+        print("3/4 Preparing radar statistics...")
         spider_seasons = sorted(folder.name for folder in inputs.iterdir() if folder.is_dir()
                                 and (folder / "player_match_stats.csv").is_file()
                                 and (folder / "team_metrics.csv").is_file()
@@ -137,10 +126,10 @@ def main(argv=None) -> int:
             build_spider_stats(spider_season, inputs, stage / "spider")
             relative_files.append(Path("spider") / spider_season / "spider_stats.csv")
         marker = Path("fantasy_pipeline") / season / "pipeline_status.csv"
-        tff_rows = points.read_csv(tff_csv)
-        points.write_csv(stage / marker, [{
+        tff_rows = read_csv(tff_csv)
+        write_csv(stage / marker, [{
             "status": "complete", "season": season, "pipeline_run_id": run_id,
-            "generated_at_utc": points.stamp(datetime.now(timezone.utc)),
+            "generated_at_utc": utc_stamp(utc_now()),
             "sportmonks_finished_at_utc": status[0].get("finished_at_utc", ""),
             "tff_updated_at_utc": max((row.get("updated_at_utc", "") for row in tff_rows), default=""),
             "tff_snapshot_file": " ".join(sorted({row.get("snapshot_file", "") for row in tff_rows})),
@@ -162,14 +151,14 @@ def main(argv=None) -> int:
         for relative in relative_files:
             publish_file(stage / relative, data_root / "final" / relative)
         publish_file(stage / marker, data_root / "final" / marker)
-        points.write_csv(run / "run_status.csv", [{"status": "complete", "pipeline_run_id": run_id,
+        write_csv(run / "run_status.csv", [{"status": "complete", "pipeline_run_id": run_id,
                          "season": season, "database_built": not args.skip_database}])
         print(f"Fantasy pipeline complete. Run record: {run}")
         print("Reload the website to read the published tables, points and projections.")
         return 0
     except (OSError, ValueError, RuntimeError, sqlite3.Error) as error:
         if run:
-            points.write_csv(run / "run_status.csv", [{"status": "failed", "message": str(error)}])
+            write_csv(run / "run_status.csv", [{"status": "failed", "message": str(error)}])
         print(f"Fantasy pipeline failed: {error}", file=sys.stderr)
         return 1
 

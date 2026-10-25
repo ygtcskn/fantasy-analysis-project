@@ -26,7 +26,6 @@ from __future__ import annotations
 
 import argparse
 import csv
-import io
 import hashlib
 import math
 import re
@@ -35,15 +34,22 @@ import sqlite3
 import sys
 import uuid
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:  # Run as a file, the project root is not on the path.
+    sys.path.insert(0, str(ROOT))
+
+from src.shared import (  # noqa: E402
+    in_progress, is_played, number_or, read_csv, season_folder, utc_now, utc_stamp, write_csv,
+)
 
 if __package__:
     from .rules import COMPONENTS, FROM_SPORTMONKS, POSITIONS, RulesError, ScoringRules
 else:
     from rules import COMPONENTS, FROM_SPORTMONKS, POSITIONS, RulesError, ScoringRules
 
-ROOT = Path(__file__).resolve().parents[2]
 INPUT = ROOT / "data" / "final" / "sportmonks"
 RULES = ROOT / "config" / "tff_scoring_rules.csv"
 DATABASE = ROOT / "data" / "superlig.sqlite"
@@ -70,49 +76,9 @@ SUMMARY_COLUMNS = (
 )
 
 
-# ------------------------------------------------------------------ utilities
-
-def read_csv(path: Path) -> list[dict]:
-    if not path.exists():
-        return []
-    return list(csv.DictReader(io.StringIO(path.read_text(encoding="utf-8-sig"))))
-
-
-def write_csv(path: Path, rows: list[dict], columns=None) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    names = list(columns) if columns else list(rows[0]) if rows else ["message"]
-    temporary = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
-    try:
-        with temporary.open("w", encoding="utf-8-sig", newline="") as handle:
-            writer = csv.DictWriter(handle, fieldnames=names, extrasaction="raise")
-            writer.writeheader()
-            writer.writerows(rows)
-        temporary.replace(path)
-    finally:
-        temporary.unlink(missing_ok=True)
-
-
-def number(value) -> float:
-    try:
-        result = float(value)
-    except (TypeError, ValueError):
-        return 0.0
-    return result if math.isfinite(result) else 0.0
-
-
-def stamp(moment: datetime) -> str:
-    return moment.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-
-def season_folder(name: str) -> str:
-    name = name.replace("/", "-")
-    if not re.fullmatch(r"\d{4}-\d{4}", name):
-        raise ValueError("Season must look like 2026/2027")
-    first, last = map(int, name.split("-"))
-    if last != first + 1:
-        raise ValueError("Season years must be consecutive")
-    return name
-
+# Reading, writing, numbers, seasons and timestamps come from src/shared.py. The
+# scorer must have a figure for every column, and Sportmonks writes no zeros, so
+# a blank counting cell is read as none here: number_or(value), never number_or().
 
 # ------------------------------------------------------------- fantasy positions
 
@@ -212,7 +178,7 @@ def build_season(season: str, rules: ScoringRules, positions: dict,
         if fixture is None:
             issues["player row with no matching fixture"] += 1
             continue
-        if fixture.get("state") != "FT" or fixture.get("league_id") != "600":
+        if not is_played(fixture) or fixture.get("league_id") != "600":
             issues["excluded unfinished or non-league fixture row"] += 1
             continue
         sportmonks_position = (row.get("position") or "").strip()
@@ -231,9 +197,9 @@ def build_season(season: str, rules: ScoringRules, positions: dict,
         if not home or not away or team_id not in {home, away}:
             raise ValueError(f"{season}: player {player_id} team does not match fixture {row['fixture_id']}")
         opponent = away if team_id == home else home
-        minutes = number(row.get("minutes_played"))
-        conceded = number(row.get("goals_conceded"))
-        if not row.get("goals_conceded") and minutes >= 90 and number(row.get("started")) == 1:
+        minutes = number_or(row.get("minutes_played"))
+        conceded = number_or(row.get("goals_conceded"))
+        if not row.get("goals_conceded") and minutes >= 90 and number_or(row.get("started")) == 1:
             # Blank normally means none conceded while on the pitch. Where the
             # final score can only replace that value for a full-match starter.
             # Substituted players may have left before the goal was conceded.
@@ -243,16 +209,16 @@ def build_season(season: str, rules: ScoringRules, positions: dict,
                 issues["blank goals_conceded corrected from the scoreline"] += 1
         # A player is dismissed at most once; a second yellow lands in its own
         # column and must not be counted twice.
-        dismissals = 1 if (number(row.get("redcards")) or number(row.get("yellowred_cards"))) else 0
+        dismissals = 1 if (number_or(row.get("redcards")) or number_or(row.get("yellowred_cards"))) else 0
 
         parts = rules.score(
             position=position, minutes=minutes,
-            goals=number(row.get("goals")), assists=number(row.get("assists")),
-            conceded=conceded, saves=number(row.get("saves")),
-            penalties_saved=number(row.get("penalties_saved")),
-            penalties_missed=number(row.get("penalties_misses")),
-            yellow_cards=number(row.get("yellowcards")),
-            dismissals=dismissals, own_goals=number(row.get("own_goals")))
+            goals=number_or(row.get("goals")), assists=number_or(row.get("assists")),
+            conceded=conceded, saves=number_or(row.get("saves")),
+            penalties_saved=number_or(row.get("penalties_saved")),
+            penalties_missed=number_or(row.get("penalties_misses")),
+            yellow_cards=number_or(row.get("yellowcards")),
+            dismissals=dismissals, own_goals=number_or(row.get("own_goals")))
         if not parts["played"]:
             continue
         scored.append({
@@ -265,17 +231,17 @@ def build_season(season: str, rules: ScoringRules, positions: dict,
             "venue": "home" if team_id == home else "away",
             "fantasy_position": position, "position_source": source,
             "sportmonks_position": sportmonks_position,
-            "started": int(number(row.get("started"))), "minutes_played": minutes,
+            "started": int(number_or(row.get("started"))), "minutes_played": minutes,
             # Provider match rating. Carried for context only: it scores no
             # points and takes no part in any total on this row.
-            "rating": number(row.get("rating")) or "",
-            "goals": int(number(row.get("goals"))), "assists": int(number(row.get("assists"))),
+            "rating": number_or(row.get("rating")) or "",
+            "goals": int(number_or(row.get("goals"))), "assists": int(number_or(row.get("assists"))),
             "clean_sheet": int(parts["clean_sheet"] != 0),
-            "goals_conceded": int(conceded), "saves": int(number(row.get("saves"))),
-            "penalties_saved": int(number(row.get("penalties_saved"))),
-            "penalties_missed": int(number(row.get("penalties_misses"))),
-            "yellow_cards": int(number(row.get("yellowcards"))),
-            "dismissals": dismissals, "own_goals": int(number(row.get("own_goals"))),
+            "goals_conceded": int(conceded), "saves": int(number_or(row.get("saves"))),
+            "penalties_saved": int(number_or(row.get("penalties_saved"))),
+            "penalties_missed": int(number_or(row.get("penalties_misses"))),
+            "yellow_cards": int(number_or(row.get("yellowcards"))),
+            "dismissals": dismissals, "own_goals": int(number_or(row.get("own_goals"))),
             **{f"points_{name}": parts[name] for name in COMPONENTS},
             "points_base": parts["points_base"],
         })
@@ -391,7 +357,7 @@ def unfinished_clubs(season: str, input_root: Path = INPUT) -> set[str]:
     for row in read_csv(path):
         if row.get("league_id") != "600":
             continue
-        if row.get("state") not in {"FT", "NS", "TBA", "POSTPONED", "CANCELLED"}:
+        if in_progress(row):
             clubs.update({row.get("home_team_id", ""), row.get("away_team_id", "")})
     return {club for club in clubs if club}
 
@@ -429,15 +395,15 @@ def reconcile(ledger: list[dict], season: str, source: Path,
     for player in players:
         key = str(player["sportmonks_player_id"])
         computed = totals.get(key, 0.0)
-        official = number(player["tp"])
+        official = number_or(player["tp"])
         rows.append({
             "player_name": player["player_name"], "team_name": player["team_name"],
             "position": player["position"], "player_id": key,
             "official_points": official, "computed_points": computed,
             "difference": computed - official,
-            "official_minutes": number(player["od"]),
+            "official_minutes": number_or(player["od"]),
             "computed_minutes": minutes.get(key, 0.0),
-            "minutes_difference": minutes.get(key, 0.0) - number(player.get("od")),
+            "minutes_difference": minutes.get(key, 0.0) - number_or(player.get("od")),
             "snapshot_file": player.get("snapshot_file", ""),
             "club_fixture_unfinished": str(player.get("sportmonks_team_id", "")) in unfinished,
             "comparison_status": "explicit_fixture_cutoff" if before else "provisional_snapshot_alignment",
@@ -524,7 +490,7 @@ def main(argv=None) -> int:
         raise ValueError("Reconciliation season must match the current TFF snapshot season")
     checks = reconcile(ledger, target, source, args.reconcile_before or "")
 
-    run = args.runs_root / (datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    run = args.runs_root / (utc_now().strftime("%Y%m%dT%H%M%SZ")
                             + "_ledger_" + uuid.uuid4().hex[:8])
     write_csv(run / "player_match_points.csv", ledger, LEDGER_COLUMNS)
     write_csv(run / "player_season_summary.csv", summary, SUMMARY_COLUMNS)
@@ -533,7 +499,7 @@ def main(argv=None) -> int:
     write_csv(run / "unmatched_players.csv", unmatched)
     write_csv(run / "data_issues.csv", issues)
     write_csv(run / "run_settings.csv", [
-        {"setting": "generated_at_utc", "value": stamp(datetime.now(timezone.utc))},
+        {"setting": "generated_at_utc", "value": utc_stamp(utc_now())},
         {"setting": "seasons", "value": " ".join(seasons)},
         {"setting": "rules_file", "value": str(args.rules)},
         {"setting": "rules_source", "value": rules.source},

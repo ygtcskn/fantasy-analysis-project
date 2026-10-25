@@ -2,8 +2,8 @@
 # 13:00 to 02:00 Turkish time, GitHub asks src/update_site.py whether a match
 # has reached a checkpoint (or a day has passed); only then does it download,
 # forecast, rebuild and upload the site. Cloudflare R2 holds the data between
-# runs (src/sync_data.py). Setup, secrets and the commands for this computer:
-# fullrun.md, "Automatic updates".
+# runs (src/sync_data.py). The secrets it needs are the secrets.* names below,
+# set under Settings -> Secrets and variables -> Actions.
 name: Update fantezianaliz.com
 
 on:

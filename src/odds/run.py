@@ -2,21 +2,25 @@
 from __future__ import annotations
 
 import argparse
-import csv
 import json
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 import hashlib
 import importlib.metadata
 import math
 from pathlib import Path
-import re
 import sys
 import uuid
 
-from data_loader import load_seasons
-
 ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:  # Run as a file, the project root is not on the path.
+    sys.path.insert(0, str(ROOT))
+
+from src.shared import parse_utc, season_folder, utc_now, write_csv  # noqa: E402
+from src.shared import utc_stamp as stamp  # noqa: E402
+from data_loader import load_seasons  # noqa: E402
+
+SHARED_MODULE = ROOT / "src" / "shared.py"
 INPUT = ROOT / "data" / "final" / "sportmonks"
 # The published product: one file, overwritten by each forecast.
 OUTPUT = ROOT / "data" / "final" / "odds"
@@ -44,31 +48,14 @@ PREDICTION_COLUMNS = [
 METRIC_COLUMNS = ["phase", "season", "candidate", "matches", "log_loss", "brier_score", "accuracy"]
 
 
-def stamp(value):
-    return value.astimezone(timezone.utc).isoformat() if value else ""
-
-
-def write_csv(path, rows, columns=None):
-    rows = list(rows)
-    columns = columns or sorted({key for row in rows for key in row}) or ["note"]
-    with path.open("w", encoding="utf-8-sig", newline="") as stream:
-        writer = csv.DictWriter(stream, fieldnames=columns, extrasaction="raise")
-        writer.writeheader()
-        writer.writerows(rows)
-
+# Writing, seasons and timestamps come from src/shared.py. Every file here is
+# written whole through a temporary file, including the published forecast.
 
 def status(folder, state, message, **extra):
     write_csv(folder / "run_status.csv", [{
-        "status": state, "message": message, "updated_at_utc": stamp(datetime.now(timezone.utc)),
+        "status": state, "message": message, "updated_at_utc": stamp(utc_now()),
         **extra,
     }])
-
-
-def season_name(value):
-    value = value.replace("/", "-")
-    if not re.fullmatch(r"\d{4}-\d{4}", value) or int(value[5:]) != int(value[:4]) + 1:
-        raise argparse.ArgumentTypeError("Use a season such as 2021/2022.")
-    return value
 
 
 def positive(value):
@@ -88,10 +75,9 @@ def positive_integer(value):
 def kickoff_bound(value):
     """Accept a plain date (read as UTC midnight) or a full ISO timestamp."""
     try:
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        return parse_utc(value)
     except ValueError as exc:
         raise argparse.ArgumentTypeError("Use YYYY-MM-DD or an ISO timestamp.") from exc
-    return parsed.replace(tzinfo=timezone.utc) if parsed.tzinfo is None else parsed.astimezone(timezone.utc)
 
 
 def describe(matches):
@@ -148,7 +134,7 @@ def record_inputs(folder, dataset, args):
     write_csv(folder / "season_summary.csv", summary)
     write_csv(folder / "team_summary.csv", team_summary)
     code = []
-    for path in sorted(Path(__file__).parent.glob("*.py")):
+    for path in [*sorted(Path(__file__).parent.glob("*.py")), SHARED_MODULE]:
         code.append({"path": str(path.resolve()), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
     write_csv(folder / "code_manifest.csv", code)
     settings = []
@@ -296,7 +282,7 @@ def rolling_predictions(history, targets, specs, args, phase, config=None):
                                feature_config=config)
             if not fitted.converged or fitted.training_latest_available_at >= cutoff:
                 raise ValueError("Model convergence or chronological cutoff check failed.")
-            generated_at = datetime.now(timezone.utc)
+            generated_at = utc_now()
             for match in games:
                 prediction = fitted.predict(match.home_team_id, match.away_team_id,
                                             neutral=match.neutral, season=match.season)
@@ -345,7 +331,7 @@ def paired_comparison(rows, selected):
         if selected not in pair or "frequency" not in pair:
             raise ValueError("Paired comparison requires identical evaluated fixtures.")
         chosen, baseline = pair[selected], pair["frequency"]
-        week = datetime.fromisoformat(chosen["kickoff_utc"]).date().toordinal() // 7
+        week = parse_utc(chosen["kickoff_utc"]).date().toordinal() // 7
         blocks[week].append((chosen["log_loss"] - baseline["log_loss"], chosen["brier_score"] - baseline["brier_score"]))
     values = list(blocks.values())
     if not values:
@@ -476,7 +462,7 @@ def write_diagnostics(folder, search, tuned, completed, args):
         folder, fold=fold, holdout=holdout, trials=search["trials"],
         best_value=search["best_value"], params=params, importance=importance,
         inputs=config.describe() if config else "",
-        generated=stamp(datetime.now(timezone.utc)))
+        generated=stamp(utc_now()))
     write_csv(folder / "fold_gaps.csv", rows)
     write_csv(folder / "learning_curve.csv", curve)
     if holdout_rows:
@@ -498,7 +484,7 @@ def upcoming(dataset, args):
     """
     targets = [m for m in dataset.matches if not m.outcome and m.state == "NS"]
     if args.round == "next":
-        after = args.from_date or datetime.now(timezone.utc)
+        after = args.from_date or utc_now()
         future = [m for m in targets if m.kickoff >= after]
         if not future:
             raise ValueError("No unplayed fixtures remain. Download the current season first.")
@@ -532,7 +518,7 @@ def forecast(dataset, args, folder):
         raise ValueError("No unplayed fixtures matched. Check --round, --from-date and --to-date "
                          "against the season schedule, and that the season is downloaded.")
     completed = [m for m in dataset.matches if m.outcome]
-    now = datetime.now(timezone.utc)
+    now = utc_now()
     first_cutoff = min(t.kickoff for t in targets) - timedelta(hours=args.cutoff_hours)
     all_tuned = load_gbdt_params(args.gbdt_params)
     config = feature_config(args)
@@ -568,7 +554,7 @@ def forecast(dataset, args, folder):
                                gbdt_params=tuned, feature_config=config)
             if not fitted.converged or fitted.training_latest_available_at >= cutoff:
                 raise ValueError("Model convergence or chronological cutoff check failed.")
-            generated_at = datetime.now(timezone.utc)
+            generated_at = utc_now()
             for match in games:
                 prediction = fitted.predict(match.home_team_id, match.away_team_id,
                                             neutral=match.neutral, season=match.season)
@@ -637,7 +623,7 @@ def backtest(dataset, args, folder):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=("coverage", "backtest", "predict"))
-    parser.add_argument("--seasons", nargs="+", type=season_name,
+    parser.add_argument("--seasons", nargs="+", type=season_folder,
                         help="Season folders; coverage discovers all if omitted. Backtest requires five or more consecutive finished seasons.")
     parser.add_argument("--input-root", type=Path, default=INPUT)
     parser.add_argument("--output-root", type=Path, default=RUNS,
@@ -703,7 +689,7 @@ def main(argv=None):
                      "cannot be destinations.")
     if args.seasons and len(args.seasons) != len(set(args.seasons)):
         parser.error("Each season must appear exactly once.")
-    folder = output_root / f"{datetime.now(timezone.utc):%Y%m%dT%H%M%SZ}_{args.command}_{uuid.uuid4().hex[:8]}"
+    folder = output_root / f"{utc_now():%Y%m%dT%H%M%SZ}_{args.command}_{uuid.uuid4().hex[:8]}"
     folder.mkdir(parents=True, exist_ok=False)
     print(f"Research output: {folder}", flush=True)
     status(folder, "running", "Reading completed season snapshots.")

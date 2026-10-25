@@ -6,7 +6,6 @@ competition is requested. A shared CSV cache bounds requests from multiple tabs.
 """
 
 import csv
-from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from http.client import HTTPException
 import io
@@ -19,6 +18,7 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from src.fetch.sportmonks import BASE, token
+from src.shared import utc_now, utc_stamp
 
 
 LIVE_SECONDS = 30
@@ -301,7 +301,7 @@ class LiveFeed:
                 rows = normalize(fixtures, league_id, season_id)
                 delay = LIVE_SECONDS if rows else IDLE_SECONDS
                 rows.extend(self.confirm_finished(fixtures, league_id, season_id))
-                meta.update(status="ok", fetched_at=datetime.now(timezone.utc).isoformat())
+                meta.update(status="ok", fetched_at=utc_stamp(utc_now()))
             except LiveUnavailable as error:
                 delay = error.retry
                 meta.update(status="unavailable", message=str(error))

@@ -1,32 +1,20 @@
 """Read published CSVs and write an isolated fantasy-XI experiment. No downloads."""
 import argparse
-import csv
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 import math
 from pathlib import Path
+import sys
 import uuid
 
 from optimizer import FORMATIONS, POSITIONS, Player, optimize, recommend, resolve_risk
 
 ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:  # Run as a file, the project root is not on the path.
+    sys.path.insert(0, str(ROOT))
+from src.shared import is_scheduled, parse_utc, read_csv, season_folder, utc_now, utc_stamp, write_csv  # noqa: E402
+
 FINAL = ROOT / "data" / "final"
-
-
-def read(path):
-    with path.open(encoding="utf-8-sig", newline="") as stream:
-        return list(csv.DictReader(stream))
-
-
-def write(path, rows, fields):
-    with path.open("w", encoding="utf-8-sig", newline="") as stream:
-        writer = csv.DictWriter(stream, fieldnames=fields)
-        writer.writeheader(); writer.writerows(rows)
-
-
-def time(value):
-    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    return parsed.replace(tzinfo=timezone.utc) if parsed.tzinfo is None else parsed.astimezone(timezone.utc)
 
 
 def money(value):
@@ -37,32 +25,32 @@ def money(value):
 
 
 def load_pool(season, now):
-    manifest = read(FINAL / "fantasy_pipeline" / season / "pipeline_status.csv")
+    manifest = read_csv(FINAL / "fantasy_pipeline" / season / "pipeline_status.csv", required=True)
     if len(manifest) != 1 or manifest[0]["status"] != "complete" or manifest[0]["season"] != season:
         raise ValueError("A completed fantasy pipeline for this season is required.")
     run_id = manifest[0]["pipeline_run_id"]
-    rows = read(FINAL / "player_projections" / season / "player_projections.csv")
+    rows = read_csv(FINAL / "player_projections" / season / "player_projections.csv", required=True)
     if not rows or any(r["pipeline_run_id"] != run_id or r["season"] != season for r in rows):
         raise ValueError("Missing projections or mixed pipeline generations/seasons.")
     rounds = {r["matchweek"] for r in rows}
     if len(rounds) != 1:
         raise ValueError("This experiment requires exactly one projected matchweek.")
     week = next(iter(rounds))
-    fixture_rows = read(FINAL / "sportmonks" / season / "fixtures.csv")
+    fixture_rows = read_csv(FINAL / "sportmonks" / season / "fixtures.csv", required=True)
     fixtures = {r["fixture_id"]: r for r in fixture_rows}
     if len(fixtures) != len(fixture_rows):
         raise ValueError("Duplicate fixture IDs.")
     round_games = [r for r in fixture_rows if r.get("round.name") == week]
     if not round_games:
         raise ValueError("Projected round absent from saved fixtures.")
-    deadline = min(time(r["kickoff"]) for r in round_games) - timedelta(hours=1)
+    deadline = min(parse_utc(r["kickoff"]) for r in round_games) - timedelta(hours=1)
     if now >= deadline:
         raise ValueError("The projected round's selection deadline has passed. Rebuild projections.")
-    tff_rows = read(FINAL / "tff_fantasy" / "tff_players.csv")
-    download = read(FINAL / "sportmonks" / season / "download_status.csv")
+    tff_rows = read_csv(FINAL / "tff_fantasy" / "tff_players.csv", required=True)
+    download = read_csv(FINAL / "sportmonks" / season / "download_status.csv", required=True)
     if len(download) != 1 or download[0].get("finished_at_utc") != manifest[0].get("sportmonks_finished_at_utc"):
         raise ValueError("Saved Sportmonks download changed; rebuild the fantasy pipeline.")
-    if any(time(r["updated_at_utc"]) > time(manifest[0]["tff_updated_at_utc"]) for r in tff_rows):
+    if any(parse_utc(r["updated_at_utc"]) > parse_utc(manifest[0]["tff_updated_at_utc"]) for r in tff_rows):
         raise ValueError("TFF data is newer than projections; rebuild the fantasy pipeline.")
     tff = {}
     for row in tff_rows:
@@ -80,14 +68,14 @@ def load_pool(season, now):
         seen.add(pid)
         reason = ""
         game, reference = fixtures.get(row["fixture_id"]), tff.get(pid)
-        if not game or game["state"].upper() not in {"NS", "TBA"}:
+        if not game or not is_scheduled(game):
             reason = "fixture_not_upcoming"
-        elif (time(game["kickoff"]) != time(row["kickoff_utc"])
+        elif (parse_utc(game["kickoff"]) != parse_utc(row["kickoff_utc"])
               or game.get("round.name") != week
               or (row["team_id"], row["opponent_id"]) not in
               {(game["home_team_id"], game["away_team_id"]), (game["away_team_id"], game["home_team_id"])}):
             reason = "fixture_changed"
-        elif time(row["generated_at_utc"]) > now or time(row["generated_at_utc"]) >= deadline:
+        elif parse_utc(row["generated_at_utc"]) > now or parse_utc(row["generated_at_utc"]) >= deadline:
             reason = "invalid_prediction_timestamp"
         elif not reference or (reference["sportmonks_team_id"], reference["position"]) != (row["team_id"], row["position"]):
             reason = "tff_identity_team_or_position_changed"
@@ -108,7 +96,7 @@ def load_pool(season, now):
                                row["position"], price, points,
                                float(row.get("recent_rating") or 0.0)))
     # Detect a pipeline publication that changed during the read.
-    if read(FINAL / "fantasy_pipeline" / season / "pipeline_status.csv") != manifest:
+    if read_csv(FINAL / "fantasy_pipeline" / season / "pipeline_status.csv", required=True) != manifest:
         raise ValueError("Pipeline changed during loading. Retry after it finishes.")
     return pool, exclusions, run_id, week
 
@@ -128,11 +116,11 @@ def main():
     parser.add_argument("--position", choices=POSITIONS, help="Filter recommendations by TFF position.")
     parser.add_argument("--time-limit", type=float, default=30, help="Seconds per formation solve.")
     args = parser.parse_args()
-    season = args.season.replace("/", "-")
-    parts = season.split("-")
-    if len(parts) != 2 or not all(len(p) == 4 and p.isdigit() for p in parts) or int(parts[1]) != int(parts[0]) + 1:
-        parser.error("Use a season such as 2026/2027.")
-    now = datetime.now(timezone.utc)
+    try:
+        season = season_folder(args.season)
+    except ValueError as error:
+        parser.error(str(error))
+    now = utc_now()
     folder = ROOT / "data" / "temp" / "xi_optimizer" / f"{now:%Y%m%dT%H%M%SZ}_{uuid.uuid4().hex[:8]}"
     folder.mkdir(parents=True)
     status = "failed"
@@ -140,7 +128,7 @@ def main():
     try:
         budget = money(args.budget)
         pool, excluded, run_id, week = load_pool(season, now)
-        write(folder / "excluded_players.csv", excluded, ["player_id", "player_name", "reason"])
+        write_csv(folder / "excluded_players.csv", excluded, ["player_id", "player_name", "reason"])
         settings = dict(budget=budget, formation=args.formation,
                         time_limit=args.time_limit, risk=args.risk)
         solution = optimize(pool, locked=args.lock, excluded=args.exclude, **settings)
@@ -150,7 +138,7 @@ def main():
             records = [{"player_id": p.id, "player_name": p.name, "team_id": p.team,
                         "team_name": p.team_name, "position": p.position, "price_million_try": p.price / 1_000_000,
                         "expected_points": p.points, "locked": p.id in args.lock} for p in solution.players]
-            write(folder / "selected_xi.csv", records, list(records[0]))
+            write_csv(folder / "selected_xi.csv", records, list(records[0]))
             summary = {"season": season, "matchweek": week, "pipeline_run_id": run_id,
                        "formation": solution.formation, "players": 11, "club_limit": 3,
                        "budget_million_try": budget / 1_000_000, "cost_million_try": solution.cost / 1_000_000,
@@ -160,16 +148,16 @@ def main():
                        "risk_weight_per_defensive_pair": resolve_risk(args.risk),
                        "same_club_defensive_pairs": solution.defensive_pairs,
                        "expected_points_standard_deviation": solution.standard_deviation}
-            write(folder / "summary.csv", [summary], list(summary))
+            write_csv(folder / "summary.csv", [summary], list(summary))
             if args.recommend:
                 recommendations = recommend(pool, locked=args.lock, excluded=args.exclude, position=args.position, **settings)
                 fields = ["player_id", "player_name", "team_name", "position", "expected_points", "price_million_try",
                           "completed_xi_expected_points", "points_below_optimal_xi", "completed_xi_cost_million_try", "formation"]
-                write(folder / "recommendations.csv", recommendations, fields)
+                write_csv(folder / "recommendations.csv", recommendations, fields)
             status, message = "complete", "Optimal XI saved. Experimental expected points, not guaranteed returns."
     except (ValueError, KeyError, OSError, RuntimeError, InvalidOperation) as error:
         message = str(error)
-    write(folder / "run_status.csv", [{"status": status, "message": message, "generated_at_utc": now.isoformat()}],
+    write_csv(folder / "run_status.csv", [{"status": status, "message": message, "generated_at_utc": utc_stamp(now)}],
           ["status", "message", "generated_at_utc"])
     print(f"{status}: {message}\nReports: {folder}")
     return 0 if status == "complete" else 1

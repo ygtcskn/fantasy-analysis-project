@@ -32,21 +32,18 @@ result from three rounds is an indication, not a finding.
 from __future__ import annotations
 
 import argparse
-import csv
-import io
 import math
 import statistics
 import sys
 import uuid
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from src.player_projections import run as projections
-
-UTC = timezone.utc
+from src.shared import is_played, number_or, parse_utc, read_csv, season_folder, utc_now, utc_stamp, write_csv
 SPORTMONKS = ROOT / "data" / "final" / "sportmonks"
 POINTS = ROOT / "data" / "final" / "points" / "player_match_points.csv"
 OUTPUT = ROOT / "data" / "temp" / "player_projections" / "backtests"
@@ -54,21 +51,6 @@ OUTPUT = ROOT / "data" / "temp" / "player_projections" / "backtests"
 # injury feed cannot be replayed backwards without inventing history.
 FORECAST = "baseline_expected_points"
 METHODS = ("model", "season_points_per_match", "last_three_matches", "position_average", "price")
-FINISHED = {"FT", "AET", "FT_PEN"}
-
-
-def read_csv(path: Path) -> list[dict]:
-    if not path.exists():
-        return []
-    return list(csv.DictReader(io.StringIO(path.read_text(encoding="utf-8-sig"))))
-
-
-def number(value, default=0.0) -> float:
-    try:
-        result = float(value)
-    except (TypeError, ValueError):
-        return default
-    return result if math.isfinite(result) else default
 
 
 def spearman(pairs) -> float:
@@ -111,10 +93,10 @@ def completed_rounds(season: str, input_root: Path) -> list[dict]:
             grouped[int(number_text)].append(row)
     rounds = []
     for matchweek, fixtures in sorted(grouped.items()):
-        if not all(row.get("state") in FINISHED for row in fixtures):
+        if not all(is_played(row) for row in fixtures):
             continue
         try:
-            kickoffs = [projections.utc(row["kickoff"]) for row in fixtures]
+            kickoffs = [parse_utc(row["kickoff"]) for row in fixtures]
         except (KeyError, ValueError):
             continue
         rounds.append({
@@ -131,7 +113,7 @@ def replay(season: str, matchweek: int, as_of: datetime, folder: Path, args) -> 
     destination = folder / f"mw{matchweek:02d}"
     code = projections.main([
         "--season", season, "--matchweek", str(matchweek),
-        "--as-of", as_of.isoformat().replace("+00:00", "Z"), "--historical",
+        "--as-of", utc_stamp(as_of), "--historical",
         "--input-root", str(args.input_root), "--points-path", str(args.points_path),
         "--output-root", str(destination / "output"), "--runs-root", str(destination / "runs"),
     ])
@@ -149,10 +131,10 @@ def actual_points(ledger: list[dict], season: str) -> tuple[dict, dict]:
         if row.get("season") != season:
             continue
         try:
-            kickoff = projections.utc(row["kickoff_utc"])
+            kickoff = parse_utc(row["kickoff_utc"])
         except (KeyError, ValueError):
             continue
-        points = number(row.get("points_total"))
+        points = number_or(row.get("points_total"))
         scored[(row["fixture_id"], row["player_id"])] = points
         history[row["player_id"]].append((kickoff, points))
     for entries in history.values():
@@ -176,7 +158,7 @@ def baselines(projected: list[dict], history: dict, as_of: datetime) -> dict:
             "season_points_per_match": statistics.fmean(played) if played else 0.0,
             "last_three_matches": statistics.fmean(played[-3:]) if played else 0.0,
             "position_average": position_mean.get(row["position"], 0.0),
-            "price": number(row.get("price_million_try")),
+            "price": number_or(row.get("price_million_try")),
         }
     return values
 
@@ -217,7 +199,7 @@ def main(argv=None) -> int:
     parser.add_argument("--no-selection", action="store_true",
                         help="Skip the optimizer comparison and report accuracy only.")
     args = parser.parse_args(argv)
-    season = projections.season_folder(args.season)
+    season = season_folder(args.season)
 
     optimizer = None
     if not args.no_selection:
@@ -239,7 +221,7 @@ def main(argv=None) -> int:
         print(f"No completed matchweeks in {season} at or after round {args.from_round}.",
               file=sys.stderr)
         return 1
-    folder = args.output_root / (datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    folder = args.output_root / (utc_now().strftime("%Y%m%dT%H%M%SZ")
                                  + "_backtest_" + uuid.uuid4().hex[:8])
     print(f"Backtesting {len(rounds)} completed matchweeks of {season}: "
           f"{', '.join(str(item['matchweek']) for item in rounds)}")
@@ -259,14 +241,14 @@ def main(argv=None) -> int:
             entry = {"season": season, "matchweek": matchweek, "player_id": pid,
                      "player_name": row["player_name"], "team_id": row["team_id"],
                      "team_name": row["team_name"], "position": row["position"],
-                     "price": number(row.get("price_million_try")),
+                     "price": number_or(row.get("price_million_try")),
                      "appeared": bool(played), "actual": actual,
-                     "model": number(row.get(FORECAST)), **naive[pid]}
+                     "model": number_or(row.get(FORECAST)), **naive[pid]}
             rows.append(entry)
             player_rows.append(entry)
         summary = {"season": season, "matchweek": matchweek, "players": len(rows),
                    "appeared": sum(1 for row in rows if row["appeared"]),
-                   "information_cutoff_utc": as_of.isoformat(),
+                   "information_cutoff_utc": utc_stamp(as_of),
                    "actual_points_mean": statistics.fmean(row["actual"] for row in rows)}
         for method in METHODS:
             pairs = [(row[method], row["actual"]) for row in rows]
@@ -318,17 +300,17 @@ def main(argv=None) -> int:
                         "xi_actual_points_total": sum(picks) if picks else ""})
     overall.sort(key=lambda row: row["mae"])
 
-    projections.write_csv(folder / "player_rounds.csv", player_rows)
-    projections.write_csv(folder / "round_scores.csv", round_rows)
-    projections.write_csv(folder / "method_summary.csv", overall)
+    write_csv(folder / "player_rounds.csv", player_rows)
+    write_csv(folder / "round_scores.csv", round_rows)
+    write_csv(folder / "method_summary.csv", overall)
     if team_rows:
-        projections.write_csv(folder / "selected_teams.csv", team_rows)
-    projections.write_csv(folder / "run_settings.csv", [
+        write_csv(folder / "selected_teams.csv", team_rows)
+    write_csv(folder / "run_settings.csv", [
         {"setting": "season", "value": season},
         {"setting": "matchweeks", "value": " ".join(str(item["matchweek"]) for item in rounds)},
         {"setting": "forecast_field", "value": FORECAST},
         {"setting": "selection_compared", "value": bool(optimizer)},
-        {"setting": "generated_at_utc", "value": datetime.now(UTC).isoformat()},
+        {"setting": "generated_at_utc", "value": utc_stamp(utc_now())},
         {"setting": "limitation", "value": "Current fantasy pool, prices and positions are "
                                            "applied to every replayed round."},
     ], ["setting", "value"])

@@ -30,9 +30,9 @@ incomparable.
 from __future__ import annotations
 
 import csv
-import io
-import math
 from pathlib import Path
+
+from src.shared import number, parse_utc, read_csv
 
 # Only the goal models publish expected goals; the boosted candidate leaves the
 # columns empty because it predicts outcome classes directly.
@@ -43,15 +43,7 @@ SOURCE_ODDS = "odds_model"
 SOURCE_INTERNAL = "internal_history"
 
 
-def _number(value):
-    try:
-        result = float(value)
-    except (TypeError, ValueError):
-        return None
-    return result if math.isfinite(result) else None
-
-
-def load_odds_goals(path: Path, fixtures: list[dict], season: str, cutoff, utc) -> tuple[dict, str]:
+def load_odds_goals(path: Path, fixtures: list[dict], season: str, cutoff) -> tuple[dict, str]:
     """Return ({fixture_id: (team_goals, opponent_goals)}, note).
 
     An empty mapping means the caller should use its own estimate; the note
@@ -61,7 +53,7 @@ def load_odds_goals(path: Path, fixtures: list[dict], season: str, cutoff, utc) 
     if not path.is_file():
         return {}, f"No odds forecast at {path.name}; used the internal team model."
     try:
-        rows = list(csv.DictReader(io.StringIO(path.read_text(encoding="utf-8-sig"))))
+        rows = read_csv(path, required=True)
     except (OSError, UnicodeError, csv.Error) as error:
         return {}, f"Odds forecast unreadable ({error}); used the internal team model."
     if not rows:
@@ -69,7 +61,7 @@ def load_odds_goals(path: Path, fixtures: list[dict], season: str, cutoff, utc) 
 
     candidates = sorted({row.get("candidate", "") for row in rows
                          if row.get("model") in GOAL_MODELS
-                         and _number(row.get("home_expected_goals")) is not None})
+                         and number(row.get("home_expected_goals")) is not None})
     if not candidates:
         return {}, "Odds forecast has no goal-model rows; used the internal team model."
     if len(candidates) > 1:
@@ -98,10 +90,10 @@ def load_odds_goals(path: Path, fixtures: list[dict], season: str, cutoff, utc) 
         if row.get("season") != season:
             return {}, "Odds forecast is for another season; used the internal team model."
         try:
-            if utc(row["kickoff_utc"]) != fixture["kickoff"]:
+            if parse_utc(row["kickoff_utc"]) != fixture["kickoff"]:
                 return {}, ("Odds forecast kickoff differs from the saved fixture; "
                             "used the internal team model.")
-            trained_to = utc(row["training_latest_available_at_utc"])
+            trained_to = parse_utc(row["training_latest_available_at_utc"])
         except (KeyError, ValueError):
             return {}, "Odds forecast has an unreadable timestamp; used the internal team model."
         if trained_to >= cutoff:
@@ -111,7 +103,7 @@ def load_odds_goals(path: Path, fixtures: list[dict], season: str, cutoff, utc) 
         if (row.get("home_team_id"), row.get("away_team_id")) != (fixture["home"], fixture["away"]):
             return {}, ("Odds forecast has different teams for a fixture; "
                         "used the internal team model.")
-        home, away = _number(row.get("home_expected_goals")), _number(row.get("away_expected_goals"))
+        home, away = number(row.get("home_expected_goals")), number(row.get("away_expected_goals"))
         if home is None or away is None or home <= 0 or away <= 0:
             return {}, "Odds forecast has missing or invalid expected goals; used the internal team model."
         goals[fixture_id] = (min(MAXIMUM_GOALS, max(MINIMUM_GOALS, home)),

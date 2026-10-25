@@ -29,14 +29,15 @@ projections it reads: this measures the model's opinion, not what will happen.
 from __future__ import annotations
 
 import argparse
-import csv
-import io
-import os
 import sys
 import time
 import uuid
-from datetime import datetime, timezone
 from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:  # Run as a file, the project root is not on the path.
+    sys.path.insert(0, str(ROOT))
+from src.shared import season_folder, utc_now, utc_stamp, write_csv  # noqa: E402
 
 if __package__:
     from .optimizer import FORMATIONS, POSITIONS, RISK_PRESETS, optimize, recommend, resolve_risk
@@ -46,10 +47,8 @@ else:
     from optimizer import FORMATIONS, POSITIONS, RISK_PRESETS, optimize, recommend, resolve_risk
     from run import load_pool
 
-ROOT = Path(__file__).resolve().parents[2]
 PUBLISHED = ROOT / "data" / "final" / "xi_optimizer"
 RUNS = ROOT / "data" / "temp" / "xi_optimizer" / "sweeps"
-UTC = timezone.utc
 
 COLUMNS = [
     "season", "matchweek", "pipeline_run_id", "rank", "player_id", "player_name",
@@ -58,22 +57,6 @@ COLUMNS = [
     "completed_xi_cost_million_try", "completed_xi_formation", "in_optimal_xi",
     "optimal_xi_expected_points", "risk", "formation_setting", "generated_at_utc",
 ]
-
-
-def write_csv(path: Path, rows, columns) -> None:
-    """Atomic replace, so a reader never sees a half-written sweep."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
-    try:
-        with temporary.open("w", encoding="utf-8-sig", newline="") as stream:
-            writer = csv.DictWriter(stream, fieldnames=columns, extrasaction="ignore")
-            writer.writeheader()
-            writer.writerows(rows)
-            stream.flush()
-            os.fsync(stream.fileno())
-        temporary.replace(path)
-    finally:
-        temporary.unlink(missing_ok=True)
 
 
 def sweep(pool, *, formation, risk, budget, time_limit, progress=print):
@@ -125,10 +108,10 @@ def main(argv=None) -> int:
                         help="Write only the run record, leaving data/final untouched.")
     args = parser.parse_args(argv)
 
-    season = args.season.replace("/", "-")
-    parts = season.split("-")
-    if len(parts) != 2 or not all(len(p) == 4 and p.isdigit() for p in parts) or int(parts[1]) != int(parts[0]) + 1:
-        parser.error("Use a season such as 2026/2027.")
+    try:
+        season = season_folder(args.season)
+    except ValueError as error:
+        parser.error(str(error))
     try:
         resolve_risk(args.risk)
     except ValueError as error:
@@ -136,7 +119,7 @@ def main(argv=None) -> int:
     if args.budget <= 0:
         parser.error("Budget must be positive.")
 
-    now = datetime.now(UTC)
+    now = utc_now()
     folder = args.runs_root / f"{now:%Y%m%dT%H%M%SZ}_sweep_{uuid.uuid4().hex[:8]}"
     status, message, rows = "failed", "", []
     try:
@@ -150,7 +133,7 @@ def main(argv=None) -> int:
                                  budget=int(round(args.budget * 1_000_000)),
                                  time_limit=args.time_limit)
         elapsed = time.perf_counter() - started
-        stamp = now.isoformat()
+        stamp = utc_stamp(now)
         rows = [{
             "season": season, "matchweek": week, "pipeline_run_id": run_id,
             "rank": index, "player_id": row["player_id"], "player_name": row["player_name"],
@@ -183,7 +166,7 @@ def main(argv=None) -> int:
         "status": status, "message": message, "players": len(rows),
         "season": season, "risk": args.risk, "formation_setting": args.formation,
         "published": status == "complete" and not args.no_publish,
-        "generated_at_utc": now.isoformat(),
+        "generated_at_utc": utc_stamp(now),
     }], ["status", "message", "players", "season", "risk", "formation_setting",
          "published", "generated_at_utc"])
     print(f"{status}: {message}")

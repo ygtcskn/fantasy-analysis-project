@@ -46,10 +46,6 @@ python src/odds/run.py coverage
 Coverage uses the standard library. Backtests require the research dependencies
 and at least five complete historical seasons; see the research README for commands.
 
-For an orientation to the whole project - what the Python computes, what the
-JavaScript draws, and how to decide where new code belongs - see
-[explain.md](explain.md).
-
 ## Workflow
 
 Run from the project directory:
@@ -61,7 +57,7 @@ python src/fetch/download_season.py --season 2026/2027 --refresh
 # Capture the current TFF table and update final/tff_fantasy/tff_players.csv
 python src/fetch/export_tff_browser.py --season 2026/2027
 
-# Rebuild fantasy points, projections, the website tables, then the database
+# Rebuild fantasy points, projections, radar statistics, then the database
 python src/run_pipeline.py --season 2026/2027
 ```
 
@@ -71,7 +67,7 @@ succeeded:
 
 1. fantasy points from completed matches (`src/points`)
 2. next-matchweek player projections (`src/player_projections`)
-3. the website tables (`src/tables`)
+3. radar statistics for every saved season (`src/spider`)
 4. SQLite (`src/fetch/build_database.py`), unless you pass `--skip-database`
 
 Then reload the site.
@@ -116,14 +112,6 @@ data/
     player_projections/2026-2027/
       player_projections.csv
       team_fixture_projections.csv
-    tables/2026-2027/           # Everything the website renders; built by src/tables
-      standings.csv
-      team_results.csv
-      team_season.csv
-      team_leaders.csv
-      player_season.csv
-      player_leaders.csv
-      tables_status.csv
     fantasy_pipeline/2026-2027/
       pipeline_status.csv
     odds/
@@ -140,7 +128,6 @@ src/
   player_projections/         # Next-matchweek forecasts, plus backtest.py
   odds/                       # Match result probabilities
   xi_optimizer/               # Squad selection under the fantasy rules
-  tables/                     # Every table the website shows, one module each
   web/                        # Local website, organised by feature
     core/                     # Shell: boot, navigation, sidebar, club kits
     data/                     # Everything that reads a file: CSV parser, published analysis
@@ -148,13 +135,13 @@ src/
     features/                 # One folder per page or panel
     styles/                   # Global appearance
     serve.py                  # Read-only local server
-  run_pipeline.py             # Points, projections, tables and SQLite in one publication
+  run_pipeline.py             # Points, projections, radar statistics and SQLite in one publication
 ```
 
 Every module publishes to `data/final/` and writes its working records to
 `data/temp/`. Nothing writes anywhere else.
 
-Provider code lives in `src/fetch/`, historical fantasy scoring in `src/points/`, player forecasts in `src/player_projections/`, squad selection in `src/xi_optimizer/`, and the website's tables in `src/tables/` ([details](src/tables/README.md)) - season totals, league table, leader cards, ratings and tiers, computed in Python and published as CSV. The pages are being switched over to read them one at a time; until a page is switched it still computes its own figures in the browser, in `src/web/lib/` ([radar](src/web/lib/radar.md), [team charts](src/web/lib/team-analysis.md)) and `src/web/features/` ([distribution](src/web/features/statistics/distribution.md)). The website is organised by feature and is described in [src/web/README.md](src/web/README.md). `src/run_pipeline.py` connects the saved CSVs to every analysis and to SQLite. `src/player_projections/backtest.py` scores the forecasts against what actually happened and against model-free baselines; run it before trusting a selection. The provider scripts find `.env` and create `data/` at the project root regardless of the working directory. They also support module invocation from the project root, for example `python -m src.fetch.download_season --season 2026/2027`.
+Provider code lives in `src/fetch/`, historical fantasy scoring in `src/points/`, player forecasts in `src/player_projections/`, and squad selection in `src/xi_optimizer/`. Season totals, rankings and ratings are computed in the browser, in `src/web/lib/` ([radar](src/web/lib/radar.md), [team charts](src/web/lib/team-analysis.md)) and `src/web/features/` ([distribution](src/web/features/statistics/distribution.md)). The website is organised by feature and is described in [src/web/README.md](src/web/README.md). `src/run_pipeline.py` connects the saved CSVs to every analysis and to SQLite. `src/player_projections/backtest.py` scores the forecasts against what actually happened and against model-free baselines; run it before trusting a selection. The provider scripts find `.env` and create `data/` at the project root regardless of the working directory. They also support module invocation from the project root, for example `python -m src.fetch.download_season --season 2026/2027`.
 
 ## Fantasy analysis pipeline
 

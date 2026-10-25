@@ -16,13 +16,3 @@
 .statistics-chart svg [tabindex]:focus-visible { outline: 2px solid var(--statistics-plot-line); }
 .statistics-radar-empty { margin: 8px 0 0; padding: 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-soft); color: var(--ink); font-size: 12px; line-height: 1.5; }
 .statistics-radar-empty p { margin: 6px 0 0; color: var(--muted); }
-
-/* The raw values and calculation details beneath each plot. */
-.statistics-metric-details { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 10px; font-size: 11px; }
-.statistics-metric-details summary { cursor: pointer; color: var(--ink); font-weight: 600; }
-.statistics-metric-scroll { overflow-x: auto; margin-top: 10px; max-height: 420px; }
-.statistics-metric-table { width: 100%; min-width: 500px; font-size: 11px; border-collapse: collapse; }
-.statistics-metric-table th, .statistics-metric-table td { padding: 8px 6px; vertical-align: top; border-bottom: 1px solid var(--line); white-space: normal; }
-.statistics-metric-table th { text-align: left; }
-.statistics-metric-table thead th { position: sticky; top: 0; background: var(--surface-raised); }
-.statistics-metric-table small { display: block; margin-top: 4px; color: var(--muted); font-size: 10px; font-weight: 400; }

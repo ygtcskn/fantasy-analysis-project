@@ -16,7 +16,6 @@ import csv
 import io
 import os
 from pathlib import Path
-import re
 import shutil
 import subprocess
 import sys
@@ -28,9 +27,10 @@ PROJECT_ROOT = WEB_ROOT.parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.shared import season_folder  # noqa: E402
 from src.web.serve import (  # noqa: E402
     ASSET_PATH, CSV_NAMES, DATA_ROOT, FINAL_ROOT, HISTORY_NAMES, OPTIONAL_CSV_NAMES,
-    analysis_files, history_seasons, season_name,
+    analysis_files, history_seasons,
 )
 
 
@@ -44,7 +44,6 @@ CODE_REMOTE, CODE_BRANCH = "origin", "main"
 MAX_FILE_BYTES = 25 * 1024 * 1024
 # No page uses them, and they are third-party artwork that is not ours to publish.
 EXCLUDED_ASSETS = ("assets/face-portraits/",)
-TABLE_NAME = re.compile(r"[a-z0-9_]+\.csv")
 SITE_FLAG = ("const SITE_PUBLISHED = false;", "const SITE_PUBLISHED = true;")
 # The first line of _headers marks a folder as this script's output, so a
 # rebuild never deletes a folder it did not write.
@@ -126,10 +125,6 @@ def data_files(season):
     wanted = {name: csv_root / name for name in sorted(CSV_NAMES | OPTIONAL_CSV_NAMES)}
     wanted.update(analysis_files(season))
     wanted["spider/spider_stats.csv"] = FINAL_ROOT / "spider" / season / "spider_stats.csv"
-    tables_root = FINAL_ROOT / "tables" / season
-    if tables_root.is_dir():
-        wanted.update({f"tables/{source.name}": source for source in sorted(tables_root.iterdir())
-                       if source.is_file() and TABLE_NAME.fullmatch(source.name)})
     earlier = [name for name in history_seasons() if name < season]
     for name in earlier:
         for file in sorted(HISTORY_NAMES):
@@ -178,7 +173,7 @@ def headers_file(season, code):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--season", type=season_name, default="2026/2027")
+    parser.add_argument("--season", type=season_folder, default="2026/2027")
     parser.add_argument("--local-code", action="store_true",
                         help="Publish this folder's website code instead of GitHub's main, to preview before pushing.")
     args = parser.parse_args()

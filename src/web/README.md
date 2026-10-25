@@ -89,7 +89,7 @@ Open **http://127.0.0.1:8000** in your browser and keep the terminal open. The w
 
 The main dataset loads from your saved CSVs and does not run your Python analysis. Maç Haftası additionally requests live Sportmonks data while visible, as described below. Finish downloading/exporting before refreshing; files are validated together before replacing the displayed dataset. Missing files or validation errors keep the previous loaded data. All seven supported CSVs must exist for automatic loading.
 
-The server binds only to this computer and serves allowed website assets, seven core CSVs, optional `fixture_formations.csv` for team pages, and the tables `src/tables` publishes under `data/final/tables/<season>/` (as `/local-data/tables/<name>.csv`). Those tables hold the season totals, league table, leader cards, ratings and tiers; the pages are being switched over to read them instead of computing their own, one page at a time. Run `python src/run_pipeline.py --season 2026/2027` to build them - see [src/tables/README.md](../tables/README.md). It does not expose `.env`, source Python files, databases, raw exports, or directory listings. It creates no files. Only `/local-live.csv` requests provider data. Stop it with Ctrl+C when finished.
+The server binds only to this computer and serves allowed website assets, seven core CSVs, and optional `fixture_formations.csv` for team pages. It does not expose `.env`, source Python files, databases, raw exports, or directory listings. It creates no files. Only `/local-live.csv` requests provider data. Stop it with Ctrl+C when finished.
 
 ## Live match centre
 
@@ -433,13 +433,13 @@ Season summaries sum count metrics over the player's appearances. Sportmonks wri
 
 Every page follows one set of rules, so a number reads the same wherever it appears:
 
-- **Finished match** - `FT`, `AET`, `FT_PEN`, `AWARDED` or `WO` (`core/match-rules.js`, the same list as `src/tables/common.py`).
+- **Finished match** - `FT`, `AET`, `FT_PEN`, `AWARDED` or `WO` (`core/match-rules.js`; the pipeline's copy is `FINISHED_STATES` in `src/shared.py`). Fantasy points and the models use the narrower played list, `FT`, `AET` or `FT_PEN`: an awarded result has a score but no match behind it.
 - **Appearance ("Maç")** - a finished match the player was on the pitch for (`minutes_played` > 0), the fantasy ledger's rule. Unused substitutes do not count.
 - **Blanks** - Sportmonks leaves zeros blank. A blank count on a covered match (any of touches, passes, total duels, shots, fouls, possession lost recorded) is zero; elsewhere it is unknown and totals show an asterisk.
 - **Names** - one name per player ID on every page, from his Sportmonks profile (`profileName` in `core/match-rules.js`): match rows, the ledger, projections, the optimizer and the live feed are looked up by ID rather than shown as sent, because each keeps the spelling of the day it was captured. A multi-word `display_name` sharing no word with the player's own names is a provider error (Stefan Savić's profile reads "André Hainault") and is replaced by his registered name.
 - **Players who left the league** - anyone missing from `current_squads.csv` is left out of every player list, leader card, best-player list and the team page's season leaders, which say how many were left out.
 - **Cards** - team card totals come from the team statistics (`team_metrics.csv`) everywhere: the match result table, the live centre and Maç Haftası's season ranks. Sportmonks counts a second yellow as a yellow card there, and any dismissal as a red card. Fantasy points still score each player's own card columns.
-- **Times** - kickoffs and dates are shown in Turkish time (`Europe/Istanbul`), from `starting_at_timestamp` or the UTC kickoff (`core/locale.js`).
+- **Times** - kickoffs and dates are shown in Turkish time (`Europe/Istanbul`), from `starting_at_timestamp` or the UTC kickoff (`core/locale.js`). Every time the pipeline saves is UTC, written as `2026-10-25T18:30:00Z` (`utc_stamp` in `src/shared.py`).
 - **Words** - *Reyting* is Sportmonks' match rating, *Puan* is league points, *Fantezi puanı (FP)* is TFF fantasy points; *İ/D* is home/away; positions are always Turkish (Kaleci, Defans, Orta saha, Forvet); shares are written %55.
 - **Pitch** - Kadro Kur, Maç Haftası's elevens and the team page draw one pitch (`styles/pitch.css`): Kadro Kur's grass and lines, club shirts from `core/kits.js` and the same rating badge.
 - **Colours** - win, draw and loss use one palette (`--result-win/draw/loss`) for chips, charts and the live table; anything that compares clubs uses each club's colour from `core/team-colors.js`.

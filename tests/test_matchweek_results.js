@@ -18,6 +18,9 @@ function setup() {
   const context = vm.createContext({ state, fantasyState, currentFixtureScores: () => scores,
     renderMatchweek: () => renders++,
     number: (value) => value == null || String(value).trim() === "" || !Number.isFinite(Number(value)) ? null : Number(value),
+    // tier-list.js supplies this on the site; without its player index it falls
+    // back to the name the row was saved with, as the real one does.
+    playerName: (id, fallback = "") => String(fallback || "").trim() || (id ? `Oyuncu ${id}` : "—"),
   });
   // The site's shared match rules load first, as they do in index.html.
   vm.runInContext(readFileSync(join(__dirname, "../src/web/core/match-rules.js"), "utf8"), context);

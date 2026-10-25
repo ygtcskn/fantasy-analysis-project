@@ -10,7 +10,7 @@ from pathlib import Path
 from unittest import mock
 
 from src.spider import radar_reliability as reliability
-from src.tables.common import write_csv
+from src.shared import write_csv
 
 
 def row(minutes, **values):

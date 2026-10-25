@@ -22,7 +22,7 @@ class RecommendationAdapterTests(unittest.TestCase):
                                      RISK_PRESETS={"balanced": 0.0, "low": 0.75, "high": -0.75},
                                      optimize=Mock(return_value=solution))
         self.source = SimpleNamespace(load_pool=Mock(return_value=([self.player, self.next_player], [], "generation", "5")),
-                                      FINAL=Path("unused"), read=Mock(return_value=[
+                                      FINAL=Path("unused"), read_csv=Mock(return_value=[
                                           {"sportmonks_player_id": "2", "match_status": "matched", "so_percent": "43.6"},
                                           {"sportmonks_player_id": "1", "match_status": "unmatched", "so_percent": "12.0"},
                                       ]))
@@ -67,7 +67,7 @@ class SubstituteTests(RecommendationAdapterTests):
     def setUp(self):
         super().setUp()
         self.source.FINAL = Path("unused")
-        self.source.read = Mock(return_value=[{
+        self.source.read_csv = Mock(return_value=[{
             "sportmonks_player_id": "3", "sportmonks_team_id": "10",
             "match_status": "matched", "price_million_try": "6",
         }])

@@ -4,12 +4,11 @@ from __future__ import annotations
 import argparse
 import csv
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 import hashlib
 import math
 from pathlib import Path
 import re
-import os
 import sys
 import uuid
 
@@ -29,7 +28,10 @@ from src.player_projections.availability import (
     AVAILABILITY_COLUMNS, apply_availability, resolve_availability,
 )
 from src.player_projections.team_goals import SOURCE_INTERNAL, SOURCE_ODDS, load_odds_goals
-UTC = timezone.utc
+from src.shared import (
+    CALLED_OFF_STATES, UTC, fixture_state, integer_or, is_finished, is_played, is_scheduled,
+    number_or, parse_utc, read_csv, season_folder, utc_now, utc_stamp, write_csv,
+)
 POSITIONS = ("KL", "DEF", "OS", "FOR")
 OUTPUT_COLUMNS = [
     "season", "player_id", "player_name", "team_id", "team_name", "position",
@@ -62,61 +64,9 @@ TEAM_COLUMNS = ["season", "fixture_id", "matchweek", "kickoff_utc", "home_team_i
                 "information_cutoff_utc", "projection_status"]
 
 
-def read_csv(path: Path) -> list[dict[str, str]]:
-    with path.open(encoding="utf-8-sig", newline="") as stream:
-        return list(csv.DictReader(stream))
-
-
-def write_csv(path: Path, rows, columns=None) -> None:
-    rows = list(rows)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    columns = columns or sorted({key for row in rows for key in row}) or ["message"]
-    temporary = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
-    try:
-        with temporary.open("x", encoding="utf-8-sig", newline="") as stream:
-            writer = csv.DictWriter(stream, fieldnames=columns, extrasaction="raise")
-            writer.writeheader()
-            writer.writerows(rows)
-            stream.flush()
-            os.fsync(stream.fileno())
-        temporary.replace(path)
-    finally:
-        if temporary.exists():
-            temporary.unlink()
-
-
-def number(value, default=0.0) -> float:
-    try:
-        result = float(value)
-        return result if math.isfinite(result) else default
-    except (TypeError, ValueError):
-        return default
-
-
-def integer(value, default=0) -> int:
-    try:
-        return int(float(value))
-    except (TypeError, ValueError):
-        return default
-
-
-def utc(value: str) -> datetime:
-    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    return parsed.replace(tzinfo=UTC) if parsed.tzinfo is None else parsed.astimezone(UTC)
-
-
-def stamp(value: datetime) -> str:
-    return value.astimezone(UTC).isoformat()
-
-
-def season_folder(value: str) -> str:
-    value = value.replace("/", "-")
-    if not re.fullmatch(r"\d{4}-\d{4}", value):
-        raise ValueError("Season must look like 2026/2027")
-    first, last = map(int, value.split("-"))
-    if last != first + 1:
-        raise ValueError("Season years must be consecutive")
-    return value
+# Reading, writing, numbers, seasons and timestamps come from src/shared.py.
+# Every input here is required: a missing file must stop the run rather than
+# project an empty pool, so reads pass required=True.
 
 
 def weighted_rate(rows: list[dict], field: str, forecast: datetime,
@@ -208,21 +158,21 @@ def load_fixture_results(seasons: list[str], forecast: datetime, input_root: Pat
         scores_path = folder / "fixture_scores.csv"
         if not all(path.exists() for path in (status_path, fixtures_path, scores_path)):
             continue
-        status = read_csv(status_path)
+        status = read_csv(status_path, required=True)
         if len(status) != 1 or status[0].get("status", "").lower() != "complete":
             continue
-        fixtures = read_csv(fixtures_path)
-        scores = read_csv(scores_path)
+        fixtures = read_csv(fixtures_path, required=True)
+        scores = read_csv(scores_path, required=True)
         current = defaultdict(dict)
         for row in scores:
             if row.get("description") == "CURRENT" and row.get("score.participant") in {"home", "away"}:
-                current[row["fixture_id"]][row["score.participant"]] = integer(row.get("score.goals"), -1)
+                current[row["fixture_id"]][row["score.participant"]] = integer_or(row.get("score.goals"), -1)
         for row in fixtures:
-            if (row.get("league_id") != "600" or row.get("state") != "FT"
+            if (row.get("league_id") != "600" or not is_played(row)
                     or row.get("length") != "90" or re.search(r"award|abandon|walkover|cancel", " ".join(
                         row.get(key, "") for key in ("state", "details", "result_info")), re.I)):
                 continue
-            kickoff = utc(row["kickoff"])
+            kickoff = parse_utc(row["kickoff"])
             score = current.get(row["fixture_id"], {})
             if kickoff >= forecast or set(score) != {"home", "away"} or min(score.values()) < 0:
                 continue
@@ -277,15 +227,15 @@ def load_target_fixtures(season: str, matchweek: int | None, forecast: datetime,
     round whose result is already known.
     """
     folder = input_root / season
-    rows = read_csv(folder / "fixtures.csv")
-    teams = {row["id"]: row for row in read_csv(folder / "teams.csv")}
-    status = read_csv(folder / "download_status.csv")
+    rows = read_csv(folder / "fixtures.csv", required=True)
+    teams = {row["id"]: row for row in read_csv(folder / "teams.csv", required=True)}
+    status = read_csv(folder / "download_status.csv", required=True)
     if len(status) != 1 or status[0].get("status", "").lower() != "complete":
         raise ValueError("Target season download must be complete before projecting players")
     rounds = defaultdict(list)
     for row in rows:
         if row.get("league_id") == "600":
-            round_number = integer(row.get("round.name") or row.get("round"), -1)
+            round_number = integer_or(row.get("round.name") or row.get("round"), -1)
             if round_number >= 1:
                 rounds[round_number].append(row)
     # Teams.csv is the saved season membership, including a possible bye in
@@ -299,20 +249,20 @@ def load_target_fixtures(season: str, matchweek: int | None, forecast: datetime,
         if len(set(members)) != len(members) or any(team not in teams for team in members):
             return False
         try:
-            return all((historical or row.get("state") in {"NS", "TBA"})
-                       and utc(row["kickoff"]) - timedelta(hours=1) > forecast for row in group)
+            return all((historical or is_scheduled(row))
+                       and parse_utc(row["kickoff"]) - timedelta(hours=1) > forecast for row in group)
         except (KeyError, ValueError):
             return False
 
     if matchweek is None:
         candidates = [number for number, group in rounds.items() if complete_future_round(group)]
-        matchweek = min(candidates, key=lambda number: min(utc(row["kickoff"]) for row in rounds[number])) if candidates else None
+        matchweek = min(candidates, key=lambda number: min(parse_utc(row["kickoff"]) for row in rounds[number])) if candidates else None
     elif not complete_future_round(rounds.get(matchweek, [])):
         raise ValueError(f"Matchweek {matchweek} must be complete, unstarted, and before its fantasy deadline")
     fixtures = []
     by_team = {}
     for row in rounds.get(matchweek, []):
-        fixture = {"fixture_id": row["fixture_id"], "kickoff": utc(row["kickoff"]),
+        fixture = {"fixture_id": row["fixture_id"], "kickoff": parse_utc(row["kickoff"]),
                    "home": row["home_team_id"], "away": row["away_team_id"]}
         fixtures.append(fixture)
         if fixture["home"] in by_team or fixture["away"] in by_team:
@@ -346,8 +296,8 @@ def main(argv=None) -> int:
     season = season_folder(args.season)
     if args.historical and not args.as_of:
         parser.error("--historical requires --as-of")
-    generated = utc(args.as_of) if args.as_of else datetime.now(UTC)
-    if generated > datetime.now(UTC):
+    generated = parse_utc(args.as_of) if args.as_of else utc_now()
+    if generated > utc_now():
         parser.error("--as-of cannot be in the future")
     fixtures, target_by_team, teams, matchweek, target_paths = load_target_fixtures(
         season, args.matchweek, generated, args.input_root, historical=args.historical)
@@ -359,7 +309,7 @@ def main(argv=None) -> int:
             write_csv(destination / "player_projections.csv", [], OUTPUT_COLUMNS)
             write_csv(destination / "team_fixture_projections.csv", [], TEAM_COLUMNS)
             write_csv(destination / "run_status.csv", [{"status": "complete", "season": season,
-                      "players": 0, "fixtures": 0, "generated_at_utc": stamp(generated),
+                      "players": 0, "fixtures": 0, "generated_at_utc": utc_stamp(generated),
                       "projection_status": "no_upcoming_complete_round",
                       "message": "No complete unstarted matchweek before its deadline is available."}])
         print(f"No upcoming complete round for {season}; cleared current projections at {output}.")
@@ -370,12 +320,12 @@ def main(argv=None) -> int:
     if rules.minutes_threshold != 60 or rules.clean_sheet_minutes != 60:
         raise ValueError("Projection minutes model currently requires the reviewed 60-minute rules")
 
-    tff_rows = read_csv(args.tff_players)
-    ledger_rows = read_csv(args.points_path)
+    tff_rows = read_csv(args.tff_players, required=True)
+    ledger_rows = read_csv(args.points_path, required=True)
     if not ledger_rows:
         raise ValueError("Points ledger is empty; rebuild points before projections")
     availability_paths = [args.input_root / season / name for name in ("team_sidelined.csv", "fixture_sidelined.csv")]
-    team_absences, fixture_absences = [read_csv(path) if path.exists() else [] for path in availability_paths]
+    team_absences, fixture_absences = [read_csv(path, required=True) if path.exists() else [] for path in availability_paths]
     current_pool = {}
     excluded = []
     for row in tff_rows:
@@ -404,7 +354,7 @@ def main(argv=None) -> int:
            for path in ledger_dependencies):
         raise ValueError("Points inputs are newer than the saved ledger; rebuild points before projections")
     results, result_paths = load_fixture_results(result_seasons, information_cutoff, args.input_root)
-    current_fixture_ids = {row["fixture_id"] for row in read_csv(args.input_root / season / "fixtures.csv")}
+    current_fixture_ids = {row["fixture_id"] for row in read_csv(args.input_root / season / "fixtures.csv", required=True)}
     eligible_current_ids = {row["fixture_id"] for row in results if row["fixture_id"] in current_fixture_ids}
     ledger_fixture_ids = {row.get("fixture_id") for row in ledger_rows if row.get("season") == season}
     if eligible_current_ids - ledger_fixture_ids:
@@ -415,22 +365,22 @@ def main(argv=None) -> int:
     current_by_player = defaultdict(list)
     for row in ledger_rows:
         try:
-            kickoff = utc(row["kickoff_utc"])
+            kickoff = parse_utc(row["kickoff_utc"])
         except (ValueError, KeyError):
             continue
-        if kickoff >= information_cutoff or number(row.get("minutes_played")) <= 0:
+        if kickoff >= information_cutoff or number_or(row.get("minutes_played")) <= 0:
             continue
         record = {
-            "kickoff": kickoff, "minutes": number(row.get("minutes_played")),
+            "kickoff": kickoff, "minutes": number_or(row.get("minutes_played")),
             # A blank or zero rating means the provider published none; 0 is not
             # a real value on a 1-10 scale, so it must not enter an average.
-            "rating": number(row.get("rating"), 0.0) or None,
-            "started": integer(row.get("started")), "goals": number(row.get("goals")),
-            "assists": number(row.get("assists")), "saves": number(row.get("saves")),
-            "penalties_saved": number(row.get("penalties_saved")),
-            "penalties_missed": number(row.get("penalties_missed")),
-            "yellow_cards": number(row.get("yellow_cards")), "dismissals": number(row.get("dismissals")),
-            "own_goals": number(row.get("own_goals")), "bonus": number(row.get("bonus")),
+            "rating": number_or(row.get("rating"), 0.0) or None,
+            "started": integer_or(row.get("started")), "goals": number_or(row.get("goals")),
+            "assists": number_or(row.get("assists")), "saves": number_or(row.get("saves")),
+            "penalties_saved": number_or(row.get("penalties_saved")),
+            "penalties_missed": number_or(row.get("penalties_missed")),
+            "yellow_cards": number_or(row.get("yellow_cards")), "dismissals": number_or(row.get("dismissals")),
+            "own_goals": number_or(row.get("own_goals")), "bonus": number_or(row.get("bonus")),
             "team_id": row.get("team_id", ""), "season": row.get("season", ""),
         }
         history[row["player_id"]].append(record)
@@ -440,7 +390,7 @@ def main(argv=None) -> int:
             current_by_player[row["player_id"]].append(record)
 
     completed_team_matches = defaultdict(int)
-    fixtures_current = read_csv(args.input_root / season / "fixtures.csv")
+    fixtures_current = read_csv(args.input_root / season / "fixtures.csv", required=True)
     for row in fixtures_current:
         if row.get("fixture_id") in eligible_current_ids:
             completed_team_matches[row["home_team_id"]] += 1
@@ -486,17 +436,16 @@ def main(argv=None) -> int:
     if args.no_odds:
         odds_goals, odds_note = {}, "Odds forecast disabled with --no-odds; used the internal team model."
     else:
-        odds_goals, odds_note = load_odds_goals(args.odds_path, fixtures, season,
-                                                information_cutoff, utc)
+        odds_goals, odds_note = load_odds_goals(args.odds_path, fixtures, season, information_cutoff)
     team_goals_source = SOURCE_ODDS if odds_goals else SOURCE_INTERNAL
     print(odds_note)
     prior_strength = 1.5
     projection_rows = []
-    pending_prior_round = any(integer(row.get("round.name") or row.get("round"), -1) < matchweek
-                              and row.get("state") not in {"FT", "AET", "FT_PEN", "CANCELLED", "AWARDED"}
+    pending_prior_round = any(integer_or(row.get("round.name") or row.get("round"), -1) < matchweek
+                              and not is_finished(row) and fixture_state(row) not in CALLED_OFF_STATES
                               for row in fixtures_current if row.get("league_id") == "600")
     projection_status = "experimental_provisional_previous_round_incomplete" if pending_prior_round else "experimental"
-    download_status = read_csv(args.input_root / season / "download_status.csv")[0]
+    download_status = read_csv(args.input_root / season / "download_status.csv", required=True)[0]
     for pid, player in current_pool.items():
         tid, position = player["sportmonks_team_id"], player["position"]
         fixture, venue, opponent = target_by_team[tid]
@@ -594,8 +543,8 @@ def main(argv=None) -> int:
             "player_name": player.get("sportmonks_display_name") or player["player_name"],
             "team_id": tid,
             "team_name": player["sportmonks_team_name"] or player["team_name"], "position": position,
-            "price_million_try": number(player.get("price_million_try"), "") if number(player.get("price_million_try"), -1) > 0 else "", "fixture_id": fixture["fixture_id"],
-            "matchweek": matchweek, "kickoff_utc": stamp(fixture["kickoff"]),
+            "price_million_try": number_or(player.get("price_million_try"), "") if number_or(player.get("price_million_try"), -1) > 0 else "", "fixture_id": fixture["fixture_id"],
+            "matchweek": matchweek, "kickoff_utc": utc_stamp(fixture["kickoff"]),
             "opponent_id": opponent, "opponent_name": opponent_row.get("name", opponent),
             "opponent_short_code": opponent_code, "venue": venue,
             "opponent_display": f"{opponent_code} ({venue})", "expected_points": expected_points,
@@ -614,7 +563,7 @@ def main(argv=None) -> int:
             "recent_rating": recent_rating if rated_recent or position_rates[position]["rating"] else "",
             "rating_appearances": len(rated_recent), "confidence": confidence,
             "projection_status": projection_status,
-            "generated_at_utc": stamp(generated), "information_cutoff_utc": stamp(information_cutoff),
+            "generated_at_utc": utc_stamp(generated), "information_cutoff_utc": utc_stamp(information_cutoff),
             "availability_updated_at_utc": download_status.get("finished_at_utc", ""),
         }
         availability = resolve_availability(player_id=pid, team_id=tid,
@@ -625,14 +574,14 @@ def main(argv=None) -> int:
             availability["eligible_for_selection"] = False
             availability["availability_reason"] += " Price is missing; excluded from budget selection."
         projection_rows.append(apply_availability(projection, availability, FORECAST_FIELDS))
-    projection_rows.sort(key=lambda row: (not row["eligible_for_selection"], -number(row["expected_points"], -1e9), row["player_name"]))
+    projection_rows.sort(key=lambda row: (not row["eligible_for_selection"], -number_or(row["expected_points"], -1e9), row["player_name"]))
 
     write_csv(run / "player_projections.csv", projection_rows, OUTPUT_COLUMNS)
     write_csv(run / "excluded_players.csv", excluded,
               ["player_name", "team_name", "player_id", "team_id", "reason"])
     team_projection_rows = [{
         "season": season, "fixture_id": fixture["fixture_id"], "matchweek": matchweek,
-        "kickoff_utc": stamp(fixture["kickoff"]), "home_team_id": fixture["home"],
+        "kickoff_utc": utc_stamp(fixture["kickoff"]), "home_team_id": fixture["home"],
         "home_team_name": teams.get(fixture["home"], {}).get("name", fixture["home"]),
         "away_team_id": fixture["away"], "away_team_name": teams.get(fixture["away"], {}).get("name", fixture["away"]),
         "home_expected_goals": odds_goals.get(fixture["fixture_id"], (
@@ -643,7 +592,7 @@ def main(argv=None) -> int:
             min(3.5, max(.25, away_base * attack.get(fixture["away"], 1) * defense.get(fixture["home"], 1))),
         ))[1],
         "team_goals_source": team_goals_source,
-        "generated_at_utc": stamp(generated), "information_cutoff_utc": stamp(information_cutoff),
+        "generated_at_utc": utc_stamp(generated), "information_cutoff_utc": utc_stamp(information_cutoff),
         "projection_status": projection_status,
     } for fixture in fixtures]
     write_csv(run / "team_fixture_projections.csv", team_projection_rows, TEAM_COLUMNS)
@@ -651,15 +600,15 @@ def main(argv=None) -> int:
                                *result_paths, *(path for path in availability_paths if path.exists())]))
     write_csv(run / "input_manifest.csv", [{
         "path": str(path.resolve()), "bytes": path.stat().st_size,
-        "last_write_utc": stamp(datetime.fromtimestamp(path.stat().st_mtime, UTC)),
+        "last_write_utc": utc_stamp(datetime.fromtimestamp(path.stat().st_mtime, UTC)),
         "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
     } for path in source_paths], ["path", "bytes", "last_write_utc", "sha256"])
     write_csv(run / "run_settings.csv", [
         {"setting": "season", "value": season}, {"setting": "matchweek", "value": matchweek},
-        {"setting": "generated_at_utc", "value": stamp(generated)},
-        {"setting": "information_cutoff_utc", "value": stamp(information_cutoff)},
+        {"setting": "generated_at_utc", "value": utc_stamp(generated)},
+        {"setting": "information_cutoff_utc", "value": utc_stamp(information_cutoff)},
         {"setting": "model", "value": "component_projection_experimental_0.2"},
-        {"setting": "replayed_as_of", "value": stamp(generated) if args.as_of else ""},
+        {"setting": "replayed_as_of", "value": utc_stamp(generated) if args.as_of else ""},
         {"setting": "historical_replay", "value": bool(args.historical)},
         {"setting": "scoring_rules_unconfirmed", "value": "|".join(rules.unconfirmed)},
         {"setting": "team_availability_present", "value": availability_paths[0].exists()},
@@ -677,7 +626,7 @@ def main(argv=None) -> int:
     ], ["setting", "value"])
     run_status = [{"status": "complete", "season": season, "matchweek": matchweek,
         "players": len(projection_rows), "excluded_players": len(excluded),
-        "fixtures": len(fixtures), "generated_at_utc": stamp(generated),
+        "fixtures": len(fixtures), "generated_at_utc": utc_stamp(generated),
         "projection_status": projection_status, "message": "Experimental component player projections completed."}]
     write_csv(run / "run_status.csv", run_status)
     # Read the stamps before they are overwritten, not after.

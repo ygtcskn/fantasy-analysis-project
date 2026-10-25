@@ -13,7 +13,7 @@ from the saved player and team match exports by
 or team in one fixture. `p_` and `t_` columns keep the two provider feeds
 separate; the browser removes the prefix before calculating rates, reference
 percentiles and principal components. The normal `src/run_pipeline.py` run
-rebuilds and publishes the current and saved earlier seasons after the website tables.
+rebuilds and publishes the current and saved earlier seasons.
 Earlier-season files widen the reference group but do not change the plotted
 season's own match data. Missing statistics remain blank rather than zero.
 

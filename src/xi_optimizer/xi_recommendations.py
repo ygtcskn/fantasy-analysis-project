@@ -80,7 +80,7 @@ def recommendations(season, query):
             names = [r["player_name"] for r in excluded if r["player_id"] in missing]
             raise ValueError("Selected players have no eligible projection: " + ", ".join(names or sorted(missing)))
         bench_cost, reserved_clubs = 0, Counter()
-        records = source.read(source.FINAL / "tff_fantasy" / "tff_players.csv")
+        records = source.read_csv(source.FINAL / "tff_fantasy" / "tff_players.csv", required=True)
         # TFF's own selection rate (SO%), joined by reviewed Sportmonks ID only.
         # It is shown to the reader and never enters the objective.
         ownership = {row["sportmonks_player_id"]: row.get("so_percent", "")

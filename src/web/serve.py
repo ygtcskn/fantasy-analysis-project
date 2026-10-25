@@ -15,6 +15,8 @@ WEB_ROOT = Path(__file__).resolve().parent
 PROJECT_ROOT = WEB_ROOT.parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
+from src.shared import season_folder  # noqa: E402
+
 FINAL_ROOT = PROJECT_ROOT / "data" / "final"
 DATA_ROOT = FINAL_ROOT / "sportmonks"
 CSV_NAMES = {
@@ -65,15 +67,6 @@ def read_file(path):
             time.sleep(0.04 * (attempt + 1))
 
 
-def season_name(value):
-    if not re.fullmatch(r"\d{4}/\d{4}", value):
-        raise argparse.ArgumentTypeError("Use a season like 2026/2027.")
-    first, last = map(int, value.split("/"))
-    if last != first + 1:
-        raise argparse.ArgumentTypeError("Season years must be consecutive.")
-    return value.replace("/", "-")
-
-
 def history_seasons():
     """Season folders the radar can pool: complete enough to scope and aggregate."""
     return sorted(path.name for path in DATA_ROOT.iterdir()
@@ -100,10 +93,6 @@ def analysis_files(season):
 def make_handler(csv_root, live_enabled=True):
     from src.web.live import LiveFeed
     live_feed = LiveFeed(csv_root, enabled=live_enabled)
-    # Every season total, ranking and percentile the site draws is built by
-    # src/tables and published here; the browser only renders them. Resolved per
-    # request, so a pipeline run that adds a table needs no restart.
-    tables_root = FINAL_ROOT / "tables" / csv_root.name
     fantasy_files = analysis_files(csv_root.name)
 
     class Handler(BaseHTTPRequestHandler):
@@ -171,9 +160,6 @@ def make_handler(csv_root, live_enabled=True):
             elif path.startswith("/local-data/") and csv_name in fantasy_files:
                 file = fantasy_files[csv_name]
                 root, relative, content_type = file.parent, file.name, "text/csv; charset=utf-8"
-            elif re.fullmatch(r"/local-data/tables/[a-z0-9_]+\.csv", path):
-                root, relative = tables_root, csv_name.removeprefix("tables/")
-                content_type = "text/csv; charset=utf-8"
             elif ASSET_PATH.fullmatch(path if path != "/" else "/index.html"):
                 relative = (path if path != "/" else "/index.html").lstrip("/")
                 root, content_type = WEB_ROOT, ASSET_TYPES[Path(relative).suffix]
@@ -217,7 +203,7 @@ def make_handler(csv_root, live_enabled=True):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--season", type=season_name, default="2026/2027")
+    parser.add_argument("--season", type=season_folder, default="2026/2027")
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--no-live", action="store_true", help="Disable on-demand Sportmonks live requests.")
     args = parser.parse_args()

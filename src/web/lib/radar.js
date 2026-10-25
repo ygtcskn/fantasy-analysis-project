@@ -573,13 +573,25 @@ const RadarAttributes = (() => {
       }
     }
     let vector = new Array(width).fill(1 / Math.sqrt(width));
+    let restarted = false;
     for (let step = 0; step < iterations; step += 1) {
       const next = new Array(width).fill(0);
       for (let i = 0; i < width; i += 1) {
         for (let j = 0; j < width; j += 1) next[i] += covariance[i][j] * vector[j];
       }
       const norm = Math.sqrt(next.reduce((sum, value) => sum + value * value, 0));
-      if (!(norm > 0)) return null;
+      if (!(norm > 0)) {
+        // The even start can be exactly at right angles to the component -
+        // two members that move in opposite directions cancel out. Start once
+        // more from the covariance column with the most weight, which lies
+        // along the component; a matrix of zeros has no component at all.
+        const weights = covariance.map((row) => Math.hypot(...row));
+        const best = weights.indexOf(Math.max(...weights));
+        if (restarted || !(weights[best] > 0)) return null;
+        restarted = true;
+        vector = covariance[best].map((value) => value / weights[best]);
+        continue;
+      }
       const scaled = next.map((value) => value / norm);
       const settled = scaled.every((value, index) => Math.abs(value - vector[index]) < 1e-12);
       vector = scaled;
