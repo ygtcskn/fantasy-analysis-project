@@ -481,7 +481,7 @@ src/web/
     panels.css                  Shared panel, table and profile styles
     pitch.css                   The one pitch: grass, lines, shirts, rating badge
     theme-dark.css              Every dark rule: tokens, then shared panels, headings and zebra tables
-  assets/                     Club logos, role icons, player portraits
+  assets/                     Site logo and tab icon (brand/logo.svg), club logos, role icons, player portraits
 ```
 
 The server serves this whole folder by file suffix - `.html`, `.js`, `.css`,

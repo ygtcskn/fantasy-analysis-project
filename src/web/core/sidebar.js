@@ -4,7 +4,7 @@ function setupSidebar() {
   document.body.insertAdjacentHTML("afterbegin", `
     <button id="sidebar-toggle" class="sidebar-toggle" aria-controls="sidebar" aria-expanded="false" aria-label="Menüyü aç">☰</button>
     <aside id="sidebar" class="rail" inert>
-      <a class="brand" href="index.html?view=home" aria-label="Fantezi Analiz ana sayfa"><span class="brand-mark">FA<span>↗</span></span><span>FANTEZİ<br><strong>ANALİZ</strong></span></a>
+      <a class="brand" href="index.html?view=home" aria-label="Fantezi Analiz ana sayfa"><img class="brand-mark" src="assets/brand/logo.svg" alt="" width="48" height="48"><span>FANTEZİ<br><strong>ANALİZ</strong></span></a>
       <div class="rail-section">
         <p class="rail-label">SÜPER LİG</p>
         <nav data-nav-group="league" aria-label="Süper Lig sayfaları"></nav>
