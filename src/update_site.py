@@ -9,8 +9,11 @@ and the upload happens only when every step before it succeeded.
 The website code it publishes is GitHub's main as last pushed, not this folder
 (see src/web/build_static.py); the data is this folder's.
 
-Not automated: the TFF export, which needs you to log in. Until you run it,
-the site keeps the last TFF prices and positions.
+Two steps are optional and never hold the site back. The odds forecast runs
+when the next matchweek has none. The TFF export runs about once a day when the
+TFF_FANTASY_EMAIL and TFF_FANTASY_PASSWORD settings exist; if TFF refuses the
+login or asks for verification, the site keeps the last TFF prices and the
+next attempt waits a day.
 """
 
 import argparse
@@ -41,6 +44,10 @@ LOCK = STATE / "update.lock"
 RUN_COLUMNS = ["started_at_utc", "finished_at_utc", "season", "status", "reason",
                "steps", "failed_step", "message", "log_file"]
 PREDICTIONS = ROOT / "data" / "final" / "odds" / "predictions.csv"
+TFF_PLAYERS = ROOT / "data" / "final" / "tff_fantasy" / "tff_players.csv"
+# Prices and selection rates move daily at most; one export a day is enough,
+# and one failed attempt a day is all a refused login should cost.
+TFF_EVERY = timedelta(hours=20)
 # The odds model's environment (XGBoost, Optuna): the project's .venv on this
 # computer. Where there is none, as on GitHub's servers, the packages are
 # installed in the Python running this script.
@@ -55,7 +62,7 @@ DAILY = timedelta(hours=24)
 # After a failed run, wait this long before trying again, so a lasting problem
 # does not repeat the whole download every half hour.
 RETRY_AFTER = timedelta(hours=2)
-STEP_MINUTES = {"download": 60, "odds": 30, "pipeline": 60, "build": 15, "upload": 30}
+STEP_MINUTES = {"download": 60, "tff": 15, "odds": 30, "pipeline": 60, "build": 15, "upload": 30}
 # A lock or an in-progress download older than the longest possible run was abandoned.
 STALE = timedelta(minutes=sum(STEP_MINUTES.values()) + 15)
 
@@ -124,6 +131,19 @@ def odds_due(season, now):
         return False
     forecast = {row.get("fixture_id") for row in read_csv(PREDICTIONS) if row.get("season") == season}
     return any(row.get("fixture_id") not in forecast for row in games if fixture_state(row) == "NS")
+
+
+def tff_due(runs, now):
+    """Whether to export TFF now: configured, stale, and not tried in the last day."""
+    if not (local_setting("TFF_FANTASY_EMAIL") and local_setting("TFF_FANTASY_PASSWORD")):
+        return False
+    updated = [parse_utc(row.get("updated_at_utc"), required=False) for row in read_csv(TFF_PLAYERS)]
+    latest = max((moment for moment in updated if moment), default=None)
+    if latest and now - latest < TFF_EVERY:
+        return False
+    tried = [parse_utc(row.get("started_at_utc"), required=False) for row in runs
+             if "tff" in row.get("steps", "").split() or "tff failed" in row.get("message", "")]
+    return not any(moment and now - moment < TFF_EVERY for moment in tried)
 
 
 def take_lock(now):
@@ -214,10 +234,13 @@ def main():
     if args.check:
         print(f"Update due: {reason}." if reason else f"Nothing to do: {why_not}")
         print(f"Odds forecast (from the saved fixtures): {'would run' if odds_due(season, now) else 'not needed'}.")
-        # GitHub Actions reads the answer to decide whether to run the update.
+        tff = bool(reason) and tff_due(runs, now)
+        print(f"TFF export: {'would run' if tff else 'not needed or not configured'}.")
+        # GitHub Actions reads the answers to decide what to install and run.
         if output := os.environ.get("GITHUB_OUTPUT"):
             with open(output, "a", encoding="utf-8") as stream:
                 print(f"due={'true' if reason else 'false'}", file=stream)
+                print(f"tff={'true' if tff else 'false'}", file=stream)
         return 0
     if not reason:
         print(f"Nothing to do: {why_not}")
@@ -248,6 +271,12 @@ def main():
         with log_path.open("a", encoding="utf-8") as log:
             run_step("download", [python, "src/fetch/download_season.py", "--season", args.season, "--refresh"], log, env)
             steps.append("download")
+            # After the download, so new players match against today's squads;
+            # before the pipeline, so projections use today's prices.
+            if tff_due(runs, utc_now()):
+                if run_optional("tff", [python, "src/fetch/export_tff_browser.py", "--season", args.season,
+                                        "--headless", "--login-timeout", "120"], log, env, warnings):
+                    steps.append("tff")
             if odds_due(season, utc_now()):
                 odds_python = next((str(path) for path in ODDS_PYTHONS if path.is_file()), python)
                 if run_optional("odds", [odds_python, "src/odds/run.py", "predict"], log, env, warnings):

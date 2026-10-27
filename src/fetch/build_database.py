@@ -14,7 +14,7 @@ if __package__:
 else:
     from sportmonks import DATA, ROOT
 # Importing sportmonks above puts the project folder on the path.
-from src.shared import utc_now, utc_stamp  # noqa: E402
+from src.shared import season_folder, season_label, utc_now, utc_stamp  # noqa: E402
 
 SKIP = {"download_status", "included_feeds", "unavailable", "file_inventory", "validation"}
 PRIMARY_KEYS = {
@@ -262,10 +262,13 @@ def main():
     parser.add_argument("--fantasy-root", type=Path,
                         help="Fantasy CSV root (default: data/final); requires --include-fantasy.")
     args = parser.parse_args()
-    if not re.fullmatch(r"[0-9]{4}/[0-9]{4}", args.season): parser.error("Use a season such as 2026/2027.")
+    try:
+        args.season = season_label(args.season)
+    except ValueError as error:
+        parser.error(str(error))
     if args.fantasy_root is not None and not args.include_fantasy:
         parser.error("--fantasy-root requires --include-fantasy.")
-    folder = DATA / args.season.replace("/", "-")
+    folder = DATA / season_folder(args.season)
     try:
         output = args.output or ROOT / "data" / "superlig.sqlite"
         tff_csv = args.tff_csv or ROOT / "data" / "final" / "tff_fantasy" / "tff_players.csv"

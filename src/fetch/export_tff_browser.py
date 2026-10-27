@@ -1,8 +1,10 @@
-"""Export the visible TFF player table through an interactive browser.
+"""Export the visible TFF player table through a browser.
 
-Run this yourself. Optional TFF_FANTASY_EMAIL and TFF_FANTASY_PASSWORD settings
-in the project .env enable normal form login. Otherwise sign in interactively.
-No passwords or login sessions are exported.
+Optional TFF_FANTASY_EMAIL and TFF_FANTASY_PASSWORD settings (environment or the
+project .env) enable normal form login; otherwise sign in in the opened window.
+--headless runs without a window, as the GitHub update does: it then needs both
+settings, and stops if TFF asks for any further verification rather than
+trying to answer it. No passwords or login sessions are exported.
 """
 import argparse
 from pathlib import Path
@@ -64,7 +66,7 @@ def login_credentials():
     return email, password
 
 
-def sign_in_if_needed(page, login_timeout):
+def sign_in_if_needed(page, login_timeout, headless=False):
     # Wait for either the login form or signed-in navigation, including a
     # possible client-side redirect after the initial document load.
     page.wait_for_function("""() => {
@@ -81,6 +83,8 @@ def sign_in_if_needed(page, login_timeout):
             "https", "tfffantezilig.com", "/giris"):
         raise ValueError("Automatic login requires the TFF Fantasy HTTPS login page.")
     email, password = login_credentials()
+    if headless and not (email and password):
+        raise ValueError("A headless export needs TFF_FANTASY_EMAIL and TFF_FANTASY_PASSWORD.")
     if email and password:
         print("Logging in using the credentials in your local environment/.env.")
         email_field = page.get_by_placeholder(re.compile(r"^E-posta adresi$", re.IGNORECASE))
@@ -91,7 +95,8 @@ def sign_in_if_needed(page, login_timeout):
         # automatically. Browser exceptions are sanitized by main().
         page.get_by_role("button", name="Giriş Yapın", exact=True).click()
         email = password = ""
-        print("Waiting for login. Complete any verification in the browser; "
+        print("Waiting for login." if headless else
+              "Waiting for login. Complete any verification in the browser; "
               "if login is rejected, correct it there or update .env and rerun.")
     else:
         print("No TFF login credentials configured. Sign in in the opened browser.")
@@ -205,7 +210,7 @@ def export(args, sync_playwright):
     with sync_playwright() as playwright:
         # Fresh, nonpersistent context. Use normal form login each run;
         # do not save storage_state, browser profiles, HARs or traces.
-        browser = playwright.chromium.launch(headless=False)
+        browser = playwright.chromium.launch(headless=args.headless)
         try:
             context = browser.new_context(locale="tr-TR", viewport={"width": 1440, "height": 1000})
             page = context.new_page()
@@ -213,7 +218,7 @@ def export(args, sync_playwright):
             print("Opening TFF Statistics. Automatic login uses the project .env when configured.")
             print("Use the Turkish interface; keep the browser open for any login verification.")
             page.goto(URL, wait_until="domcontentloaded")
-            sign_in_if_needed(page, args.login_timeout)
+            sign_in_if_needed(page, args.login_timeout, args.headless)
             if page.url.split("?")[0].rstrip("/") != URL:
                 page.goto(URL, wait_until="domcontentloaded")
             page.get_by_role("columnheader", name="Oyuncu", exact=True).wait_for()
@@ -264,6 +269,8 @@ def main():
     cli.add_argument("--max-pages", type=int, default=100)
     cli.add_argument("--login-timeout", type=int, default=300, help="Seconds allowed for interactive login")
     cli.add_argument("--overwrite", action="store_true")
+    cli.add_argument("--headless", action="store_true",
+                     help="No browser window; needs both TFF login settings and fails on any verification.")
     args = cli.parse_args()
     try:
         args.season = season_folder(args.season)
