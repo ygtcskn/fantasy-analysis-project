@@ -163,6 +163,24 @@ def run_step(step, command, log, env):
     print(f"{datetime.now():%H:%M:%S} {step} done in {time.monotonic() - started:.0f} s", flush=True)
 
 
+def run_optional(step, command, log, env, warnings):
+    """A step the site can do without: on failure, note it and carry on.
+
+    A forecast that fails must not hold back the results of matches already
+    played; the projections fall back to their own team model without it.
+    """
+    try:
+        run_step(step, command, log, env)
+    except StepFailed as failure:
+        warnings.append(f"{step} failed: {failure}")
+        print(f"{step} failed ({failure}); the update carries on without it.", flush=True)
+        if os.environ.get("GITHUB_ACTIONS") == "true":
+            print(f"::warning title={step} failed::{failure}. The site was updated without it; "
+                  "see the log in data/temp/site_update/logs.", flush=True)
+        return False
+    return True
+
+
 def record(row):
     STATE.mkdir(parents=True, exist_ok=True)
     new = not RUNS.is_file()
@@ -224,7 +242,7 @@ def main():
             upload_env[key] = value
     row = {"started_at_utc": utc_stamp(now), "season": season, "reason": reason, "status": "failed",
            "log_file": log_path.relative_to(ROOT).as_posix()}
-    steps = []
+    steps, warnings = [], []
     print(f"Updating {season}: {reason}. Log: {log_path}")
     try:
         with log_path.open("a", encoding="utf-8") as log:
@@ -232,8 +250,8 @@ def main():
             steps.append("download")
             if odds_due(season, utc_now()):
                 odds_python = next((str(path) for path in ODDS_PYTHONS if path.is_file()), python)
-                run_step("odds", [odds_python, "src/odds/run.py", "predict"], log, env)
-                steps.append("odds")
+                if run_optional("odds", [odds_python, "src/odds/run.py", "predict"], log, env, warnings):
+                    steps.append("odds")
             run_step("pipeline", [python, "src/run_pipeline.py", "--season", args.season,
                                   *(["--skip-database"] if args.skip_database else [])], log, env)
             steps.append("pipeline")
@@ -246,8 +264,8 @@ def main():
                                 "--project-name", PAGES_PROJECT, "--branch", "main", "--commit-dirty=true"],
                      log, upload_env)
             steps.append("upload")
-        row.update(status="complete", message="")
-        print("The site is up to date.")
+        row.update(status="complete", message="; ".join(warnings))
+        print("The site is up to date." + (f" Warnings: {'; '.join(warnings)}" if warnings else ""))
         return 0
     except StepFailed as failure:
         row.update(failed_step=failure.step, message=f"{failure.step}: {failure}")

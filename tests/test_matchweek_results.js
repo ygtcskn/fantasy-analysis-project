@@ -26,7 +26,7 @@ function setup() {
   vm.runInContext(readFileSync(join(__dirname, "../src/web/core/match-rules.js"), "utf8"), context);
   vm.runInContext(readFileSync(join(__dirname, "../src/web/features/matchweek/results.js"), "utf8") + `
     globalThis.api = { matchweekFinished, resetMatchweekResults, ingestMatchweekResults,
-      matchweekEffectiveFixture, matchweekFinalScore, matchweekResultPlayers, matchweekCompletedSnapshot, matchweekFantasyPlayers };
+      matchweekEffectiveFixture, matchweekFinalScore, matchweekResultPlayers, matchweekCompletedSnapshot, matchweekMatchFantasy };
   `, context);
   context.api.resetMatchweekResults();
   return { ...context.api, state, saved, scores, fantasyState, renders: () => renders };
@@ -98,28 +98,32 @@ test("switching seasons clears the final-result overlay", () => {
 
 test("fantasy points use this match's ledger totals, including zero and negative scores", () => {
   const app = setup();
-  const players = ["1", "2", "3", "4"].map((id) => ({ fixture_id: "100", player_id: id, team_id: "1", name: id, started: "1", rating: "9.5" }));
   for (const [id, total] of [["1", "0"], ["2", "-2"], ["3", "12"]]) {
-    app.fantasyState.matches.set(id, [{ season: "2026-2027", fixture_id: "100", player_id: id,
-      team_id: "1", opponent_id: "2", points_total: total, bonus: "3" }]);
+    app.fantasyState.matches.set(id, [{ season: "2026-2027", fixture_id: "100", player_id: id, player_name: `P${id}`,
+      team_id: "1", opponent_id: "2", fantasy_position: "OS", points_total: total, bonus: "3", minutes_played: "90" }]);
   }
-  const rows = app.matchweekFantasyPlayers(app.saved, "1", players);
-  assert.equal(Array.from(rows, (row) => row.id).join(","), "3,1,2,4");
-  assert.equal(rows[0].points, 12); // Bonus is already included; do not add it again.
-  assert.equal(rows[1].points, 0);
-  assert.equal(rows[2].points, -2);
-  assert.equal(rows[3].points, null); // Never substitute a Sportmonks rating.
+  // Player 4 played but has no ledger row: he is left out, never given a
+  // number from somewhere else such as his Sportmonks rating.
+  app.fantasyState.matches.set("4", []);
+  const [home, away] = app.matchweekMatchFantasy(app.saved);
+  assert.equal(Array.from(home, (row) => row.id).join(","), "3,1,2");
+  assert.equal(home[0].points, 12); // Bonus is already included; do not add it again.
+  assert.equal(home[1].points, 0);
+  assert.equal(home[2].points, -2);
+  assert.equal(away.length, 0);
 });
 
-test("fantasy ledger rejects wrong matches, seasons, team orientation and duplicate identities", () => {
-  for (const change of [{ fixture_id: "99" }, { season: "2025-2026" }, { team_id: "2" }, { opponent_id: "3" }]) {
+test("fantasy ledger rows from another match, team orientation or season are not shown", () => {
+  for (const change of [{ fixture_id: "99" }, { team_id: "2" }, { opponent_id: "3" }]) {
     const app = setup();
-    const player = { fixture_id: "100", player_id: "1", team_id: "1", started: "1" };
-    app.fantasyState.matches.set("1", [{ season: "2026-2027", fixture_id: "100", player_id: "1", team_id: "1", opponent_id: "2", points_total: "10", ...change }]);
-    assert.equal(app.matchweekFantasyPlayers(app.saved, "1", [player])[0].points, null);
+    app.fantasyState.matches.set("1", [{ season: "2026-2027", fixture_id: "100", player_id: "1", team_id: "1",
+      opponent_id: "2", points_total: "10", ...change }]);
+    assert.equal(app.matchweekMatchFantasy(app.saved).flat().length, 0, JSON.stringify(change));
   }
+  // The ledger loaded for another season is never read against this one.
   const app = setup();
-  const entry = { season: "2026-2027", fixture_id: "100", player_id: "1", team_id: "1", opponent_id: "2", points_total: "10" };
-  app.fantasyState.matches.set("1", [entry, { ...entry }]);
-  assert.equal(app.matchweekFantasyPlayers(app.saved, "1", [])[0].points, null);
+  app.fantasyState.matches.set("1", [{ season: "2026-2027", fixture_id: "100", player_id: "1", team_id: "1",
+    opponent_id: "2", points_total: "10" }]);
+  app.fantasyState.season = "2025-2026";
+  assert.equal(app.matchweekMatchFantasy(app.saved).map((side) => side.length).join(","), "0,0");
 });
