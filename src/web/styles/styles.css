@@ -14,12 +14,13 @@ main {
   position: fixed;
   inset: 0 auto 0 0;
   z-index: 60;
-  width: 240px;
+  width: 210px;
   max-width: 85vw;
   height: 100dvh;
-  padding: 80px 22px 28px;
+  padding: 80px 16px 28px;
   display: flex;
   flex-direction: column;
+  overflow-x: hidden;
   overflow-y: auto;
   transform: translateX(-100%);
   visibility: hidden;
@@ -32,7 +33,7 @@ main {
 }
 .rail.is-pinned { box-shadow: 12px 0 40px #123e3040; }
 .rail nav { display: grid; gap: 7px; margin-top: 0; }
-.rail .nav-button { min-width: 0; padding: 13px 12px; font-size: 13px; flex: none; }
+.rail .nav-button { min-width: 0; padding: 13px 12px; font-size: 13px; flex: none; white-space: nowrap; }
 .rail .rail-label { display: block; margin-top: 48px; }
 .rail-section + .rail-section .rail-label { margin-top: 28px; }
 
@@ -404,23 +405,23 @@ a.team-link:hover { color: #507624; text-decoration: underline; text-underline-o
   select { transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease; }
 }
 
-/* The rail is a fixed 240px overlay on the left, but `main` is centred on the
+/* The rail is a fixed 210px overlay on the left, but `main` is centred on the
    whole viewport, so the two only clear each other once the centred left margin
-   exceeds 240px - which happens at about 1700px. Below that the rail sits on top
+   exceeds 210px - which happens at about 1640px. Below that the rail sits on top
    of the content. Reserve its width instead. The reserve does not depend on
    whether the rail is open, so toggling it still never moves the page.
    Above 1700px nothing here applies and the layout is unchanged. */
 @media (min-width: 1101px) and (max-width: 1700px) {
-  main { width: min(1220px, calc(100% - 320px)); margin-left: 240px; margin-right: auto; }
-  .home-view main { width: min(1040px, calc(100% - 320px)); }
-  .team-page main { width: min(1040px, calc(100% - 300px)); }
+  main { width: min(1220px, calc(100% - 290px)); margin-left: 210px; margin-right: auto; }
+  .home-view main { width: min(1040px, calc(100% - 290px)); }
+  .team-page main { width: min(1040px, calc(100% - 270px)); }
 }
 /* The sidebar is open by default from tablet width up, so it reserves its
    width there too instead of covering the page. */
 @media (min-width: 761px) and (max-width: 1100px) {
   main,
   .home-view main,
-  .team-page main { width: calc(100% - 280px); margin-left: 256px; margin-right: 24px; }
+  .team-page main { width: calc(100% - 250px); margin-left: 226px; margin-right: 24px; }
 }
 
 /* CANLI beside Maç Haftası: the live centre's own badge (live-centre.css), placed. */

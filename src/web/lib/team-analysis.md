@@ -123,7 +123,7 @@ file it lacks.
 ## Narrow screens
 
 The Takım Analizi section is its own CSS size container, because from 761px to
-1100px the sidebar keeps 256px of the window. Below 800px of section width the
+1100px the sidebar keeps 226px of the window. Below 800px of section width the
 tabs move from the left of the chart to above it, wrapping into rows so every
 tab stays visible. Below 600px the 640-unit bar charts and scatters
 keep a 540px minimum width and scroll sideways, so their labels stay legible
