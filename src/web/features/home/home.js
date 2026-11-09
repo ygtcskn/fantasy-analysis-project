@@ -316,9 +316,15 @@ function homeSvg(parent, tag, attributes = {}, text) {
 const HOME_GOALS = new Set(["GOAL", "PENALTY", "OWNGOAL"]);
 const HOME_CARDS = new Set(["YELLOWCARD", "REDCARD", "YELLOWREDCARD"]);
 
+// A match minute on the pressure chart's clock. The feed counts pressure
+// minutes straight through stoppage time, so a second-half minute is placed
+// after the first half's real length.
+function homeChartTime(minute, extra, firstHalf, total) {
+  const at = minute <= 45 ? Math.min(minute + extra, firstHalf) : firstHalf + (minute - 45) + extra;
+  return Math.max(0, Math.min(at, total));
+}
+
 // This match's goals, cards and substitutions on the pressure chart's clock.
-// The feed counts pressure minutes straight through stoppage time, so a
-// second-half minute is placed after the first half's real length.
 function homeMatchEvents(fixture, firstHalf, total) {
   const sides = [String(fixture.home_team_id), String(fixture.away_team_id)];
   const events = [];
@@ -329,8 +335,7 @@ function homeMatchEvents(fixture, firstHalf, total) {
     if (["true", "1"].includes(String(event.rescinded).toLowerCase())) continue;
     const team = String(event.participant_id || event.team_id || ""), minute = number(event.minute), extra = number(event.extra_minute) || 0;
     if (!sides.includes(team) || minute === null) continue;
-    const at = minute <= 45 ? Math.min(minute + extra, firstHalf) : firstHalf + (minute - 45) + extra;
-    events.push({ kind, home: team === sides[0], at: Math.max(0, Math.min(at, total)), sort: number(event.sort_order) ?? 0,
+    events.push({ kind, home: team === sides[0], at: homeChartTime(minute, extra, firstHalf, total), sort: number(event.sort_order) ?? 0,
       clock: `${minute}${extra ? `+${extra}` : ""}'`, player: playerName(event.player_id, event.player_name),
       related: event.related_player_name ? playerName(event.related_player_id, event.related_player_name) : "",
       result: String(event.result || "").replace("-", "–") });
@@ -456,8 +461,25 @@ function renderHomeMomentum(fixture, teams) {
         class: event.kind === "YELLOWCARD" ? "home-card-yellow" : event.kind === "REDCARD" ? "home-card-red" : "home-card-second" });
     }
   }
+  // A slider under the chart walks through the match: a line marks its minute
+  // on the chart, and Maç Olayları lights the event nearest to it. Nothing is
+  // marked until it is first moved.
+  const marker = homeSvg(svg, "line", { x1: 0, y1: top - 2, x2: 0, y2: height, class: "home-momentum-cursor", visibility: "hidden" });
+  const slider = element("input", "home-momentum-slider");
+  Object.assign(slider, { type: "range", min: 0, max: total, step: 1, value: 0 });
+  slider.setAttribute("aria-label", "Maç olaylarında dakika seç");
+  slider.style.setProperty("--plot-left", `${(left / width) * 100}%`);
+  slider.style.setProperty("--plot-right", `${(right / width) * 100}%`);
+  slider.addEventListener("input", () => {
+    const at = Number(slider.value);
+    marker.setAttribute("x1", x(at)); marker.setAttribute("x2", x(at)); marker.setAttribute("visibility", "visible");
+    slider.setAttribute("aria-valuetext", homePressureClock(at, firstHalf));
+    highlightHomeEvents(at);
+  });
+  const track = element("div", "home-momentum-track");
+  track.append(svg, slider);
   const scroll = element("div", "home-momentum-scroll");
-  scroll.append(svg);
+  scroll.append(track);
   // Screen readers get the match's goals and dismissals as a list.
   const key = element("ol", "sr-only");
   for (const event of events.filter((item) => HOME_GOALS.has(item.kind) || item.kind === "REDCARD" || item.kind === "YELLOWREDCARD")) {
@@ -960,8 +982,58 @@ function renderHomeSeasonShifts(fixture, teams) {
   return card;
 }
 
+// Maç Olayları: the chosen match's events as text, drawn by Maç Haftası's own
+// list (renderLiveEvents) so both pages word and order them alike. Rows of
+// events.csv are put in the live feed's shape first.
+function renderHomeEvents(fixture, teams) {
+  const list = $("home-events-list");
+  const note = (text) => list.replaceChildren(element("li", "live-events-empty", text));
+  if (!fixture) return note("Maç seçildiğinde olayları burada görünür.");
+  if (teamAnalysisExtras.key !== state.seasonSlug || teamAnalysisExtras.state !== "ready") return note("Maç olayları yükleniyor…");
+  if (!teamAnalysisExtras.events) return note("events.csv okunamadı.");
+  const id = String(fixture.fixture_id);
+  const rows = teamAnalysisExtras.events.filter((event) => String(event.fixture_id) === id).map((event) => ({
+    record_type: "event", fixture_id: id, event_id: String(event.event_id || event.id || ""),
+    minute: event.minute, extra_minute: event.extra_minute, sort_order: event.sort_order,
+    code: event["type.developer_name"], label: event["type.name"], team_id: String(event.participant_id || event.team_id || ""),
+    player_id: event.player_id, player_name: event.player_name, related_player_id: event.related_player_id,
+    related_player_name: event.related_player_name, result: event.result, info: event.info, addition: event.addition,
+    rescinded: event.rescinded,
+  }));
+  if (list.dataset.fixture !== id) list.scrollTop = 0;
+  list.dataset.fixture = id;
+  renderLiveEvents({ fixture_id: id, events_available: "1" }, teams, rows, list);
+  // Each event's place on the pressure chart's clock, for its slider.
+  const pressure = homePressure(fixture);
+  if (pressure.message) return;
+  const times = new Map();
+  for (const row of rows) {
+    const minute = number(row.minute);
+    if (row.event_id && minute !== null) times.set(row.event_id, homeChartTime(minute, number(row.extra_minute) || 0, pressure.firstHalf, pressure.total));
+  }
+  for (const item of list.children) {
+    if (times.has(item.dataset.eventId)) item.dataset.at = String(times.get(item.dataset.eventId));
+  }
+}
+
+// Light the event (or events, when several share a minute) nearest to a
+// minute on the pressure chart's clock, and bring it into the list's view
+// without moving the page.
+function highlightHomeEvents(at) {
+  const list = $("home-events-list");
+  const items = [...list.querySelectorAll("li[data-at]")];
+  if (!items.length) return;
+  const distance = (item) => Math.abs(Number(item.dataset.at) - at);
+  const nearest = items.reduce((best, item) => (distance(item) < distance(best) ? item : best));
+  for (const item of items) item.classList.toggle("is-current", item.dataset.at === nearest.dataset.at);
+  const view = list.getBoundingClientRect(), box = nearest.getBoundingClientRect();
+  if (box.top < view.top) list.scrollTop -= view.top - box.top;
+  else if (box.bottom > view.bottom) list.scrollTop += box.bottom - view.bottom;
+}
+
 function renderHomeDetail(game, teams) {
   const detail = $("home-detail");
+  renderHomeEvents(game?.fixture, teams);
   if (!game) {
     detail.style.removeProperty("--matchweek-home");
     detail.style.removeProperty("--matchweek-away");
@@ -983,7 +1055,9 @@ function renderHomeDetail(game, teams) {
   const more = element("div", "home-more");
   more.append(renderHomeSeasonRanks(fixture, teams), renderHomePassingStyle(fixture, teams), renderHomeSeasonShifts(fixture, teams),
     renderHomePhysical(fixture, teams), renderHomeSetPieces(fixture, teams), renderHomePhases(fixture, teams));
-  detail.replaceChildren(renderHomeScoreboard(game, teams), renderHomeMomentum(fixture, teams), pair, more);
+  // Each part sits in a row of its own (home.css) that its cards size themselves against.
+  const row = (part) => { const box = element("div", "home-row"); box.append(part); return box; };
+  detail.replaceChildren(row(renderHomeScoreboard(game, teams)), row(renderHomeMomentum(fixture, teams)), row(pair), row(more));
 }
 
 function renderHome() {

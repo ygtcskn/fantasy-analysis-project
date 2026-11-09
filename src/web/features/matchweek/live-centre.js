@@ -277,6 +277,8 @@ function renderLiveEvents(fixture, teams, rows = liveCentre.rows, list = $("live
   const content = document.createDocumentFragment();
   for (const event of events) {
     const row = element("li", "live-event"), details = element("div", "live-event-details");
+    // Lets Ana Sayfa find the row again (its pressure strip's slider lights it).
+    if (event.event_id) row.dataset.eventId = event.event_id;
     const code = String(event.code || "").toUpperCase().replace(/[- ]/g, "_");
     const label = liveEventLabels[code] || translateEventText(event.label) || "Maç olayı";
     // The site's one name per player; the feed's own spelling only for someone it does not know.

@@ -19,8 +19,8 @@ also says what to run and what you should see.
 | 2 | [Build the database](02-build-the-database.md) | One file the chatbot reads: `data/temp/chat/chat.sqlite` |
 | 3 | [The tools](03-the-tools.md) | Safe questions the bot can ask, tested without AI |
 | 4 | [Connect the AI](04-connect-the-ai.md) | Claude and ChatGPT agent loops, and a chat in your terminal |
-| 5 | Chat box on Anasayfa *(coming next)* | The page visitors use |
-| 6 | Put it online *(later)* | Cloudflare Pages Function + D1 database |
+| 5 | [The chat on Ana Sayfa](05-website-chat.md) | The Asistan panel, answered through your local server |
+| 6 | Put it online *(coming next)* | Cloudflare Pages Function + D1 database |
 | 7 | Test and measure *(later)* | How often it answers correctly, and the cost |
 
 ## How it fits together (the finished version)

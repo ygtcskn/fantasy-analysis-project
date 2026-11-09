@@ -413,6 +413,7 @@ window.addEventListener("popstate", () => navigateView(new URLSearchParams(locat
 
 setupTierList();
 setupHome();
+setupHomeChat();
 setupDetailedStandings();
 setupSquadBuilder();
 setupBuilderRecommendations();

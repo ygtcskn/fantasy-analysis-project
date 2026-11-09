@@ -3,7 +3,7 @@
   "configurations": [
     {
       "name": "superlig-site",
-      "runtimeExecutable": "python",
+      "runtimeExecutable": ".venv/Scripts/python.exe",
       "runtimeArgs": ["src/web/serve.py", "--season", "2026/2027", "--no-live", "--port", "8123"],
       "port": 8123
     }

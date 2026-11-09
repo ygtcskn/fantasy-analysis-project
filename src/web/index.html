@@ -31,6 +31,7 @@
   <script src="core/profile.js" defer></script>
   <script src="features/tier-list/tier-list.js" defer></script>
   <script src="features/home/home.js" defer></script>
+  <script src="features/home/home-chat.js" defer></script>
   <script src="features/standings/standings.js" defer></script>
   <script src="core/kits.js" defer></script>
   <script src="core/team-colors.js" defer></script>
@@ -102,8 +103,19 @@
           </section>
         </div>
         <div id="home-detail" class="home-detail" aria-label="Seçilen maç" tabindex="-1"></div>
-        <!-- An empty panel on purpose: it holds the place of a future one. -->
-        <aside class="home-panel home-reserved" aria-hidden="true"></aside>
+        <section id="home-events" class="home-panel home-reserved home-reserved-top home-events live-events" aria-label="Maç olayları">
+          <ol id="home-events-list" tabindex="0" aria-label="Seçilen maçın olayları, en yeni önce"></ol>
+        </section>
+        <section id="home-chat" class="home-panel home-reserved home-reserved-bottom home-chat" aria-labelledby="home-chat-title">
+          <div class="home-chat-head"><h2 id="home-chat-title">Asistan</h2><div class="home-chat-provider" role="group" aria-label="Yapay zekâ"><button type="button" data-provider="claude" aria-pressed="true">Claude</button><button type="button" data-provider="openai" aria-pressed="false">ChatGPT</button></div></div>
+          <ol id="home-chat-messages" class="home-chat-messages" tabindex="0" aria-live="polite" aria-label="Sohbet"></ol>
+          <div id="home-chat-suggestions" class="home-chat-suggestions" role="group" aria-label="Örnek sorular"></div>
+          <form id="home-chat-form" class="home-chat-form">
+            <label for="home-chat-input" class="sr-only">Sorunu yaz</label>
+            <textarea id="home-chat-input" rows="1" maxlength="500" placeholder="Buraya yaz"></textarea>
+            <button id="home-chat-send" type="submit" aria-label="Gönder"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M21 3 3 10.53v.98l6.84 2.65L12.48 21h.98L21 3z"/></svg></button>
+          </form>
+        </section>
       </div>
     </section>
     <section id="empty-state" class="empty-state"><div class="file-symbol" aria-hidden="true">CSV <span>↗</span></div><p class="eyebrow">KENDİ VERİNLE BAŞLA</p><h2>Sezonunu görünür kıl.</h2><p>Siteyi <code>python src/web/serve.py --season 2026/2027</code> ile başlatın; sezon klasöründeki şu dosyalar otomatik yüklenir:</p><div class="file-list"><code>player_match_stats.csv</code><code>fixtures.csv</code><code>teams.csv</code><code>players.csv</code><code>squads.csv</code></div><p class="muted">Son iki dosya, maç kaydı olmayan oyuncuları da içerir.<br>Dosyalar bu bilgisayarda okunur; yükleme, API çağrısı veya hesap gerekmez.</p></section>

@@ -1,4 +1,4 @@
-"""Serve saved CSVs, XI recommendations and on-demand live Sportmonks CSVs. No data writes."""
+"""Serve saved CSVs, XI recommendations, on-demand live Sportmonks CSVs and the Ana Sayfa chat. No data writes."""
 
 import argparse
 import csv
@@ -53,6 +53,10 @@ ASSET_PATH = re.compile(r"/(?:[a-z0-9][a-z0-9._-]*/)*[a-z0-9][a-z0-9._-]*"
                         r"\.(?:html|js|css|svg|png|jpg)")
 
 MAX_BYTES = 40 * 1024 * 1024
+# The chat's question arrives as a small form (conversation, provider, question);
+# the answer goes back as one CSV row with these columns.
+MAX_CHAT_BYTES = 4096
+CHAT_FIELDS = ("status", "text", "model", "tool_calls", "rounds", "input_tokens", "output_tokens", "cost_usd")
 
 
 def read_file(path):
@@ -92,10 +96,12 @@ def analysis_files(season):
     }
 
 
-def make_handler(csv_root, live_enabled=True):
+def make_handler(csv_root, live_enabled=True, chat=None):
     from src.web.live import LiveFeed
+    from src.chat.web_chat import ChatError, WebChat
     live_feed = LiveFeed(csv_root, enabled=live_enabled)
     fantasy_files = analysis_files(csv_root.name)
+    chat = chat or WebChat()
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
@@ -103,6 +109,58 @@ def make_handler(csv_root, live_enabled=True):
 
         def do_HEAD(self):
             self.serve_file(head_only=True)
+
+        def do_POST(self):
+            port = self.server.server_port
+            if self.headers.get("Host") not in {f"127.0.0.1:{port}", f"localhost:{port}"}:
+                self.send_error(403, "Open the printed localhost URL.")
+                return
+            if urlsplit(self.path).path != "/local-chat":
+                self.send_error(404, "Not available.")
+                return
+            # Each answer costs money on the API account, so only this website
+            # may ask. Another site's page cannot add the X-Superlig-Chat header
+            # without a CORS permission this server never gives, and browsers
+            # name where a request comes from in Origin and Sec-Fetch-Site.
+            origin = self.headers.get("Origin")
+            if (self.headers.get("X-Superlig-Chat") != "1"
+                    or self.headers.get("Sec-Fetch-Site") not in {None, "same-origin"}
+                    or (origin and origin not in {f"http://127.0.0.1:{port}", f"http://localhost:{port}"})):
+                self.send_error(403, "Use the local website.")
+                return
+            if not (self.headers.get("Content-Type") or "").startswith("application/x-www-form-urlencoded"):
+                self.send_error(415, "Send the question as a form.")
+                return
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                length = 0
+            if not 0 < length <= MAX_CHAT_BYTES:
+                self.send_error(413, "Question too long.")
+                return
+            try:
+                form = parse_qs(self.rfile.read(length).decode("utf-8"), max_num_fields=5)
+            except (UnicodeDecodeError, ValueError):
+                self.send_error(400, "Invalid question.")
+                return
+            field = lambda name: (form.get(name) or [""])[0]  # noqa: E731
+            try:
+                reply = chat.answer(field("conversation"), field("provider"), field("question"))
+                status, row = 200, {"status": "ok", "text": reply.text, "model": reply.model,
+                                    "tool_calls": " | ".join(reply.tool_calls), "rounds": reply.rounds,
+                                    "input_tokens": reply.input_tokens, "output_tokens": reply.output_tokens,
+                                    "cost_usd": f"{reply.cost_usd:.6f}"}
+            except ChatError as error:
+                status, row = error.status, {"status": "error", "text": str(error)}
+            except Exception:  # noqa: BLE001 - a bug must not take the page's chat down silently
+                import traceback
+                traceback.print_exc()
+                status, row = 500, {"status": "error", "text": "Beklenmeyen bir hata oldu; ayrıntı sunucu penceresinde."}
+            stream = io.StringIO(newline="")
+            writer = csv.DictWriter(stream, fieldnames=CHAT_FIELDS)
+            writer.writeheader()
+            writer.writerow(row)
+            self.send_bytes(stream.getvalue().encode("utf-8"), "text/csv; charset=utf-8", False, status)
 
         def serve_file(self, head_only=False):
             # Reject alternate hostnames; this server is for this computer only.
@@ -185,8 +243,8 @@ def make_handler(csv_root, live_enabled=True):
                 return
             self.send_bytes(content, content_type, head_only)
 
-        def send_bytes(self, content, content_type, head_only):
-            self.send_response(200)
+        def send_bytes(self, content, content_type, head_only, status=200):
+            self.send_response(status)
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(content)))
             self.send_header("Cache-Control", "no-store")
@@ -226,6 +284,7 @@ def main():
     print("After a download finishes, refresh the page or click Refresh saved data.")
     print("Live Sportmonks requests disabled." if args.no_live else
           "Live Sportmonks data is requested only while the Matchweek page is visible.")
+    print("The Ana Sayfa chat answers with Claude or ChatGPT, using the API keys in .env; each answer costs a little.")
     print("Keep this terminal open. Press Ctrl+C to stop.")
     try:
         server.serve_forever()

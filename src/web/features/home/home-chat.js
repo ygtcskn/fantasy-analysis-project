@@ -1,0 +1,171 @@
+"use strict";
+
+// Ana Sayfa's chat panel (Asistan). A question goes to src/web/serve.py's
+// /local-chat, which has the chosen AI answer it with the chatbot's tools
+// (src/chat/web_chat.py) and this computer's API keys. With no server behind
+// it, the public site's panel says so instead. Messages are written as text,
+// never as HTML.
+
+const HOME_CHAT_EXAMPLES = ["2023-24 gol kralı kim?", "Fenerbahçe bu sezon evinde nasıl?", "Son derbiyi kim kazandı?"];
+const HOME_CHAT_PROVIDERS = ["claude", "openai"];
+const HOME_CHAT_MODELS = { "claude-haiku-5-5": "Claude Haiku 5.5", "gpt-6-luna": "GPT-6 Luna" };
+const HOME_CHAT_GREETING = "Merhaba! Süper Lig maçları, oyuncular ve sezon istatistikleri hakkında soru sorabilirsin.";
+const HOME_CHAT_TIMEOUT = 90000;
+const homeChat = { busy: false, provider: "claude", conversation: "" };
+
+function homeChatScrollToEnd() {
+  const list = $("home-chat-messages");
+  list.scrollTop = list.scrollHeight;
+}
+
+// role: user, assistant or error. meta: a small line under an answer.
+function homeChatMessage(role, text, meta, detail) {
+  const item = element("li", `home-chat-message is-${role}`);
+  item.append(element("p", "", text));
+  if (meta) {
+    const line = element("small", "home-chat-meta", meta);
+    if (detail) line.title = detail;
+    item.append(line);
+  }
+  $("home-chat-messages").append(item);
+  homeChatScrollToEnd();
+  return item;
+}
+
+// Three jumping dots while the answer is on its way.
+function homeChatTyping() {
+  const item = element("li", "home-chat-message is-assistant is-typing");
+  item.setAttribute("aria-label", "Asistan yazıyor");
+  const dots = element("span", "home-chat-dots");
+  dots.setAttribute("aria-hidden", "true");
+  dots.append(element("i"), element("i"), element("i"));
+  item.append(dots);
+  $("home-chat-messages").append(item);
+  homeChatScrollToEnd();
+  return item;
+}
+
+function homeChatNewId() {
+  return globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
+function homeChatResize() {
+  const input = $("home-chat-input");
+  input.style.height = "auto";
+  input.style.height = `${Math.min(input.scrollHeight, 96)}px`;
+}
+
+function homeChatSync() {
+  const offline = siteMode !== "local";
+  $("home-chat-input").disabled = offline;
+  $("home-chat-send").disabled = offline || homeChat.busy || !$("home-chat-input").value.trim();
+  for (const button of document.querySelectorAll(".home-chat-provider button")) {
+    button.setAttribute("aria-pressed", String(button.dataset.provider === homeChat.provider));
+    button.disabled = offline || homeChat.busy;
+  }
+}
+
+// A fresh conversation with the chosen AI. The server keeps each provider's
+// history in its own form, so a switch always starts over.
+function startHomeChat() {
+  homeChat.conversation = homeChatNewId();
+  $("home-chat-messages").replaceChildren();
+  homeChatMessage("assistant", HOME_CHAT_GREETING);
+  if (siteMode !== "local") {
+    homeChatMessage("error", "Asistan şimdilik yalnızca yerel sitede (serve.py) çalışıyor.");
+    $("home-chat-suggestions").hidden = true;
+  } else {
+    $("home-chat-suggestions").hidden = false;
+  }
+  homeChatSync();
+}
+
+// The answer as one CSV row: status, text, model, tool_calls, rounds, tokens, cost.
+async function askHomeChat(question) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), HOME_CHAT_TIMEOUT);
+  try {
+    const response = await fetch("/local-chat", {
+      method: "POST",
+      headers: { "X-Superlig-Chat": "1" },
+      body: new URLSearchParams({ conversation: homeChat.conversation, provider: homeChat.provider, question }),
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    const row = (response.headers.get("Content-Type") || "").startsWith("text/csv")
+      ? parseCSV(await response.text()).records[0] : null;
+    if (!row) throw new Error(`HTTP ${response.status}`);
+    return row;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function homeChatMeta(row) {
+  const model = HOME_CHAT_MODELS[row.model] || row.model;
+  const cost = Number(row.cost_usd);
+  return [model, row.rounds ? `${row.rounds} tur` : "", Number.isFinite(cost) ? `$${cost.toFixed(4)}` : ""].filter(Boolean).join(" · ");
+}
+
+async function sendHomeChat(text) {
+  const question = String(text || "").trim();
+  if (!question || homeChat.busy || siteMode !== "local") return;
+  homeChat.busy = true;
+  const conversation = homeChat.conversation;
+  $("home-chat-suggestions").hidden = true;
+  homeChatMessage("user", question);
+  $("home-chat-input").value = "";
+  homeChatResize();
+  homeChatSync();
+  const typing = homeChatTyping();
+  try {
+    const row = await askHomeChat(question);
+    if (conversation !== homeChat.conversation) return;
+    if (row.status === "ok") {
+      homeChatMessage("assistant", row.text, homeChatMeta(row), row.tool_calls ? `Araçlar: ${row.tool_calls}` : "Araç kullanılmadı");
+    } else {
+      homeChatMessage("error", row.text || "Yanıt alınamadı.");
+    }
+  } catch (error) {
+    if (conversation === homeChat.conversation) {
+      homeChatMessage("error", error.name === "AbortError" ? "Yanıt çok gecikti; tekrar deneyin."
+        : "Yerel sunucuya ulaşılamadı. serve.py çalışıyor mu? Kod değiştiyse yeniden başlatın.");
+    }
+  } finally {
+    typing.remove();
+    homeChat.busy = false;
+    homeChatSync();
+  }
+}
+
+function setupHomeChat() {
+  try {
+    const saved = localStorage.getItem("homeChatProvider");
+    if (HOME_CHAT_PROVIDERS.includes(saved)) homeChat.provider = saved;
+  } catch { /* Storage may be blocked; Claude is the default. */ }
+  for (const example of HOME_CHAT_EXAMPLES) {
+    const button = element("button", "home-chat-suggestion", example);
+    button.type = "button";
+    button.addEventListener("click", () => sendHomeChat(example));
+    $("home-chat-suggestions").append(button);
+  }
+  for (const button of document.querySelectorAll(".home-chat-provider button")) {
+    button.addEventListener("click", () => {
+      if (homeChat.busy || button.dataset.provider === homeChat.provider) return;
+      homeChat.provider = button.dataset.provider;
+      try { localStorage.setItem("homeChatProvider", homeChat.provider); } catch { /* not kept */ }
+      startHomeChat();
+    });
+  }
+  const input = $("home-chat-input");
+  input.addEventListener("input", () => { homeChatResize(); homeChatSync(); });
+  // Enter sends; Shift+Enter starts a new line.
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
+      event.preventDefault();
+      sendHomeChat(input.value);
+    }
+  });
+  $("home-chat-form").addEventListener("submit", (event) => { event.preventDefault(); sendHomeChat(input.value); });
+  startHomeChat();
+}
