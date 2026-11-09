@@ -98,6 +98,10 @@
 .home-chat-message.is-assistant { align-self: flex-start; border-bottom-left-radius: 4px; background: var(--surface-soft); color: var(--ink); }
 .home-chat-message.is-error { align-self: flex-start; border: 1px solid var(--result-loss); background: transparent; color: var(--ink); }
 .home-chat-meta { display: block; margin-top: 5px; color: var(--muted); font-size: 10px; }
+/* The request to sign in, with its button, once a guest's questions are used. */
+.home-chat-message.is-login { align-self: stretch; max-width: none; border: 1px solid var(--home-chat-accent); background: transparent; color: var(--ink); }
+.home-chat-login { margin-top: 8px; padding: 6px 14px; border: 0; border-radius: 999px; background: var(--home-chat-accent); color: var(--surface); font-size: 12px; font-weight: 600; }
+.home-chat-note { margin: 0 14px 2px; color: var(--muted); font-size: 10.5px; }
 .home-chat-message.is-user { align-self: flex-end; border-bottom-right-radius: 4px; background: var(--home-chat-user); color: var(--home-chat-user-ink); }
 /* While an answer is on its way: three purple dots, each with a soft halo,
    jumping one after another. */

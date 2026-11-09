@@ -53,10 +53,12 @@ ASSET_PATH = re.compile(r"/(?:[a-z0-9][a-z0-9._-]*/)*[a-z0-9][a-z0-9._-]*"
                         r"\.(?:html|js|css|svg|png|jpg)")
 
 MAX_BYTES = 40 * 1024 * 1024
-# The chat's question arrives as a small form (conversation, provider, question);
-# the answer goes back as one CSV row with these columns.
+# The chat's question arrives as a small form (conversation, provider, question,
+# guest) with a signed-in visitor's Supabase token in Authorization; the answer
+# goes back as one CSV row with these columns. status is ok, error, or login
+# (sign in to go on); guest_left is blank for a signed-in visitor.
 MAX_CHAT_BYTES = 4096
-CHAT_FIELDS = ("status", "text", "model", "tool_calls", "rounds", "input_tokens", "output_tokens", "cost_usd")
+CHAT_FIELDS = ("status", "text", "model", "tool_calls", "rounds", "input_tokens", "output_tokens", "cost_usd", "guest_left")
 
 
 def read_file(path):
@@ -144,14 +146,19 @@ def make_handler(csv_root, live_enabled=True, chat=None):
                 self.send_error(400, "Invalid question.")
                 return
             field = lambda name: (form.get(name) or [""])[0]  # noqa: E731
+            authorization = self.headers.get("Authorization") or ""
+            token = authorization[7:].strip() if authorization.startswith("Bearer ") else ""
+            guest = "" if token else field("guest")
             try:
-                reply = chat.answer(field("conversation"), field("provider"), field("question"))
+                reply = chat.answer(field("conversation"), field("provider"), field("question"), guest_id=guest, token=token)
                 status, row = 200, {"status": "ok", "text": reply.text, "model": reply.model,
                                     "tool_calls": " | ".join(reply.tool_calls), "rounds": reply.rounds,
                                     "input_tokens": reply.input_tokens, "output_tokens": reply.output_tokens,
-                                    "cost_usd": f"{reply.cost_usd:.6f}"}
+                                    "cost_usd": f"{reply.cost_usd:.6f}",
+                                    "guest_left": "" if token else chat.guest_left(guest)}
             except ChatError as error:
-                status, row = error.status, {"status": "error", "text": str(error)}
+                status, row = error.status, {"status": error.code, "text": str(error),
+                                             "guest_left": 0 if error.code == "login" and not token else ""}
             except Exception:  # noqa: BLE001 - a bug must not take the page's chat down silently
                 import traceback
                 traceback.print_exc()

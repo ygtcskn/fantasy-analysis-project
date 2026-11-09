@@ -5,20 +5,38 @@
 // (src/chat/web_chat.py) and this computer's API keys. With no server behind
 // it, the public site's panel says so instead. Messages are written as text,
 // never as HTML.
+//
+// Guests get a few answers, then the chat asks them to sign in. The server
+// keeps that count and checks a signed-in visitor's Supabase token itself;
+// what this page shows about it is only a convenience.
 
 const HOME_CHAT_EXAMPLES = ["2023-24 gol kralı kim?", "Fenerbahçe bu sezon evinde nasıl?", "Son derbiyi kim kazandı?"];
 const HOME_CHAT_PROVIDERS = ["claude", "openai"];
 const HOME_CHAT_MODELS = { "claude-haiku-5-5": "Claude Haiku 5.5", "gpt-6-luna": "GPT-6 Luna" };
 const HOME_CHAT_GREETING = "Merhaba! Süper Lig maçları, oyuncular ve sezon istatistikleri hakkında soru sorabilirsin.";
+const HOME_CHAT_GUEST_QUESTIONS = 3;
 const HOME_CHAT_TIMEOUT = 90000;
-const homeChat = { busy: false, provider: "claude", conversation: "" };
+const HOME_CHAT_PLACEHOLDER = "Buraya yaz";
+const homeChat = { busy: false, provider: "claude", conversation: "", guest: "", guestLeft: null, needsLogin: false };
+
+function homeChatStorage(name, value) {
+  try {
+    if (value === undefined) return localStorage.getItem(name);
+    localStorage.setItem(name, String(value));
+  } catch { /* Storage may be blocked; the server's count still holds. */ }
+  return null;
+}
+
+function homeChatSignedIn() {
+  return typeof siteAuth !== "undefined" && Boolean(siteAuth.user);
+}
 
 function homeChatScrollToEnd() {
   const list = $("home-chat-messages");
   list.scrollTop = list.scrollHeight;
 }
 
-// role: user, assistant or error. meta: a small line under an answer.
+// role: user, assistant, error or login. meta: a small line under an answer.
 function homeChatMessage(role, text, meta, detail) {
   const item = element("li", `home-chat-message is-${role}`);
   item.append(element("p", "", text));
@@ -30,6 +48,18 @@ function homeChatMessage(role, text, meta, detail) {
   $("home-chat-messages").append(item);
   homeChatScrollToEnd();
   return item;
+}
+
+// The sign-in request, with a button that opens the site's sign-in dialog.
+function homeChatLoginMessage(text) {
+  const item = homeChatMessage("login", text);
+  if (typeof authEnabled === "function" && authEnabled()) {
+    const button = element("button", "home-chat-login", "Giriş yap");
+    button.type = "button";
+    button.addEventListener("click", () => openAuthDialog());
+    item.append(button);
+  }
+  homeChatScrollToEnd();
 }
 
 // Three jumping dots while the answer is on its way.
@@ -55,14 +85,27 @@ function homeChatResize() {
   input.style.height = `${Math.min(input.scrollHeight, 96)}px`;
 }
 
+// The line under the examples: how many questions a guest has left.
+function homeChatNote() {
+  const note = $("home-chat-note");
+  const left = homeChat.guestLeft ?? HOME_CHAT_GUEST_QUESTIONS;
+  note.hidden = siteMode !== "local" || homeChatSignedIn() || homeChat.needsLogin;
+  note.textContent = left === HOME_CHAT_GUEST_QUESTIONS
+    ? `Misafir olarak ${left} soru sorabilirsin; sonrası için giriş yapman gerekir.`
+    : `Misafir olarak ${left} soru hakkın kaldı.`;
+}
+
 function homeChatSync() {
-  const offline = siteMode !== "local";
-  $("home-chat-input").disabled = offline;
-  $("home-chat-send").disabled = offline || homeChat.busy || !$("home-chat-input").value.trim();
+  const offline = siteMode !== "local", locked = offline || homeChat.needsLogin;
+  const input = $("home-chat-input");
+  input.disabled = locked;
+  input.placeholder = homeChat.needsLogin ? "Devam etmek için giriş yap" : HOME_CHAT_PLACEHOLDER;
+  $("home-chat-send").disabled = locked || homeChat.busy || !input.value.trim();
   for (const button of document.querySelectorAll(".home-chat-provider button")) {
     button.setAttribute("aria-pressed", String(button.dataset.provider === homeChat.provider));
     button.disabled = offline || homeChat.busy;
   }
+  homeChatNote();
 }
 
 // A fresh conversation with the chosen AI. The server keeps each provider's
@@ -74,21 +117,37 @@ function startHomeChat() {
   if (siteMode !== "local") {
     homeChatMessage("error", "Asistan şimdilik yalnızca yerel sitede (serve.py) çalışıyor.");
     $("home-chat-suggestions").hidden = true;
+  } else if (homeChat.needsLogin) {
+    homeChatLoginMessage("Misafir olarak 3 soru hakkını kullandın. Devam etmek için giriş yap.");
+    $("home-chat-suggestions").hidden = true;
   } else {
     $("home-chat-suggestions").hidden = false;
   }
   homeChatSync();
 }
 
-// The answer as one CSV row: status, text, model, tool_calls, rounds, tokens, cost.
+// The signed-in visitor's current access token, or "" for a guest.
+async function homeChatToken() {
+  if (!homeChatSignedIn() || !siteAuth.client) return "";
+  try {
+    const { data } = await siteAuth.client.auth.getSession();
+    return data.session?.access_token || "";
+  } catch {
+    return "";
+  }
+}
+
+// The answer as one CSV row: status, text, model, tool_calls, rounds, tokens, cost, guest_left.
 async function askHomeChat(question) {
+  const token = await homeChatToken();
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), HOME_CHAT_TIMEOUT);
   try {
     const response = await fetch("/local-chat", {
       method: "POST",
-      headers: { "X-Superlig-Chat": "1" },
-      body: new URLSearchParams({ conversation: homeChat.conversation, provider: homeChat.provider, question }),
+      headers: { "X-Superlig-Chat": "1", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: new URLSearchParams({ conversation: homeChat.conversation, provider: homeChat.provider, question,
+        guest: token ? "" : homeChat.guest }),
       cache: "no-store",
       signal: controller.signal,
     });
@@ -107,9 +166,16 @@ function homeChatMeta(row) {
   return [model, row.rounds ? `${row.rounds} tur` : "", Number.isFinite(cost) ? `$${cost.toFixed(4)}` : ""].filter(Boolean).join(" · ");
 }
 
+function homeChatGuestLeft(row) {
+  const left = row.guest_left === "" || row.guest_left === undefined ? null : Number(row.guest_left);
+  if (left === null || !Number.isFinite(left)) return;
+  homeChat.guestLeft = left;
+  homeChatStorage("homeChatGuestLeft", left);
+}
+
 async function sendHomeChat(text) {
   const question = String(text || "").trim();
-  if (!question || homeChat.busy || siteMode !== "local") return;
+  if (!question || homeChat.busy || homeChat.needsLogin || siteMode !== "local") return;
   homeChat.busy = true;
   const conversation = homeChat.conversation;
   $("home-chat-suggestions").hidden = true;
@@ -121,8 +187,17 @@ async function sendHomeChat(text) {
   try {
     const row = await askHomeChat(question);
     if (conversation !== homeChat.conversation) return;
+    homeChatGuestLeft(row);
     if (row.status === "ok") {
       homeChatMessage("assistant", row.text, homeChatMeta(row), row.tool_calls ? `Araçlar: ${row.tool_calls}` : "Araç kullanılmadı");
+      // That was a guest's last question: ask them to sign in now, not after they type another.
+      if (homeChat.guestLeft === 0 && !homeChatSignedIn()) {
+        homeChat.needsLogin = true;
+        homeChatLoginMessage("Misafir olarak 3 soru hakkını kullandın. Devam etmek için giriş yap.");
+      }
+    } else if (row.status === "login") {
+      homeChat.needsLogin = true;
+      homeChatLoginMessage(row.text);
     } else {
       homeChatMessage("error", row.text || "Yanıt alınamadı.");
     }
@@ -138,11 +213,23 @@ async function sendHomeChat(text) {
   }
 }
 
+// Signing in (here or in another tab) opens the chat again.
+function homeChatAuthChanged() {
+  if (homeChatSignedIn() && homeChat.needsLogin) {
+    homeChat.needsLogin = false;
+    homeChatMessage("assistant", "Giriş yaptın; sorularına devam edebilirsin.");
+  }
+  homeChatSync();
+}
+
 function setupHomeChat() {
-  try {
-    const saved = localStorage.getItem("homeChatProvider");
-    if (HOME_CHAT_PROVIDERS.includes(saved)) homeChat.provider = saved;
-  } catch { /* Storage may be blocked; Claude is the default. */ }
+  const saved = homeChatStorage("homeChatProvider");
+  if (HOME_CHAT_PROVIDERS.includes(saved)) homeChat.provider = saved;
+  homeChat.guest = homeChatStorage("homeChatGuest") || homeChatNewId();
+  homeChatStorage("homeChatGuest", homeChat.guest);
+  const left = Number(homeChatStorage("homeChatGuestLeft"));
+  if (homeChatStorage("homeChatGuestLeft") !== null && Number.isFinite(left)) homeChat.guestLeft = left;
+  homeChat.needsLogin = homeChat.guestLeft === 0 && !homeChatSignedIn();
   for (const example of HOME_CHAT_EXAMPLES) {
     const button = element("button", "home-chat-suggestion", example);
     button.type = "button";
@@ -153,7 +240,7 @@ function setupHomeChat() {
     button.addEventListener("click", () => {
       if (homeChat.busy || button.dataset.provider === homeChat.provider) return;
       homeChat.provider = button.dataset.provider;
-      try { localStorage.setItem("homeChatProvider", homeChat.provider); } catch { /* not kept */ }
+      homeChatStorage("homeChatProvider", homeChat.provider);
       startHomeChat();
     });
   }
@@ -167,5 +254,6 @@ function setupHomeChat() {
     }
   });
   $("home-chat-form").addEventListener("submit", (event) => { event.preventDefault(); sendHomeChat(input.value); });
+  document.addEventListener("site-auth-change", homeChatAuthChanged);
   startHomeChat();
 }

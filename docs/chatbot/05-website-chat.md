@@ -216,6 +216,45 @@ Other behaviour:
 
 ---
 
+## Part 3b — Guests get 3 questions, then sign in
+
+A visitor who isn't signed in (a **guest**) gets **3 answered questions**.
+After that the chat shows *"Misafir olarak 3 soru hakkını kullandın. Devam
+etmek için giriş yap."* ("You've used your 3 guest questions. Sign in to
+continue.") with a **Giriş yap** (Sign in) button that opens the site's
+existing Supabase sign-in dialog. Once signed in, the chat continues where it was.
+
+**The server keeps the count, not the page.** A counter only in the browser
+could be reset by anyone in a second. So:
+
+- Each browser gets a random **guest id**, kept in `localStorage` and sent
+  with every question. `WebChat` counts answers per guest id
+  (`take_guest_question()`). Number 4 is refused **before** the AI is called,
+  so it costs nothing. A question that fails (AI service down…) is given back
+  (`give_back_guest_question()`), so guests aren't charged for errors.
+- A signed-in visitor's page sends their **Supabase access token** in the
+  `Authorization: Bearer …` header instead. The server does **not** just believe
+  it: `supabase_user()` asks Supabase (`/auth/v1/user`) whether the token is
+  real, and remembers the answer for 5 minutes (only a fingerprint of the
+  token, its SHA-256 hash, is kept). An expired token gets *"Oturumun sona
+  ermiş"* ("Your session has expired") and the sign-in button again.
+- The server reads the Supabase address and public key from the website's own
+  `src/web/core/auth-config.js`, so they live in one place.
+
+The answer's CSV row has a new column, `guest_left`, which the page shows
+under the example questions: *"Misafir olarak 2 soru hakkın kaldı."* ("As a
+guest you have 2 questions left.") A refused question comes back with
+`status` = `login` (HTTP 401), which the page turns into the sign-in prompt.
+
+**Honest limits (good to mention in an interview):** on your computer the
+count lives in the server's memory and the guest id in the browser, so
+restarting the server or clearing the browser's storage starts a guest over.
+That's fine locally; when the chat goes online (step 6) the count will also
+be tied to the visitor's IP address and kept in a database, so it survives
+both.
+
+---
+
 ## Part 4 — Run it
 
 ### 1. Use the Python that has the AI libraries
@@ -243,9 +282,11 @@ is only read when the server starts.
 .venv/Scripts/python.exe -m unittest tests.test_web_chat -v
 ```
 
-They use a fake AI and fake requests. They check that conversations are
-remembered, switching provider starts over, wrong inputs are refused, a
-failed AI call is cleaned up, and the endpoint refuses other websites.
+They use a fake AI, a fake Supabase and fake requests. They check that
+conversations are remembered, switching provider starts over, wrong inputs
+are refused, a failed AI call is cleaned up, a guest gets exactly 3 answers,
+a signed-in visitor's token is checked (and trusted for 5 minutes), and the
+endpoint refuses other websites.
 
 All chatbot tests together:
 
