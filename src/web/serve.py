@@ -24,11 +24,12 @@ CSV_NAMES = {
     "player_match_stats.csv", "standings.csv", "fixture_scores.csv",
 }
 # team_metrics.csv, events.csv, fixture_pressure.csv and fixture_periods.csv feed
-# the team pages; current_squads.csv tells Kadro Kur who is still in the league.
-# Older exports may lack them, so they are optional.
+# the team pages; current_squads.csv tells Kadro Kur who is still in the league;
+# fixture_referees.csv gives Ana Sayfa each match's referee. Older exports may
+# lack them, so they are optional.
 OPTIONAL_CSV_NAMES = {"fixture_formations.csv", "download_status.csv", "team_metrics.csv",
                       "events.csv", "fixture_pressure.csv", "fixture_periods.csv",
-                      "current_squads.csv"}
+                      "current_squads.csv", "fixture_referees.csv"}
 # Earlier seasons are read only to widen the radar's reference population; the
 # player's own plotted values always come from the served season.
 HISTORY_NAMES = {"fixtures.csv", "player_match_stats.csv", "squads.csv", "team_metrics.csv", "spider_stats.csv"}
@@ -45,10 +46,11 @@ ASSET_TYPES = {
     ".css": "text/css; charset=utf-8",
     ".svg": "image/svg+xml",
     ".png": "image/png",
+    ".jpg": "image/jpeg",
 }
 # Lower case, no leading dot on any segment, so ".." and hidden files cannot match.
 ASSET_PATH = re.compile(r"/(?:[a-z0-9][a-z0-9._-]*/)*[a-z0-9][a-z0-9._-]*"
-                        r"\.(?:html|js|css|svg|png)")
+                        r"\.(?:html|js|css|svg|png|jpg)")
 
 MAX_BYTES = 40 * 1024 * 1024
 

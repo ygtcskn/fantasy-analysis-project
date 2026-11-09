@@ -1,0 +1,308 @@
+/* Ana Sayfa: played matches and standings on the left, the chosen match in
+   the middle, and a right-hand column kept empty for a future panel. Panels
+   are the site's .home-panel; club colours arrive as --matchweek-home and
+   --matchweek-away (set by home.js from teamColorPair), as on Maç Haftası.
+
+   The yellow and red of a card are pictures of the cards, like the pitch's
+   grass, so they are the same in both themes. */
+:root {
+  --home-card-yellow: #f5c518;
+  --home-card-red: #e5484d;
+}
+
+/* The page is as wide as every other page (styles.css). The two outer columns
+   share one width, so they are always equal. The match runs down both rows
+   while the outer two share the first, so they are as tall as each other (the
+   left one's content) and not as tall as the match, however long it gets. The
+   right column is an empty panel holding the place of a future one. */
+.home-dashboard { container-type: inline-size; margin-bottom: 40px; --home-side-width: 250px; }
+.home-layout {
+  display: grid;
+  grid-template-columns: var(--home-side-width) minmax(0, 1fr) var(--home-side-width);
+  grid-template-rows: auto 1fr;
+  grid-template-areas: "side detail reserved" ". detail .";
+  gap: 0 20px;
+  align-items: start;
+}
+.home-side { grid-area: side; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 20px; align-self: stretch; min-width: 0; }
+.home-detail { grid-area: detail; display: grid; gap: 20px; min-width: 0; container: home-detail / inline-size; }
+.home-detail:focus { outline: none; }
+.home-reserved { grid-area: reserved; align-self: stretch; min-width: 0; }
+/* Statistics and elevens side by side, always the same height. */
+.home-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; align-items: stretch; }
+/* Below them, six cards of one size: the same two halves, three rows that
+   share one height (1fr rows take the tallest card's), filled column by column
+   so the season cards sit under the statistics and the match's battles under
+   İlk 11'ler. Fiziksel Mücadele sets the size; the other five are kept no
+   taller. */
+.home-more { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(3, 1fr); grid-auto-flow: column; gap: 20px; }
+
+@container (max-width: 1100px) {
+  .home-layout { grid-template-columns: var(--home-side-width) minmax(0, 1fr); grid-template-areas: "side detail" ". detail"; }
+  .home-reserved { display: none; }
+}
+@container (max-width: 700px) {
+  /* One column: the chosen match first, then the list to choose from. */
+  .home-layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto; grid-template-areas: "detail" "side"; gap: 20px; }
+}
+@container home-detail (max-width: 600px) {
+  .home-pair { grid-template-columns: minmax(0, 1fr); }
+  .home-more { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; grid-auto-flow: row; grid-auto-rows: 1fr; }
+  /* Alone in its row, the pitch has no neighbour to match, so it keeps a
+     pitch-like shape of its own. */
+  .home-lineups .home-pitch { min-height: 480px; }
+}
+
+/* Cards in the match column */
+.home-card { padding-bottom: 14px; }
+.home-card .home-panel-heading { padding: 18px 18px 8px; }
+.home-card > :not(.home-panel-heading, .home-momentum-scroll) { margin-left: 18px; margin-right: 18px; }
+.home-card-note { margin-top: 12px; margin-bottom: 0; color: var(--muted); font-size: 11px; line-height: 1.6; }
+.home-empty { padding: 28px 18px; }
+
+/* Played matches */
+/* The week: arrows either side of the picker, as on the team page's match
+   picker. The note only speaks when there is nothing to list. */
+.home-week-control { display: flex; align-items: center; gap: 8px; margin: 0 22px 14px; }
+.home-week-control label { flex: 1; min-width: 0; }
+.home-week-control select { width: 100%; }
+.home-week-control .secondary { min-height: 38px; padding: 8px 12px; }
+.home-games-panel .home-panel-note:empty { display: none; }
+/* One week at a time, so the list needs no scroll of its own. */
+.home-games-list { padding: 0 12px 14px; }
+.home-game {
+  display: grid;
+  gap: 5px;
+  width: 100%;
+  margin: 0 0 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-raised);
+  color: var(--ink);
+  text-align: left;
+}
+.home-game:hover { background: var(--surface-hover); }
+/* The week's matches still to play: listed, greyed, nothing to open. */
+.home-game-upcoming { border-style: dashed; background: transparent; color: var(--muted); }
+.home-game-upcoming:hover { background: transparent; }
+.home-game-upcoming .club-logo { opacity: .6; }
+.home-game[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 3px 0 var(--accent); }
+.home-game-meta { color: var(--muted); font-size: 10px; }
+.home-game-line { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 6px; }
+.home-game-team { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 12px; font-weight: 600; }
+.home-game-team > span:not(.club-logo) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.home-game-away { justify-content: flex-end; }
+.home-game .club-logo { width: 22px; height: 22px; flex: 0 0 22px; }
+.home-game .club-logo img { width: 20px; height: 20px; }
+.home-game-score { font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* Puan Durumu in the side column, laid out like a club app's table: place,
+   crest and name under one "Takım" heading, then played, won and points as
+   plain muted figures. Tall rows with no lines between them, only the zebra
+   stripes, in both themes. The figure columns are as narrow as their numbers,
+   so most names fit on one line; the two or three longest wrap onto a second
+   within the same row height. The rules that compete with the dark theme's
+   general table rules (the strongest names an id and three classes) start
+   with :is(:root, :root[data-theme]) .home-side #home-standings: as strong,
+   and later, so they win in either theme. */
+.home-side .standings-scroll { max-height: none; min-height: 0; }
+.home-standings-table { table-layout: fixed; width: 100%; }
+.home-standing-rank { width: 30px; }
+.home-standing-figure { width: 24px; }
+.home-standing-total { width: 40px; }
+:is(:root, :root[data-theme]) .home-side #home-standings :is(th, td):not(.no-results) { padding: 0 4px; border: 0; line-height: 1.2; }
+:is(:root, :root[data-theme]) .home-side #home-standings :is(th, td):first-child { padding-left: 10px; }
+:is(:root, :root[data-theme]) .home-side #home-standings :is(th, td):last-child { padding-right: 10px; }
+:is(:root, :root[data-theme]) .home-side #home-standings thead th { position: static; height: 34px; background: transparent; color: var(--muted); font-size: 12px; font-weight: 500; letter-spacing: 0; text-transform: none; }
+:is(:root, :root[data-theme]) .home-side #home-standings tbody td { height: 44px; font-size: 12px; }
+.home-standings-table .standing-position { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+.home-standings-table .standing-club { gap: 7px; font-size: 12px; font-weight: 600; }
+.home-standings-table .standing-club > span:last-child { min-width: 0; overflow-wrap: normal; }
+.home-standings-table .standing-club .club-logo { width: 24px; height: 24px; flex-basis: 24px; }
+.home-standings-table .standing-club .club-logo img { width: 22px; height: 22px; }
+.home-standings-table td.numeric { color: var(--muted); font-variant-numeric: tabular-nums; }
+.home-standings-table .standing-points { font-size: inherit; font-weight: 500; }
+:is(:root, :root[data-theme]) .home-side #home-standings tbody > tr:nth-child(odd) > td { background: var(--zebra-purple); }
+:is(:root, :root[data-theme]) .home-side #home-standings tbody > tr:nth-child(even) > td { background: var(--zebra-light); }
+:is(:root, :root[data-theme]) .home-side #home-standings tbody > tr:hover > td { background: var(--zebra-hover); }
+
+/* Result */
+.home-scoreboard { padding: 32px 18px 24px; }
+.home-score-grid { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 16px; }
+.home-score-team { display: grid; justify-items: center; gap: 8px; min-width: 0; text-align: center; }
+.home-score-team .club-logo { width: 84px; height: 84px; flex-basis: 84px; }
+.home-score-team .club-logo img { width: 76px; height: 76px; }
+.home-score-name { max-width: 100%; font-size: 17px; font-weight: 600; overflow-wrap: anywhere; }
+.home-score-role { color: var(--muted); font-size: 11px; }
+.home-score-middle { display: grid; justify-items: center; gap: 4px; }
+.home-score-value { font-size: 52px; font-weight: 650; line-height: 1; letter-spacing: -1px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.home-score-state { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.home-score-venue { margin: 22px 0 0; color: var(--ink); font-size: 13px; font-weight: 600; text-align: center; }
+.home-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 12px; }
+.home-chip { padding: 4px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-raised); color: var(--muted); font-size: 11px; }
+/* The ground's photo behind the result, under a dark tint. Like the pitch, it
+   is a picture with its own white ink, the same in both themes. */
+.home-scoreboard-photo { position: relative; isolation: isolate; }
+.home-scoreboard-photo::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(180deg, #0a0610a6 0%, #0a0610cc 70%, #0a0610e6 100%), var(--home-stadium) center / cover no-repeat;
+}
+.home-scoreboard-photo :is(.home-score-name, .home-score-value, .home-score-venue) { color: #fff; text-shadow: 0 1px 3px #000c; }
+.home-scoreboard-photo :is(.home-score-role, .home-score-state) { color: #ffffffcc; text-shadow: 0 1px 2px #000c; }
+.home-scoreboard-photo .home-chip { border-color: #ffffff38; background: #0a0610a6; color: #ffffffd9; }
+.home-scoreboard-photo .club-logo { filter: drop-shadow(0 2px 4px #0009); }
+
+@container home-detail (max-width: 520px) {
+  .home-score-grid { gap: 8px; }
+  .home-score-team .club-logo { width: 48px; height: 48px; flex-basis: 48px; }
+  .home-score-team .club-logo img { width: 44px; height: 44px; }
+  .home-score-name { font-size: 13px; }
+  .home-score-value { font-size: 36px; }
+}
+
+/* Pressure balance: a low strip that is all chart, with no title row or
+   legend; how to read it is the chart's hover text. The chart's sizes are in
+   its own units, about one pixel each at desktop width. */
+.home-card.home-momentum { padding: 10px 0 8px; }
+.home-momentum .home-card-note { margin-top: 0; }
+.home-momentum-scroll { overflow-x: auto; padding: 0 18px; }
+.home-momentum-chart { display: block; width: 100%; min-width: 480px; height: auto; }
+.home-momentum-chart text { font-family: inherit; }
+.home-momentum-tick { fill: var(--muted); font-size: 9px; }
+.home-momentum-team { fill: var(--ink); font-size: 10px; font-weight: 700; }
+.home-momentum-lane { fill: var(--muted); font-size: 8px; font-weight: 600; }
+.home-momentum-label { fill: var(--ink); font-size: 9.5px; font-weight: 600; paint-order: stroke; stroke: var(--surface); stroke-width: 2.5px; stroke-linejoin: round; }
+.home-momentum-axis { stroke: var(--muted); stroke-width: 0.75; }
+.home-momentum-half { stroke: var(--muted); stroke-width: 0.75; stroke-dasharray: 2 2; }
+.home-momentum-ball { stroke: var(--surface); stroke-width: 1; }
+.home-momentum-sub { fill: var(--muted); font-size: 9px; }
+.home-card-yellow { fill: var(--home-card-yellow); }
+.home-card-red { fill: var(--home-card-red); }
+.home-card-second { fill: var(--home-card-red); stroke: var(--home-card-yellow); stroke-width: 1.5; }
+
+/* Match statistics: Maç Haftası's versus rows. */
+.home-statistics .matchweek-versus-head .club-logo { width: 20px; height: 20px; flex: 0 0 20px; }
+.home-statistics .matchweek-versus-head .club-logo img { width: 18px; height: 18px; }
+
+/* Fiziksel Mücadele and Duran Top ve Akan Oyun: Maç Haftası's versus header,
+   then bars growing out from the label in the middle towards each club, the
+   larger value in full colour and the smaller faded. Numbers stay in ink, on
+   the far side of their bar. */
+.home-physical .matchweek-versus-head .club-logo,
+.home-set-pieces .matchweek-versus-head .club-logo,
+.home-phases .matchweek-versus-head .club-logo { width: 20px; height: 20px; flex: 0 0 20px; }
+.home-physical .matchweek-versus-head .club-logo img,
+.home-set-pieces .matchweek-versus-head .club-logo img,
+.home-phases .matchweek-versus-head .club-logo img { width: 18px; height: 18px; }
+.home-mirror-row { display: grid; grid-template-columns: minmax(0, 1fr) 11em minmax(0, 1fr); align-items: center; column-gap: 10px; padding: 5px 0; border-top: 1px solid var(--line); }
+.home-mirror-label { color: var(--muted); font-size: 11px; line-height: 1.3; text-align: center; }
+.home-mirror-side { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.home-mirror-home { justify-content: flex-end; }
+.home-mirror-side b { flex: none; min-width: 2.4em; font-size: 13px; font-variant-numeric: tabular-nums; }
+.home-mirror-home b { text-align: right; }
+/* The bar's room is its half less the number beside it (2.4em and the gap). */
+.home-mirror-bar { display: block; flex: none; width: calc((100% - 2.4em - 6px) * var(--share)); height: 10px; border-radius: 3px; }
+.home-mirror-home .home-mirror-bar { background: var(--matchweek-home); }
+.home-mirror-away .home-mirror-bar { background: var(--matchweek-away); }
+.home-mirror-behind { opacity: .5; }
+/* In a narrow card (half the match column, or a phone) the label wraps so the
+   bars keep some length. The card's own width decides. */
+.home-physical, .home-set-pieces { container: home-mirror / inline-size; }
+@container home-mirror (max-width: 440px) {
+  .home-mirror-row { grid-template-columns: minmax(0, 1fr) 6.5em minmax(0, 1fr); column-gap: 6px; }
+  .home-mirror-side b { min-width: 2em; font-size: 12px; }
+  .home-mirror-bar { width: calc((100% - 2em - 6px) * var(--share)); }
+}
+
+/* The season cards mark each club with a dot in its colour; a small legend
+   names them. The away dot has a ring so it shows when the two overlap. */
+.home-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
+.home-dot-home { background: var(--matchweek-home); }
+.home-dot-away { background: var(--matchweek-away); box-shadow: 0 0 0 1.5px var(--surface); }
+.home-dot-legend { display: flex; gap: 14px; color: var(--muted); font-size: 11px; font-weight: 600; }
+.home-dot-legend-item { display: inline-flex; align-items: center; gap: 6px; }
+
+/* Sezona Göre Bu Maç: a track per measure from the club's lowest match this
+   season (left) to its highest (right), a dot where this match falls. */
+.home-rank-scale { display: flex; justify-content: space-between; margin: 10px 0 2px 6.8em; color: var(--muted); font-size: 10px; }
+.home-rank-row { display: grid; grid-template-columns: 6.3em minmax(0, 1fr); align-items: center; column-gap: 8px; padding: 5px 0; border-top: 1px solid var(--line); }
+.home-rank-label { color: var(--muted); font-size: 11px; line-height: 1.3; }
+/* The home dot sits a little above the line and the away dot a little below,
+   so both show when the two matches fall in the same place. */
+.home-rank-track { position: relative; height: 16px; margin: 0 6px; }
+.home-rank-track::before { content: ""; position: absolute; inset: 5px -6px; border-radius: 3px; background: var(--surface-soft); }
+.home-rank-track .home-dot { position: absolute; top: 0; transform: translateX(-50%); }
+.home-rank-track .home-dot-away { top: 6px; }
+
+/* Ligde Pas Tarzı: the season's team-matches in grey, this match's two in
+   their club colours. */
+.home-passing-chart { display: block; width: 100%; height: auto; }
+.home-passing-chart text { font-family: inherit; }
+.home-passing-grid { stroke: var(--line); stroke-width: 0.6; }
+.home-passing-tick { fill: var(--muted); font-size: 8px; }
+.home-passing-axis { fill: var(--muted); font-size: 8.5px; font-weight: 600; }
+.home-passing-corner { fill: var(--muted); font-size: 8px; font-style: italic; opacity: .8; }
+.home-passing-dot { fill: var(--muted); opacity: .35; }
+.home-passing-own { stroke: var(--surface); stroke-width: 1.5; }
+.home-passing-home { fill: var(--matchweek-home); }
+.home-passing-away { fill: var(--matchweek-away); }
+.home-passing-name { fill: var(--ink); font-size: 10px; font-weight: 700; paint-order: stroke; stroke: var(--surface); stroke-width: 2.5px; stroke-linejoin: round; }
+
+/* Sezon Ortalamasına Göre: two bars per measure out from the line that is the
+   club's season average, right for more than usual, left for less. Each bar's
+   half leaves 2.8em for its number at the far end. */
+.home-shift-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.home-shift-zero { color: var(--muted); font-size: 10px; }
+.home-shift-row { display: grid; grid-template-columns: 6.3em minmax(0, 1fr); align-items: center; column-gap: 8px; padding: 4px 0; border-top: 1px solid var(--line); }
+.home-shift-label { color: var(--muted); font-size: 11px; line-height: 1.3; }
+.home-shift-track { position: relative; display: grid; gap: 2px; }
+.home-shift-track::before { content: ""; position: absolute; top: -2px; bottom: -2px; left: 50%; border-left: 1px solid var(--muted); }
+.home-shift-bar { position: relative; height: 8px; }
+.home-shift-bar i { position: absolute; top: 0; left: 50%; width: calc(var(--w) * (50% - 2.8em)); height: 100%; border-radius: 2px; }
+.home-shift-home i { background: var(--matchweek-home); }
+.home-shift-away i { background: var(--matchweek-away); }
+.home-shift-bar b { position: absolute; top: 50%; left: calc(50% + var(--w) * (50% - 2.8em) + 4px); transform: translateY(-50%); font-size: 9px; line-height: 1; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.home-shift-down i { left: auto; right: 50%; }
+.home-shift-down b { left: auto; right: calc(50% + var(--w) * (50% - 2.8em) + 4px); }
+
+/* Dönem Dönem Hakimiyet: Maç Haftası's split bar, thicker, one per block. */
+.home-phase-row { display: grid; grid-template-columns: 4.2em 2.6em minmax(0, 1fr) 2.6em; align-items: center; column-gap: 8px; padding: 4px 0; border-top: 1px solid var(--line); }
+.home-phase-label { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.home-phase-row b { font-size: 12px; line-height: 1.3; font-variant-numeric: tabular-nums; }
+.home-phase-row b:last-child { text-align: right; }
+.home-phase-row .home-phase-bar { grid-column: auto; height: 12px; margin-top: 0; }
+
+/* Elevens: both sides on one full pitch (styles/pitch.css), away at the top. */
+.home-lineup-caption { display: flex; align-items: center; gap: 8px; margin-top: 0; margin-bottom: 8px; font-size: 12px; font-weight: 600; }
+.home-lineup-caption + .home-pitch { margin-top: 0; }
+.home-pitch + .home-lineup-caption { margin-top: 8px; margin-bottom: 0; }
+.home-lineup-caption small { margin-left: auto; color: var(--muted); font-size: 10px; font-weight: 500; }
+.home-lineup-caption .club-logo { width: 22px; height: 22px; flex: 0 0 22px; }
+.home-lineup-caption .club-logo img { width: 20px; height: 20px; }
+/* The pitch takes whatever height the card has left once the row's height is
+   set, so this card ends level with the statistics beside it. It is never
+   shorter than 370px, where five lines a side of small shirts still fit. */
+.home-lineups { display: flex; flex-direction: column; }
+.home-pitch { display: grid; grid-template-rows: 1fr 1fr; flex: 1 0 auto; min-height: 370px; padding: 8px 4px; }
+.home-pitch .pitch-markings { inset: 8px; }
+.home-pitch .pitch-circle { width: 24%; height: auto; aspect-ratio: 1; }
+.home-pitch .pitch-box { height: 14%; }
+.home-pitch-half { display: flex; flex-direction: column; justify-content: space-around; min-height: 0; }
+.home-pitch-line { display: flex; justify-content: space-evenly; gap: 2px; }
+.home-pitch-player { display: grid; flex: 1; justify-items: center; align-content: start; gap: 1px; min-width: 0; max-width: 64px; text-align: center; }
+.home-pitch-player .pitch-shirt { width: 23px; height: auto; }
+.home-pitch-player .pitch-shirt svg { width: 100%; height: auto; }
+.home-pitch-player .pitch-player-name { max-width: 100%; overflow: hidden; font-size: 9px; line-height: 1.15; text-overflow: ellipsis; white-space: nowrap; overflow-wrap: normal; }
+.home-pitch-missing { margin: auto; padding: 6px 10px; border-radius: 6px; background: #0006; font-size: 11px; text-align: center; }
+.home-subs { margin-top: 12px; font-size: 12px; }
+.home-subs summary { color: var(--ink); font-weight: 600; cursor: pointer; }
+.home-subs h3 { margin: 10px 0 4px; color: var(--muted); font-size: 11px; font-weight: 600; }
+.home-subs ul { display: grid; gap: 3px; margin: 0; padding: 0; list-style: none; }
+.home-subs li { display: grid; grid-template-columns: 38px minmax(0, 1fr) minmax(0, 1fr); gap: 6px; }
+.home-subs-minute { color: var(--muted); font-variant-numeric: tabular-nums; }
+.home-subs-in { color: var(--result-win); overflow-wrap: anywhere; }
+.home-subs-out { color: var(--muted); overflow-wrap: anywhere; }

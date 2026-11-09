@@ -563,6 +563,26 @@ function matchweekTeamHistory(teamId, selected) {
     .sort((a, b) => fantasyKickoff(b) - fantasyKickoff(a));
 }
 
+// A starting eleven as lines, own goal first: by the recorded formation
+// ("row:column") when all eleven have one, otherwise by recorded position,
+// with no exact order inside a line. The keeper is the first line, or the
+// recorded goalkeeper. Shared by Maç Haftası and Ana Sayfa.
+function matchweekLineupLines(players) {
+  const exact = players.length === 11 && players.every((row) => /^[1-6]:[1-6]$/.test(row.formation_field || ""))
+    && new Set(players.map((row) => row.formation_field)).size === 11;
+  const role = (position) => /goalkeeper/i.test(position) ? 1 : /defender|back/i.test(position) ? 2 : /midfield/i.test(position) ? 3 : /forward|attacker|striker|winger/i.test(position) ? 4 : 5;
+  const groups = new Map();
+  for (const player of players) {
+    const group = exact ? Number(player.formation_field.split(":")[0]) : role(player.position);
+    if (!groups.has(group)) groups.set(group, []);
+    groups.get(group).push(player);
+  }
+  const column = (player) => Number(player.formation_field.split(":")[1]);
+  const lines = [...groups.keys()].sort((a, b) => a - b).map((group) => ({ group, goalkeeper: group === 1,
+    players: groups.get(group).sort((a, b) => exact ? column(a) - column(b) : String(a.name).localeCompare(String(b.name))) }));
+  return { exact, lines };
+}
+
 function matchweekLastXI(teamId, game, teams, { players: matchPlayers = state.tables["player_match_stats.csv"] || [], title = "Son 11" } = {}) {
   const panel = element("section", "matchweek-last-xi");
   panel.setAttribute("aria-label", `${teamName(teamId, teams)} ${title}`);
@@ -585,21 +605,11 @@ function matchweekLastXI(teamId, game, teams, { players: matchPlayers = state.ta
   markings.setAttribute("aria-hidden", "true");
   for (const part of ["centre-circle", "centre-spot", "penalty-box", "goal-box", "penalty-arc", "penalty-spot"]) markings.append(element("span", `mini-pitch-${part}`));
   pitch.append(markings);
-  const groups = new Map();
-  const exact = players.length === 11 && players.every((row) => /^[1-6]:[1-6]$/.test(row.formation_field || ""))
-    && new Set(players.map((row) => row.formation_field)).size === 11;
-  const role = (position) => /goalkeeper/i.test(position) ? 1 : /defender|back/i.test(position) ? 2 : /midfield/i.test(position) ? 3 : /forward|attacker|striker|winger/i.test(position) ? 4 : 5;
-  for (const player of players) {
-    const group = exact ? Number(player.formation_field.split(":")[0]) : role(player.position);
-    if (!groups.has(group)) groups.set(group, []);
-    groups.get(group).push(player);
-  }
-  for (const group of [...groups.keys()].sort((a, b) => b - a)) {
+  const { exact, lines } = matchweekLineupLines(players);
+  for (const { goalkeeper, players: linePlayers } of [...lines].reverse()) {
     const line = element("div", "matchweek-mini-line");
-    for (const player of groups.get(group).sort((a, b) => exact ? Number(a.formation_field.split(":")[1]) - Number(b.formation_field.split(":")[1]) : String(a.name).localeCompare(String(b.name)))) {
+    for (const player of linePlayers) {
       const person = element("div", "matchweek-mini-player"), shirt = element("span", "pitch-shirt");
-      // The keeper is the formation's first line, or the recorded goalkeeper.
-      const goalkeeper = exact ? group === 1 : role(player.position) === 1;
       shirt.innerHTML = shirtSVG(teamId, { size: 64, number: player.jersey_number, showName: false, goalkeeper });
       person.append(shirt, element("span", "pitch-player-name", playerName(player.player_id, player.name))); line.append(person);
     }

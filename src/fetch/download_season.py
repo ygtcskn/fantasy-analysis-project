@@ -106,8 +106,11 @@ class Download:
         self.resource("standings", f"standings/seasons/{sid}", include="participant;details.type;form;rule")
         self.resource("topscorers", f"topscorers/seasons/{sid}", paginated=True, include="player;participant;type")
         ids = sorted(self.fixtures)
+        # "referees" gives each match's officials as ids; "referees.referee" adds
+        # who they are, so fixture_referees.csv carries their names. Both are
+        # asked for, so the ids still arrive if a plan refuses the names.
         groups = [
-            ["participants","scores","state","round","stage","venue","referees","coaches","formations","periods"],
+            ["participants","scores","state","round","stage","venue","referees","referees.referee","coaches","formations","periods"],
             ["events.type","statistics.type","lineups.details.type","lineups.position","lineups.player"],
             ["lineups.xGLineup.type","xGFixture.type","pressure","ballCoordinates","trends"],
             ["sidelined","metadata","weatherReport","tvStations","comments","timeline"],

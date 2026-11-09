@@ -48,7 +48,10 @@ async function loadTeamAnalysisExtras() {
   ]);
   if (teamAnalysisExtras.key !== key) return;
   Object.assign(teamAnalysisExtras, { state: "ready", events, pressure, periods });
-  if (state.view === "team-statistics" && state.seasonSlug === key) renderTeamStatistics();
+  if (state.seasonSlug !== key) return;
+  if (state.view === "team-statistics") renderTeamStatistics();
+  // Ana Sayfa's match flow reads the same pressure, periods and events.
+  if (state.view === "home") renderHome();
 }
 
 function teamAnalysisBlock(id, content, note) {

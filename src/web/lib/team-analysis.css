@@ -20,7 +20,7 @@
 }
 
 /* The section is its own size container: from 761px to 1100px the sidebar
-   keeps 256px of the window, so the window's width says little about the
+   keeps 192px of the window, so the window's width says little about the
    room the charts actually have. */
 .team-analysis { margin-top: 20px; border: 1px solid var(--line); border-top: 3px solid #b0a8dd; border-radius: 10px; background: var(--surface); color: var(--ink); overflow: hidden; container: team-analysis / inline-size; }
 :root[data-theme="dark"] .team-analysis { border-top-color: #c9c4e6; }

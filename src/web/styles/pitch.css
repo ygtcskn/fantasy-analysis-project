@@ -21,6 +21,7 @@
 .builder-pitch,
 .team-pitch,
 .squad-pitch,
+.home-pitch,
 .matchweek-mini-pitch {
   --pitch-stripe: 12.5%;
   position: relative;

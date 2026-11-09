@@ -305,6 +305,11 @@ const TeamAnalysis = (() => {
   // from fixture_periods: minutes past it belong to the second half. A team's
   // line is its pressure minus the opponent's, averaged by block over its
   // finished matches; above zero it had the upper hand.
+  // A pressure minute on the match clock, stoppage time held at 45 or 90 so
+  // that it joins the half's last block. Ana Sayfa uses the same rule.
+  function matchClock(minute, firstHalf) {
+    return minute <= firstHalf ? Math.min(minute, 45) : Math.min(45 + (minute - firstHalf), 90);
+  }
   function momentum(pressureRows, periods, played) {
     const firstHalf = new Map();
     for (const period of periods) {
@@ -331,8 +336,7 @@ const TeamAnalysis = (() => {
       const [a, b] = sides.get(fixture);
       if (!values.has(a) || !values.has(b)) continue;
       const half = firstHalf.get(fixture) ?? 45 + Math.max(0, Math.round(((lastMinute.get(fixture) || 90) - 90) / 2));
-      const clock = minute <= half ? Math.min(minute, 45) : Math.min(45 + (minute - half), 90);
-      const block = bucketOf(clock);
+      const block = bucketOf(matchClock(minute, half));
       for (const [team, other] of [[a, b], [b, a]]) {
         if (!sums.has(team)) sums.set(team, buckets.map(() => ({ total: 0, count: 0 })));
         const cell = sums.get(team)[block];
@@ -520,7 +524,7 @@ const TeamAnalysis = (() => {
     return played.map((match) => ({ ...match, fantasy: points.has(`${match.fixtureId}|${match.teamId}`) ? points.get(`${match.fixtureId}|${match.teamId}`) : null }));
   }
   return { buckets, matches, asOf, xgGrid, fantasyByRole, fantasyChart, luck, luckChart,
-    formGrid, bucketOf, goalTiming, timingGrid, momentum, momentumGrid, niceTicks, scatter, comparisons, comparisonRows,
+    formGrid, bucketOf, matchClock, goalTiming, timingGrid, momentum, momentumGrid, niceTicks, scatter, comparisons, comparisonRows,
     withFantasy };
 })();
 

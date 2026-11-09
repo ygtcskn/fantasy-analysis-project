@@ -1,5 +1,95 @@
 # Fantezi Analiz — local data explorer
 
+## Ana Sayfa
+
+The home page (`index.html?view=home`, `features/home/`) has three columns.
+On the left, under the title **Maçlar**, is one matchweek's matches, with the
+league table below them. A week picker with ← and → either side (as on the
+team page's match picker) chooses the week; it opens on the current week, by
+the same `currentRoundIndex` rule as every other page, and keeps the visitor's
+choice until the data reloads. The week's matches are listed earliest first:
+the played ones open the match, and the ones still to play are greyed with
+their kickoff and open nothing. Choosing another week changes only the list.
+
+The league table below (**SÜPER LİG · Puan Durumu**) lists each club's place
+("1."), crest and name under one "Takım" heading, then O (played), G (won) and
+Puan, in tall zebra rows with no lines between them, in both themes. Played
+and won are Puan Durumu's own figures, from one shared function
+(`standingFigureCell` in `features/standings/standings.js`): Sportmonks'
+number, or a count from the saved results, marked *, when it gives none. Maç
+Haftası draws its live table with the same code, without these two columns.
+The middle column shows the chosen match, which is the newest played one until
+the visitor clicks another. It has ten parts:
+
+- **Result:** the score with the half-time score, both formations, the stadium,
+  the date and the weather. A photo of the ground sits behind it when there
+  is one in `assets/stadiums/`. Photos are matched by Sportmonks venue id
+  (`HOME_STADIUM_PHOTOS` in `home.js`), so a match at another ground shows that
+  ground's photo, or none.
+- **Baskı Dengesi:** Sportmonks' pressure index, home minus away, minute by
+  minute, with goals, cards and substitutions marked. It is a low strip with
+  no title or legend; hovering the chart explains how to read it.
+- **Maç İstatistikleri:** Maç Haftası's statistic rows, with xG and passes
+  added.
+- **İlk 11'ler:** both elevens on one pitch, away at the top, and the
+  substitutions below. Beside the statistics, the pitch stretches so the two
+  cards always end level.
+- **Fiziksel Mücadele:** duels won, aerials won, successful dribbles, fouls
+  won and dispossessions, as bars growing out from the label towards each club,
+  the larger value in full colour. Duels and dribbles are the team's own
+  Sportmonks totals (as on the team radar); the other three have no team total
+  and add up the team's players who were on the pitch.
+- **Duran Top ve Akan Oyun:** corners, free kicks, set-play and open-play xG,
+  and goals from penalties or straight from free kicks. The events record how a
+  goal was struck, not how the move began, so goals from corners cannot be
+  counted and the row does not claim them.
+- **Dönem Dönem Hakimiyet:** each side's share of the pressure index in the
+  team page's six 15-minute blocks (stoppage time in a half's last block, by
+  the same `TeamAnalysis.matchClock`). The feed gives the pressure to one side
+  at a time, so a block can be close to 100–0.
+- **Sezona Göre Bu Maç:** for xG, shots, possession, dangerous attacks and
+  fouls, where this match falls among each club's own finished matches this
+  season, from its lowest (left) to its highest (right); ties share the middle
+  place. Hovering a dot gives the value and the season's range.
+- **Ligde Pas Tarzı:** every team-match this season in grey, long-pass share
+  (long passes ÷ passes) against pass accuracy (successful passes ÷ passes, as
+  on the radar), with this match's two sides in their colours.
+- **Sezon Ortalamasına Göre:** possession, pass accuracy, long-pass share,
+  crosses, dangerous attacks and fouls in this match, as a change in per cent
+  from the club's average over its other matches this season. Bars share one
+  scale, the card's largest change between 10% and 100%; a larger change fills
+  its half and its number gives the full figure.
+
+The last three take their season from `team_metrics.csv`, finished matches
+only; a statistic recorded twice for a match is unknown, as on Maç
+İstatistikleri.
+Below the statistics and the elevens, the middle column splits in two: the
+season cards on the left under Maç İstatistikleri, and the match's battle
+cards (Fiziksel Mücadele, Duran Top ve Akan Oyun, Dönem Dönem Hakimiyet) on
+the right under İlk 11'ler. All six are one size: a grid of three equal rows
+gives every card the tallest one's height, and Fiziksel Mücadele is meant to
+be that one, so the other five are kept no taller (the pass scatter's height,
+the rows' padding). On a phone the six stack, still of one height.
+
+The right-hand column is an empty panel holding the place of a future one. The
+two outer columns are always the same width, and as tall as each other: as tall
+as the left one's content, while the match runs on below them. On narrower
+screens the right one is dropped, and on a phone the match comes first.
+
+Everything comes from files the published site serves: `fixtures.csv`,
+`fixture_scores.csv`, `team_metrics.csv`, `player_match_stats.csv`,
+`events.csv`, `fixture_pressure.csv`, `fixture_periods.csv`,
+`fixture_formations.csv` and `fixture_referees.csv`.
+
+The result card shows the referee as a "Hakem: …" chip. Sportmonks lists four
+officials a match in `fixture_referees.csv`; type 6 is the referee. The names
+come from the downloader's `referees.referee` include, added in November 2026:
+an export made before it has the officials' ids only, and then the chip is left
+out until the season is downloaded again.
+
+The page shows no model forecast for a played match: `odds/predictions.csv`
+keeps forecasts only for matches not yet played.
+
 ## Maç Tribünü
 
 The sidebar's **Sosyal → Maç Tribünü** page (`index.html?view=social`) groups
@@ -24,8 +114,8 @@ on the open page only. The implementation lives in `features/social/`.
 
 The sidebar's **Sosyal → Kadrolar** page (`index.html?view=squads`), below
 Maç Tribünü, lists the fantasy squads visitors have shared. Each matchweek is a
-purple bar, newest first: the current week always (the same week Ana Sayfa and
-Maç Tribünü open on, `currentRoundIndex` in `core/match-rules.js`), then every
+purple bar, newest first: the current week always (the same week Maç Tribünü
+opens on, `currentRoundIndex` in `core/match-rules.js`), then every
 earlier or later week someone shared a squad for. Under each bar, three cards
 to a row (two, then one, on narrower screens) show the sharer's profile photo
 (or the nickname's first letter, as everywhere a person appears), nickname, share
@@ -89,7 +179,7 @@ Open **http://127.0.0.1:8000** in your browser and keep the terminal open. The w
 
 The main dataset loads from your saved CSVs and does not run your Python analysis. Maç Haftası additionally requests live Sportmonks data while visible, as described below. Finish downloading/exporting before refreshing; files are validated together before replacing the displayed dataset. Missing files or validation errors keep the previous loaded data. All seven supported CSVs must exist for automatic loading.
 
-The server binds only to this computer and serves allowed website assets, seven core CSVs, and optional `fixture_formations.csv` for team pages. It does not expose `.env`, source Python files, databases, raw exports, or directory listings. It creates no files. Only `/local-live.csv` requests provider data. Stop it with Ctrl+C when finished.
+The server binds only to this computer and serves allowed website assets, seven core CSVs, and the optional ones listed in `OPTIONAL_CSV_NAMES` (such as `fixture_formations.csv` for team pages and `fixture_referees.csv` for Ana Sayfa's referee). It does not expose `.env`, source Python files, databases, raw exports, or directory listings. It creates no files. Only `/local-live.csv` requests provider data. Stop it with Ctrl+C when finished.
 
 ## Live match centre
 

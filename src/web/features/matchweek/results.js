@@ -80,7 +80,9 @@ async function loadMatchweekResultMetrics() {
     if (request !== matchweekResults.request || season !== state.seasonSlug) return;
     matchweekResults.metricsStatus = "unavailable";
   }
+  // Ana Sayfa's match statistics read the same rows.
   if (state.view === "matchweek") renderMatchweek();
+  if (state.view === "home") renderHome();
 }
 
 function matchweekResultPlayers(fixture) {
@@ -89,6 +91,20 @@ function matchweekResultPlayers(fixture) {
     return snapshot.filter((row) => row.record_type === "lineup").map((row) => ({ ...row, name: row.player_name }));
   }
   return (state.tables["player_match_stats.csv"] || []).filter((row) => row.fixture_id === fixture.fixture_id);
+}
+
+// One statistic of one match for both sides, from one feed's rows (team_id,
+// type_id, value). Sportmonks leaves a card count out when it is zero: for a
+// side with this match's statistics recorded, a missing card count is 0.
+// Anything else missing, duplicated or out of range is unknown (null).
+function matchweekStatisticValues(rows, sides, type, percent = false) {
+  const cardTypes = new Set(["84", "83", "85"]);
+  return sides.map((team) => {
+    const matching = rows.filter((metric) => metric.team_id === team && metric.type_id === String(type));
+    if (!matching.length && cardTypes.has(String(type)) && rows.some((metric) => metric.team_id === team)) return 0;
+    const value = matching.length === 1 ? number(matching[0].value) : null;
+    return value === null || value < 0 || (percent && value > 100) ? null : value;
+  });
 }
 
 // This match's Sportmonks statistics, home against away, each with a bar.
@@ -100,17 +116,8 @@ function matchweekResultStatisticsCard(fixture, sides, teams) {
     .filter((row) => row.fixture_id === fixture.fixture_id && (!row.source || row.source === "statistics"));
   const section = matchweekCard("matchweek-preview-wide", "Maç istatistikleri");
   section.append(matchweekVersusHeader(sides, teams));
-  // Sportmonks leaves a card count out when it is zero: for a side with this
-  // match's statistics recorded, a missing card count is 0.
-  const recorded = sides.map((team) => rows.some((metric) => metric.team_id === team));
-  const cardTypes = new Set(["84", "83", "85"]);
   for (const [type, label, percent] of liveStatistics) {
-    const values = sides.map((team, index) => {
-      const matching = rows.filter((metric) => metric.team_id === team && metric.type_id === String(type));
-      if (!matching.length && recorded[index] && cardTypes.has(String(type))) return 0;
-      const value = matching.length === 1 ? number(matching[0].value) : null;
-      return value === null || value < 0 || (percent && value > 100) ? null : value;
-    });
+    const values = matchweekStatisticValues(rows, sides, type, percent);
     section.append(matchweekVersusRow(label, values.map((value) => ({
       value: value === null ? "—" : percent ? percentText(value) : displayNumber(value), note: "" })), values));
   }

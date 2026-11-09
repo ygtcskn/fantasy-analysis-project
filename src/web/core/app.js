@@ -1,7 +1,7 @@
 "use strict";
 
 // CSVs come from the local server or file picker and stay in browser memory.
-const state = { tables: {}, seasonSlug: "", view: "home", page: 0, sort: "date", direction: -1, busy: false, tierCache: null, homeRound: null, standingsGroup: null };
+const state = { tables: {}, seasonSlug: "", view: "home", page: 0, sort: "date", direction: -1, busy: false, tierCache: null, homeFixture: null, homeWeek: null, standingsGroup: null };
 const pageSize = 40;
 let renderedPageCount = 1;
 const expected = {
@@ -87,7 +87,9 @@ async function loadFiles(files, { replace = false, local = false } = {}) {
     if (typeof teamHistory !== "undefined") teamHistory.key = null;
     if (typeof teamMetricsState !== "undefined") teamMetricsState.key = null;
     if (typeof teamAnalysisExtras !== "undefined") teamAnalysisExtras.key = null;
-    state.homeRound = null;
+    state.homeFixture = null;
+    state.homeWeek = null;
+    homeExtras.key = null;
     state.standingsGroup = null;
     resetTierFilters();
     resetFilters();
@@ -215,7 +217,7 @@ function render() {
     for (const id of ["dataset-stats", "empty-state", "workspace"]) $(id).hidden = true;
   }
   $("view-title").textContent = homeView ? "Ana Sayfa" : tierView ? "Oyuncu Listesi" : playerView ? "Oyuncu Katılımları" : "Fikstür";
-  $("view-description").textContent = homeView ? "Puan durumu ve fikstür bir arada." : tierView ? "Tüm oyuncular, sezon performansları ve reytinglerini oluşturan maçlar." : playerView ? "Dakikalar, fırsatlar ve hücum katkısı. Her satır bir oyuncunun bir maçıdır." : "Sezonun bütün maçları, haftalara göre sıralanır.";
+  $("view-description").textContent = homeView ? "Oynanan maçlar, puan durumu ve seçtiğin maçın özeti." : tierView ? "Tüm oyuncular, sezon performansları ve reytinglerini oluşturan maçlar." : playerView ? "Dakikalar, fırsatlar ve hücum katkısı. Her satır bir oyuncunun bir maçıdır." : "Sezonun bütün maçları, haftalara göre sıralanır.";
   if (standingsView) {
     $("view-title").textContent = "Puan Durumu";
     $("view-description").textContent = "Maçlar, galibiyetler, goller ve form durumu — sezonun ayrıntılı tablosu.";

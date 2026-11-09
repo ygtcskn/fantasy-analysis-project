@@ -76,9 +76,10 @@
 .matchweek-versus-bar > span { flex: 1 1 0; min-width: 2px; border-radius: 2px; }
 .matchweek-versus-bar-home { background: var(--matchweek-home); }
 .matchweek-versus-bar-away { background: var(--matchweek-away); }
-.matchweek-preview-fantasy .matchweek-versus-row { padding: 5px 0; }
-.matchweek-preview-fantasy .matchweek-versus-value strong { font-size: 13px; }
-.matchweek-preview-fantasy .matchweek-versus-label { font-size: 10px; }
+/* Compact rows: the fantasy preview here and Ana Sayfa's match statistics. */
+.matchweek-preview-fantasy .matchweek-versus-row, .home-statistics .matchweek-versus-row { padding: 5px 0; }
+.matchweek-preview-fantasy .matchweek-versus-value strong, .home-statistics .matchweek-versus-value strong { font-size: 13px; }
+.matchweek-preview-fantasy .matchweek-versus-label, .home-statistics .matchweek-versus-label { font-size: 10px; }
 /* Last five: one column per club. */
 .matchweek-form-teams { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .matchweek-form-list { display: grid; gap: 4px; margin: 8px 0 0; padding: 0; list-style: none; }

@@ -20,6 +20,7 @@
   <link rel="stylesheet" href="features/squads/squads.css">
   <link rel="stylesheet" href="features/builder/bench.css">
   <link rel="stylesheet" href="features/builder/summary.css">
+  <link rel="stylesheet" href="features/home/home.css">
   <script src="core/site.js" defer></script>
   <script src="data/csv.js" defer></script>
   <script src="core/locale.js" defer></script>
@@ -59,7 +60,7 @@
   <main>
     <header class="page-header" aria-labelledby="view-title">
       <div class="topbar"><span>FUTBOL / VERİ GEZGİNİ</span></div>
-      <div class="page-heading"><div><p id="view-eyebrow" class="eyebrow">SÜPER LİG</p><h1 id="view-title">Ana Sayfa</h1><p id="view-description">Puan durumu ve fikstür bir arada.</p><p id="home-season-note" class="home-season-note"></p></div></div>
+      <div class="page-heading"><div><p id="view-eyebrow" class="eyebrow">SÜPER LİG</p><h1 id="view-title">Ana Sayfa</h1><p id="view-description">Oynanan maçlar, puan durumu ve seçtiğin maçın özeti.</p><p id="home-season-note" class="home-season-note"></p></div></div>
     </header>
     <p id="message" class="message" role="status" aria-live="polite"></p>
     <section id="dataset-stats" class="stats" aria-label="Yüklenen veriler"><div><span>OYUNCU KATILIMI</span><strong id="appearance-count">—</strong></div><div><span>MAÇ</span><strong id="fixture-count">—</strong></div><div><span>TAKIM</span><strong id="team-count">—</strong></div><div><span>SEZON</span><strong id="season-label" class="season-value">—</strong></div></section>
@@ -84,19 +85,26 @@
       </div>
       <div id="squads-detail" hidden></div>
     </section>
-    <section id="home-workspace" class="home-grid" aria-label="Ana Sayfa">
-      <section class="home-panel standings-panel" aria-labelledby="standings-title">
-        <div class="home-panel-heading"><div><p class="eyebrow">LİG</p><h2 id="standings-title">Puan Durumu</h2></div><span id="standings-count" class="badge">—</span></div>
-        <label id="standings-group-control" class="standings-group-control" hidden>Grup<select id="standings-group"></select></label>
-        <p id="standings-note" class="home-panel-note" role="status"></p>
-        <div class="standings-scroll" tabindex="0" aria-label="Kaydırılabilir puan tablosu"><table class="standings-table"><thead><tr><th scope="col">Sıra</th><th scope="col">Takım</th><th scope="col" class="numeric">Puan</th></tr></thead><tbody id="standings-body"></tbody></table></div>
-      </section>
-      <section class="home-panel fixtures-panel" aria-labelledby="home-fixtures-title">
-        <div class="home-panel-heading"><div><p class="eyebrow">MAÇLAR</p><h2 id="home-fixtures-title">Fikstür</h2></div><span id="home-fixture-count" class="badge">—</span></div>
-        <div class="matchweek-controls"><button id="home-round-prev" class="secondary" aria-label="Önceki hafta">←</button><label class="sr-only" for="home-round">Maç haftası</label><select id="home-round"></select><button id="home-round-next" class="secondary" aria-label="Sonraki hafta">→</button></div>
-        <p id="home-fixtures-note" class="home-panel-note" role="status"></p>
-        <div id="home-fixtures-list" class="home-fixtures-list"></div>
-      </section>
+    <section id="home-workspace" class="home-dashboard" aria-label="Ana Sayfa">
+      <div class="home-layout">
+        <div class="home-side">
+          <section class="home-panel home-games-panel" aria-labelledby="home-games-title">
+            <div class="home-panel-heading"><h2 id="home-games-title">Maçlar</h2></div>
+            <div class="home-week-control"><button id="home-week-prev" type="button" class="secondary" aria-label="Önceki hafta">←</button><label><span class="sr-only">Maç haftası</span><select id="home-games-week"></select></label><button id="home-week-next" type="button" class="secondary" aria-label="Sonraki hafta">→</button></div>
+            <p id="home-games-note" class="home-panel-note" role="status"></p>
+            <div id="home-games-list" class="home-games-list" tabindex="-1" aria-label="Seçilen haftanın maçları. Ayrıntılarını görmek için oynanmış bir maç seçin."></div>
+          </section>
+          <section class="home-panel standings-panel" aria-labelledby="standings-title">
+            <div class="home-panel-heading"><div><p class="eyebrow">SÜPER LİG</p><h2 id="standings-title">Puan Durumu</h2></div></div>
+            <label id="standings-group-control" class="standings-group-control" hidden>Grup<select id="standings-group"></select></label>
+            <p id="standings-note" class="home-panel-note" role="status"></p>
+            <div class="standings-scroll" tabindex="0" aria-label="Kaydırılabilir puan tablosu"><table id="home-standings" class="standings-table home-standings-table"><colgroup><col class="home-standing-rank"><col><col class="home-standing-figure"><col class="home-standing-figure"><col class="home-standing-total"></colgroup><thead><tr><th scope="col" colspan="2">Takım</th><th scope="col" class="numeric" title="Oynanan maç">O</th><th scope="col" class="numeric" title="Galibiyet">G</th><th scope="col" class="numeric">Puan</th></tr></thead><tbody id="standings-body"></tbody></table></div>
+          </section>
+        </div>
+        <div id="home-detail" class="home-detail" aria-label="Seçilen maç" tabindex="-1"></div>
+        <!-- An empty panel on purpose: it holds the place of a future one. -->
+        <aside class="home-panel home-reserved" aria-hidden="true"></aside>
+      </div>
     </section>
     <section id="empty-state" class="empty-state"><div class="file-symbol" aria-hidden="true">CSV <span>↗</span></div><p class="eyebrow">KENDİ VERİNLE BAŞLA</p><h2>Sezonunu görünür kıl.</h2><p>Siteyi <code>python src/web/serve.py --season 2026/2027</code> ile başlatın; sezon klasöründeki şu dosyalar otomatik yüklenir:</p><div class="file-list"><code>player_match_stats.csv</code><code>fixtures.csv</code><code>teams.csv</code><code>players.csv</code><code>squads.csv</code></div><p class="muted">Son iki dosya, maç kaydı olmayan oyuncuları da içerir.<br>Dosyalar bu bilgisayarda okunur; yükleme, API çağrısı veya hesap gerekmez.</p></section>
     <section id="standings-workspace" class="detailed-standings" hidden aria-label="Detaylı puan durumu">

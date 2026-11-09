@@ -58,6 +58,24 @@ function standingResults(standing, scores) {
   return { games, values };
 }
 
+// One figure of a club's record as a table cell: Sportmonks' own, or when it
+// gives none, the count from the saved results if they are complete, marked
+// with an asterisk. `results` is a function, so the results are only worked
+// out when they are needed. Puan Durumu and Ana Sayfa's table both use it.
+function standingFigureCell(row, metric, derivedKey, results) {
+  let official = number(row[`details.${metric}`]);
+  // Goal difference can also be obtained from the provider's two goal totals.
+  if (metric === "overall_goal_difference" && official === null) {
+    const scored = number(row["details.overall_scored"]), conceded = number(row["details.overall_conceded"]);
+    if (scored !== null && conceded !== null) official = scored - conceded;
+  }
+  const value = official ?? results().values[derivedKey];
+  const fromResults = official === null && value !== null;
+  const cell = element("td", "numeric", displayNumber(value) + (fromResults ? "*" : ""));
+  cell.title = value === null ? "Veri eksik veya sonuçlar tamamlanmamış." : fromResults ? "Kaydedilmiş tamamlanan maçlardan hesaplandı." : "Sportmonks puan tablosu verisi.";
+  return cell;
+}
+
 function renderDetailedStandings() {
   const teams = homeTeams();
   const source = state.tables["standings.csv"] || [];
@@ -75,19 +93,7 @@ function renderDetailedStandings() {
     clubCell.append(identity);
     tr.append(qualificationCell(row.position), clubCell);
     const results = standingResults(row, scores);
-    for (const [metric, derivedKey] of standingsMetrics) {
-      let official = number(row[`details.${metric}`]);
-      // Goal difference can also be obtained from the provider's two goal totals.
-      if (metric === "overall_goal_difference" && official === null) {
-        const scored = number(row["details.overall_scored"]), conceded = number(row["details.overall_conceded"]);
-        if (scored !== null && conceded !== null) official = scored - conceded;
-      }
-      const value = official ?? results.values[derivedKey];
-      const fromResults = official === null && value !== null;
-      const cell = element("td", "numeric", displayNumber(value) + (fromResults ? "*" : ""));
-      cell.title = value === null ? "Veri eksik veya sonuçlar tamamlanmamış." : fromResults ? "Kaydedilmiş tamamlanan maçlardan hesaplandı." : "Sportmonks puan tablosu verisi.";
-      tr.append(cell);
-    }
+    for (const [metric, derivedKey] of standingsMetrics) tr.append(standingFigureCell(row, metric, derivedKey, () => results));
     const points = element("td", "numeric detailed-points", displayNumber(row.points));
     points.title = "Sportmonks tarafından verilen puan; yeniden hesaplanmaz.";
     tr.append(points);

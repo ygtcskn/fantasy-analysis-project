@@ -14,13 +14,17 @@ main {
   position: fixed;
   inset: 0 auto 0 0;
   z-index: 60;
-  width: 240px;
+  width: 176px;
   max-width: 85vw;
   height: 100dvh;
-  padding: 80px 22px 28px;
+  padding: 80px 10px 28px;
   display: flex;
   flex-direction: column;
+  overflow-x: hidden;
   overflow-y: auto;
+  /* A scrollbar on short screens would eat into the narrow rail; it still
+     scrolls by wheel, touch and keyboard. */
+  scrollbar-width: none;
   transform: translateX(-100%);
   visibility: hidden;
   transition: transform 180ms ease, visibility 180ms;
@@ -31,8 +35,13 @@ main {
   box-shadow: 12px 0 40px #123e3026;
 }
 .rail.is-pinned { box-shadow: 12px 0 40px #123e3040; }
+.rail::-webkit-scrollbar { display: none; }
+/* The rail ends just after its longest label, Oyuncu İstatistikleri; the
+   wordmark's spacing is tightened to fit the same width. */
+.rail .brand { gap: 10px; }
+.rail .brand strong { letter-spacing: 4px; }
 .rail nav { display: grid; gap: 7px; margin-top: 0; }
-.rail .nav-button { min-width: 0; padding: 13px 12px; font-size: 13px; flex: none; }
+.rail .nav-button { min-width: 0; padding: 13px 10px; font-size: 13px; flex: none; white-space: nowrap; }
 .rail .rail-label { display: block; margin-top: 48px; }
 .rail-section + .rail-section .rail-label { margin-top: 28px; }
 
@@ -134,7 +143,6 @@ main {
 a.team-link:hover { color: #507624; text-decoration: underline; text-underline-offset: 3px; }
 .team-logo-link { display: inline-flex; flex-shrink: 0; }
 .team-logo-link:hover { background: #edf2e3; }
-.home-match-team { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
 .team-page main { width: min(1040px, calc(100% - 40px)); }
 .team-page .topbar { padding-left: 0; }
 .team-page .team-page-heading { justify-content: flex-start; flex-direction: row; align-items: center; gap: 24px; }
@@ -142,12 +150,10 @@ a.team-link:hover { color: #507624; text-decoration: underline; text-underline-o
 .team-page-heading h1 { overflow-wrap: anywhere; }
 
 
-/* Home: a wide overview above standings on the left and fixtures on the right. */
-.home-view main { width: min(1040px, calc(100% - 160px)); }
-.home-grid { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: 36px; align-items: start; }
-.home-panel { min-width: 0; border: 1px solid var(--line); border-radius: 9px; background: white; overflow: hidden; }
+/* Home panels and the compact standings table (Ana Sayfa's own layout is in
+   features/home/home.css). */
+.home-panel { min-width: 0; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); overflow: hidden; }
 .standings-panel { border-top: 3px solid #c86158; }
-.fixtures-panel { border-top: 3px solid #5c71bb; }
 .home-panel-heading { padding: 24px 22px 12px; display: flex; align-items: center; justify-content: space-between; gap: 15px; }
 .home-panel-heading .eyebrow { font-size: 9px; margin-bottom: 7px; }
 .home-panel-heading h2 { font-size: 23px; }
@@ -161,36 +167,12 @@ a.team-link:hover { color: #507624; text-decoration: underline; text-underline-o
 .standing-club .club-logo img { width: 27px; height: 27px; }
 .standing-points { font-weight: 700; font-size: 14px; }
 .standings-group-control { display: grid; gap: 6px; margin: 8px 22px 16px; font-size: 11px; color: var(--muted); }
-.matchweek-controls { display: flex; align-items: center; gap: 9px; padding: 6px 22px 8px; }
-.matchweek-controls select { flex: 1; min-width: 0; background: #f5f7f0; text-align: center; font-weight: 600; }
-.matchweek-controls .secondary { min-height: 38px; }
-.home-fixtures-list { padding: 0 22px 24px; max-height: 780px; min-height: 290px; overflow: auto; }
-.fixture-date { font-size: 10px; letter-spacing: .7px; color: var(--muted); padding: 13px 0 8px; margin: 0; font-weight: 600; }
-.home-match { border: 1px solid var(--line); border-radius: 7px; padding: 12px 15px; margin-bottom: 10px; }
-.home-match-meta { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 10px; color: var(--muted); margin-bottom: 8px; }
-.fixture-status { background: #f1f4e9; border-radius: 3px; padding: 2px 6px; text-align: right; }
-.home-match-side { display: flex; align-items: center; gap: 10px; min-height: 37px; }
-.home-match-side .club-logo { width: 26px; height: 26px; flex-basis: 26px; }
-.home-match-side .club-logo img { width: 24px; height: 24px; }
-.home-match-club { font-size: 12px; font-weight: 550; flex: 1; min-width: 0; }
-.home-match-score { font-size: 15px; min-width: 20px; text-align: right; font-variant-numeric: tabular-nums; }
 @media (max-width: 900px) {
-  .home-grid { gap: 20px; }
   .home-panel-heading { padding: 20px 15px 10px; }
   .home-panel-note { padding: 0 15px; }
   .home-panel-heading h2 { font-size: 20px; }
-  .home-fixtures-list { padding: 0 15px 18px; }
-  .matchweek-controls { padding-left: 15px; padding-right: 15px; }
   .standing-club { gap: 7px; }
   .standings-table td, .standings-table th { padding-left: 10px; padding-right: 10px; }
-}
-@media (max-width: 760px) {
-  .home-view main { width: calc(100% - 40px); }
-  .home-grid { grid-template-columns: minmax(0, 1fr); gap: 26px; }
-  .home-panel-heading { padding: 22px 20px 12px; }
-  .home-panel-note { padding: 0 20px; }
-  .home-fixtures-list { max-height: 650px; padding: 0 20px 20px; }
-  .matchweek-controls { padding-left: 20px; padding-right: 20px; }
 }
 
 /* View-specific status visibility; every view keeps the shared page header. */
@@ -404,23 +386,22 @@ a.team-link:hover { color: #507624; text-decoration: underline; text-underline-o
   select { transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease; }
 }
 
-/* The rail is a fixed 240px overlay on the left, but `main` is centred on the
+/* The rail is a fixed 176px overlay on the left, but `main` is centred on the
    whole viewport, so the two only clear each other once the centred left margin
-   exceeds 240px - which happens at about 1700px. Below that the rail sits on top
+   exceeds 176px - which happens at about 1570px. Below that the rail sits on top
    of the content. Reserve its width instead. The reserve does not depend on
    whether the rail is open, so toggling it still never moves the page.
    Above 1700px nothing here applies and the layout is unchanged. */
 @media (min-width: 1101px) and (max-width: 1700px) {
-  main { width: min(1220px, calc(100% - 320px)); margin-left: 240px; margin-right: auto; }
-  .home-view main { width: min(1040px, calc(100% - 320px)); }
-  .team-page main { width: min(1040px, calc(100% - 300px)); }
+  main { width: min(1220px, calc(100% - 256px)); margin-left: 176px; margin-right: auto; }
+  .team-page main { width: min(1040px, calc(100% - 236px)); }
 }
 /* The sidebar is open by default from tablet width up, so it reserves its
    width there too instead of covering the page. */
 @media (min-width: 761px) and (max-width: 1100px) {
   main,
   .home-view main,
-  .team-page main { width: calc(100% - 280px); margin-left: 256px; margin-right: 24px; }
+  .team-page main { width: calc(100% - 216px); margin-left: 192px; margin-right: 24px; }
 }
 
 /* CANLI beside Maç Haftası: the live centre's own badge (live-centre.css), placed. */
