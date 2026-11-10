@@ -20,7 +20,7 @@ also says what to run and what you should see.
 | 3 | [The tools](03-the-tools.md) | Safe questions the bot can ask, tested without AI |
 | 4 | [Connect the AI](04-connect-the-ai.md) | Claude and ChatGPT agent loops, and a chat in your terminal |
 | 5 | [The chat on Ana Sayfa](05-website-chat.md) | The Asistan panel, answered through your local server |
-| 6 | Put it online *(coming next)* | Cloudflare Pages Function + D1 database |
+| 6 | Put it online *(code written for you, no guide)* | `functions/api/chat.js` + `src/chat/cloud/` on Cloudflare, data in D1 via `src/chat/sync_chat_d1.py` |
 | 7 | Test and measure *(later)* | How often it answers correctly, and the cost |
 
 ## How it fits together (the finished version)

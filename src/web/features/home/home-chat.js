@@ -1,10 +1,12 @@
 "use strict";
 
-// Ana Sayfa's chat panel (Asistan). A question goes to src/web/serve.py's
-// /local-chat, which has the chosen AI answer it with the chatbot's tools
-// (src/chat/web_chat.py) and this computer's API keys. With no server behind
-// it, the public site's panel says so instead. Messages are written as text,
-// never as HTML.
+// Ana Sayfa's chat panel (Asistan). A question goes to the server, which has
+// the chosen AI answer it with the chatbot's tools and API keys the page never
+// sees: on this computer src/web/serve.py's /local-chat (src/chat/web_chat.py),
+// on fantezianaliz.com the Cloudflare function /api/chat (functions/api/chat.js).
+// The page sends the last few questions and answers with each question, so
+// follow-ups work there too (the local server also keeps its own history).
+// Messages are written as text, never as HTML.
 //
 // Guests get a few answers, then the chat asks them to sign in. The server
 // keeps that count and checks a signed-in visitor's Supabase token itself;
@@ -17,7 +19,14 @@ const HOME_CHAT_GREETING = "Merhaba! Süper Lig maçları, oyuncular ve sezon is
 const HOME_CHAT_GUEST_QUESTIONS = 3;
 const HOME_CHAT_TIMEOUT = 90000;
 const HOME_CHAT_PLACEHOLDER = "Buraya yaz";
-const homeChat = { busy: false, provider: "claude", conversation: "", guest: "", guestLeft: null, needsLogin: false };
+const HOME_CHAT_HISTORY = 6;   // question-and-answer pairs sent along with a question
+const homeChat = { busy: false, provider: "claude", conversation: "", guest: "", guestLeft: null, needsLogin: false, history: [] };
+
+// Where questions go: the local server, or the site's Cloudflare function. A
+// page opened from disk has neither.
+function homeChatEndpoint() {
+  return siteMode === "local" ? "/local-chat" : siteMode === "published" ? "/api/chat" : "";
+}
 
 function homeChatStorage(name, value) {
   try {
@@ -89,14 +98,14 @@ function homeChatResize() {
 function homeChatNote() {
   const note = $("home-chat-note");
   const left = homeChat.guestLeft ?? HOME_CHAT_GUEST_QUESTIONS;
-  note.hidden = siteMode !== "local" || homeChatSignedIn() || homeChat.needsLogin;
+  note.hidden = !homeChatEndpoint() || homeChatSignedIn() || homeChat.needsLogin;
   note.textContent = left === HOME_CHAT_GUEST_QUESTIONS
     ? `Misafir olarak ${left} soru sorabilirsin; sonrası için giriş yapman gerekir.`
     : `Misafir olarak ${left} soru hakkın kaldı.`;
 }
 
 function homeChatSync() {
-  const offline = siteMode !== "local", locked = offline || homeChat.needsLogin;
+  const offline = !homeChatEndpoint(), locked = offline || homeChat.needsLogin;
   const input = $("home-chat-input");
   input.disabled = locked;
   input.placeholder = homeChat.needsLogin ? "Devam etmek için giriş yap" : HOME_CHAT_PLACEHOLDER;
@@ -112,10 +121,11 @@ function homeChatSync() {
 // history in its own form, so a switch always starts over.
 function startHomeChat() {
   homeChat.conversation = homeChatNewId();
+  homeChat.history = [];
   $("home-chat-messages").replaceChildren();
   homeChatMessage("assistant", HOME_CHAT_GREETING);
-  if (siteMode !== "local") {
-    homeChatMessage("error", "Asistan şimdilik yalnızca yerel sitede (serve.py) çalışıyor.");
+  if (!homeChatEndpoint()) {
+    homeChatMessage("error", "Asistan bu sayfada çalışmıyor: siteyi fantezianaliz.com'dan ya da yerel sunucudan (serve.py) aç.");
     $("home-chat-suggestions").hidden = true;
   } else if (homeChat.needsLogin) {
     homeChatLoginMessage("Misafir olarak 3 soru hakkını kullandın. Devam etmek için giriş yap.");
@@ -142,12 +152,17 @@ async function askHomeChat(question) {
   const token = await homeChatToken();
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), HOME_CHAT_TIMEOUT);
+  const body = new URLSearchParams({ conversation: homeChat.conversation, provider: homeChat.provider, question,
+    guest: token ? "" : homeChat.guest });
+  for (const { q, a } of homeChat.history.slice(-HOME_CHAT_HISTORY)) {
+    body.append("q", q);
+    body.append("a", a);
+  }
   try {
-    const response = await fetch("/local-chat", {
+    const response = await fetch(homeChatEndpoint(), {
       method: "POST",
       headers: { "X-Superlig-Chat": "1", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-      body: new URLSearchParams({ conversation: homeChat.conversation, provider: homeChat.provider, question,
-        guest: token ? "" : homeChat.guest }),
+      body,
       cache: "no-store",
       signal: controller.signal,
     });
@@ -175,7 +190,7 @@ function homeChatGuestLeft(row) {
 
 async function sendHomeChat(text) {
   const question = String(text || "").trim();
-  if (!question || homeChat.busy || homeChat.needsLogin || siteMode !== "local") return;
+  if (!question || homeChat.busy || homeChat.needsLogin || !homeChatEndpoint()) return;
   homeChat.busy = true;
   const conversation = homeChat.conversation;
   $("home-chat-suggestions").hidden = true;
@@ -190,6 +205,7 @@ async function sendHomeChat(text) {
     homeChatGuestLeft(row);
     if (row.status === "ok") {
       homeChatMessage("assistant", row.text, homeChatMeta(row), row.tool_calls ? `Araçlar: ${row.tool_calls}` : "Araç kullanılmadı");
+      homeChat.history = [...homeChat.history, { q: question, a: row.text }].slice(-HOME_CHAT_HISTORY);
       // That was a guest's last question: ask them to sign in now, not after they type another.
       if (homeChat.guestLeft === 0 && !homeChatSignedIn()) {
         homeChat.needsLogin = true;
@@ -204,7 +220,8 @@ async function sendHomeChat(text) {
   } catch (error) {
     if (conversation === homeChat.conversation) {
       homeChatMessage("error", error.name === "AbortError" ? "Yanıt çok gecikti; tekrar deneyin."
-        : "Yerel sunucuya ulaşılamadı. serve.py çalışıyor mu? Kod değiştiyse yeniden başlatın.");
+        : siteMode === "local" ? "Yerel sunucuya ulaşılamadı. serve.py çalışıyor mu? Kod değiştiyse yeniden başlatın."
+          : "Asistana şu an ulaşılamadı. Biraz sonra tekrar dene.");
     }
   } finally {
     typing.remove();

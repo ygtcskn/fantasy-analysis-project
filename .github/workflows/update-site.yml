@@ -3,7 +3,7 @@
 # has reached a checkpoint (or a day has passed); only then does it download,
 # export TFF (about once a day), forecast, rebuild and upload the site. The TFF
 # export and the forecast are optional: if either fails, the site still updates
-# and the run shows a warning. Cloudflare R2 holds the data between
+# and the run shows a warning. So is sending the chat's data to Cloudflare D1. Cloudflare R2 holds the data between
 # runs (src/sync_data.py). The secrets it needs are the secrets.* names below,
 # set under Settings -> Secrets and variables -> Actions.
 name: Update fantezianaliz.com
@@ -42,6 +42,9 @@ env:
   # last TFF prices and positions.
   TFF_FANTASY_EMAIL: ${{ secrets.TFF_FANTASY_EMAIL }}
   TFF_FANTASY_PASSWORD: ${{ secrets.TFF_FANTASY_PASSWORD }}
+  # Optional. The Cloudflare D1 database the Ana Sayfa chat reads online; without
+  # it the chat data is not sent. CLOUDFLARE_API_TOKEN then needs D1 Edit too.
+  CHAT_D1_DATABASE_ID: ${{ secrets.CHAT_D1_DATABASE_ID }}
   NOW_FLAG: ${{ inputs.now && '--now' || '' }}
 
 jobs:

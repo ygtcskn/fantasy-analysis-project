@@ -14,6 +14,13 @@ when the next matchweek has none. The TFF export runs about once a day when the
 TFF_FANTASY_EMAIL and TFF_FANTASY_PASSWORD settings exist; if TFF refuses the
 login or asks for verification, the site keeps the last TFF prices and the
 next attempt waits a day.
+
+The Ana Sayfa chat online (functions/api/chat.js, a Cloudflare Pages Function
+uploaded with the site) reads its data from Cloudflare D1. After the upload,
+when CHAT_D1_DATABASE_ID is set, the chat database is rebuilt and what changed
+is sent to D1 (src/chat/sync_chat_d1.py); both steps are optional too. If the
+chat function itself cannot be built, the site is uploaded without it rather
+than not at all.
 """
 
 import argparse
@@ -62,7 +69,11 @@ DAILY = timedelta(hours=24)
 # After a failed run, wait this long before trying again, so a lasting problem
 # does not repeat the whole download every half hour.
 RETRY_AFTER = timedelta(hours=2)
-STEP_MINUTES = {"download": 60, "tff": 15, "odds": 30, "pipeline": 60, "build": 15, "upload": 30}
+STEP_MINUTES = {"download": 60, "tff": 15, "odds": 30, "pipeline": 60, "build": 15, "upload": 30,
+                "chat-db": 10, "chat-sync": 20}
+# Cloudflare Pages Functions: wrangler uploads this folder with the site when it
+# runs from the project folder.
+FUNCTIONS = ROOT / "functions"
 # A lock or an in-progress download older than the longest possible run was abandoned.
 STALE = timedelta(minutes=sum(STEP_MINUTES.values()) + 15)
 
@@ -165,13 +176,13 @@ def console_python():
     return str(executable)
 
 
-def run_step(step, command, log, env):
+def run_step(step, command, log, env, cwd=ROOT):
     started = time.monotonic()
     print(f"{datetime.now():%H:%M:%S} {step}...", flush=True)
     log.write(f"\n=== {step}: {' '.join(command)}\n")
     log.flush()
     try:
-        result = subprocess.run(command, cwd=ROOT, env=env, stdin=subprocess.DEVNULL, stdout=log,
+        result = subprocess.run(command, cwd=cwd, env=env, stdin=subprocess.DEVNULL, stdout=log,
                                 stderr=subprocess.STDOUT, timeout=STEP_MINUTES[step] * 60,
                                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     except subprocess.TimeoutExpired:
@@ -289,10 +300,22 @@ def main():
             npx = shutil.which("npx")
             if not npx:
                 raise StepFailed("upload", "npx not found; install Node.js")
-            run_step("upload", [npx, "--yes", "wrangler", "pages", "deploy", SITE_ROOT.relative_to(ROOT).as_posix(),
-                                "--project-name", PAGES_PROJECT, "--branch", "main", "--commit-dirty=true"],
-                     log, upload_env)
+            deploy = [npx, "--yes", "wrangler", "pages", "deploy"]
+            options = ["--project-name", PAGES_PROJECT, "--branch", "main", "--commit-dirty=true"]
+            try:
+                run_step("upload", [*deploy, SITE_ROOT.relative_to(ROOT).as_posix(), *options], log, upload_env)
+            except StepFailed as failure:
+                if not FUNCTIONS.is_dir():
+                    raise
+                # Run from the site's own parent folder, wrangler finds no functions/:
+                # the site goes up without the chat rather than not at all.
+                warnings.append(f"upload with the chat function failed ({failure}); the site went up without it")
+                run_step("upload", [*deploy, SITE_ROOT.name, *options], log, upload_env, cwd=SITE_ROOT.parent)
             steps.append("upload")
+            if local_setting("CHAT_D1_DATABASE_ID"):
+                if run_optional("chat-db", [python, "src/chat/build_chat_db.py"], log, env, warnings):
+                    if run_optional("chat-sync", [python, "src/chat/sync_chat_d1.py"], log, upload_env, warnings):
+                        steps.append("chat")
         row.update(status="complete", message="; ".join(warnings))
         print("The site is up to date." + (f" Warnings: {'; '.join(warnings)}" if warnings else ""))
         return 0
