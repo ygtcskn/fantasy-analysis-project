@@ -29,7 +29,7 @@ function statisticsFantasyPoints(playerId) {
 
 function statisticsShortName(name) {
   const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
-  return parts.length < 2 ? (parts[0] || "—") : `${parts[0][0].toLocaleUpperCase("tr-TR")}. ${parts.at(-1)}`;
+  return parts.length < 2 ? (parts[0] || "—") : `${parts[0][0].toLocaleUpperCase(LOCALE)}. ${parts.at(-1)}`;
 }
 
 function statisticsListLayout() {
@@ -58,7 +58,7 @@ function statisticsLeaders(players, accessor, limit) {
     .filter((entry) => entry.value !== null && entry.value > 0)
     .sort((a, b) => b.value - a.value
       || (b.player.totals.minutes_played.value ?? 0) - (a.player.totals.minutes_played.value ?? 0)
-      || a.player.name.localeCompare(b.player.name, "tr"))
+      || a.player.name.localeCompare(b.player.name, LOCALE))
     .slice(0, limit);
 }
 
@@ -76,7 +76,7 @@ function renderStatisticsCard(bodyId, noteId, players, teams, accessor, format, 
     club.append(createTeamLogo(entry.player.club || "unknown", teams, false));
     const open = element("button", "statistics-player-button", entry.player.name);
     open.type = "button";
-    open.setAttribute("aria-label", `${entry.player.name} maç istatistiklerini aç`);
+    open.setAttribute("aria-label", t("{name} maç istatistiklerini aç", { name: entry.player.name }));
     open.addEventListener("click", () => openTierPlayer(entry.player.id));
     club.append(open);
     identity.append(club);
@@ -91,15 +91,15 @@ function renderStatisticsCard(bodyId, noteId, players, teams, accessor, format, 
   }
   $(bodyId).replaceChildren(body);
   $(noteId).textContent = leaders.length
-    ? `İlk ${leaders.length} oyuncu gösteriliyor.`
+    ? t("İlk {count} oyuncu gösteriliyor.", { count: leaders.length })
     : "";
 }
 
 function renderStatisticsList(players, teams) {
   const teamIds = [...new Set(players.flatMap((player) => [...player.teams]))];
   options($("statistics-team"), teamIds.map((id) => [id, teamName(id, teams)])
-    .sort((a, b) => a[1].localeCompare(b[1], "tr")), "Tüm takımlar");
-  const query = $("statistics-search").value.trim().toLocaleLowerCase("tr");
+    .sort((a, b) => a[1].localeCompare(b[1], LOCALE)), t("Tüm takımlar"));
+  const query = $("statistics-search").value.trim().toLocaleLowerCase(LOCALE);
   const team = $("statistics-team").value;
   const [, , accessor] = STATISTICS_SORTS.find(([key]) => key === $("statistics-sort").value)
     || STATISTICS_SORTS[0];
@@ -107,9 +107,9 @@ function renderStatisticsList(players, teams) {
   const visible = players
     .filter((player) => (!team || player.teams.has(team))
       && (!role || playerPrimaryRole(player) === role)
-      && (!query || `${player.name} ${player.teamNames.join(" ")}`.toLocaleLowerCase("tr").includes(query)))
+      && (!query || `${player.name} ${player.teamNames.join(" ")}`.toLocaleLowerCase(LOCALE).includes(query)))
     .sort((a, b) => (accessor(b) ?? -Infinity) - (accessor(a) ?? -Infinity)
-      || a.name.localeCompare(b.name, "tr"));
+      || a.name.localeCompare(b.name, LOCALE));
   const body = document.createDocumentFragment();
   for (const player of visible) {
     const row = element("tr");
@@ -119,7 +119,7 @@ function renderStatisticsList(players, teams) {
     const open = element("button", "statistics-player-button", statisticsShortName(player.name));
     open.type = "button";
     open.title = player.name;
-    open.setAttribute("aria-label", `${player.name} profilini göster`);
+    open.setAttribute("aria-label", t("{name} profilini göster", { name: player.name }));
     open.addEventListener("click", () => statisticsPick(player.id));
     club.append(open);
     identity.append(club);
@@ -133,7 +133,7 @@ function renderStatisticsList(players, teams) {
     body.append(row);
   }
   if (!visible.length) {
-    const row = element("tr"), cell = element("td", "no-results", "Bu filtrelerle oyuncu bulunamadı.");
+    const row = element("tr"), cell = element("td", "no-results", t("Bu filtrelerle oyuncu bulunamadı."));
     cell.colSpan = 5;
     row.append(cell);
     body.append(row);
@@ -145,18 +145,18 @@ function renderStatistics() {
   const { players, teams } = leaguePlayers();
   renderStatisticsCard("statistics-scorers-body", "statistics-scorers-note", players, teams,
     (player) => player.totals.goals.value, (value) => displayNumber(value),
-    "Kayıtlı gol bulunamadı.");
+    t("Kayıtlı gol bulunamadı."));
   renderStatisticsCard("statistics-assists-body", "statistics-assists-note", players, teams,
     (player) => player.totals.assists.value, (value) => displayNumber(value),
-    "Kayıtlı asist bulunamadı.");
+    t("Kayıtlı asist bulunamadı."));
   // Fantasy points are the currency this whole project is built around, and
   // they are not visible anywhere else on the site, so they earn the third card
   // rather than a fourth attacking metric that mostly repeats the first two.
   const fantasyReady = fantasyState.season && fantasyState.season === state.seasonSlug;
   renderStatisticsCard("statistics-fantasy-body", "statistics-fantasy-note", players, teams,
     (player) => statisticsFantasyPoints(player.id), (value) => displayNumber(value),
-    fantasyReady ? "Fantezi puanı bulunamadı."
-      : "Fantezi analizi yüklenmedi. Sayfayı yenileyin.");
+    fantasyReady ? t("Fantezi puanı bulunamadı.")
+      : t("Fantezi analizi yüklenmedi. Sayfayı yenileyin."));
   renderStatisticsList(players, teams);
   renderStatisticsProfile(players);
   requestAnimationFrame(statisticsListLayout);
@@ -219,7 +219,7 @@ function renderStatisticsHeader(profiles) {
     if (profiles.length > 1) {
       const remove = element("button", "statistics-chip-remove", "×");
       remove.type = "button";
-      remove.title = `${player.name} karşılaştırmadan çıkar`;
+      remove.title = t("{name} karşılaştırmadan çıkar", { name: player.name });
       remove.setAttribute("aria-label", remove.title);
       remove.addEventListener("click", () => statisticsPick(player.id));
       chip.append(remove);
@@ -228,9 +228,8 @@ function renderStatisticsHeader(profiles) {
   });
   $("statistics-profile-name").replaceChildren(...chips);
   $("statistics-profile-note").textContent = profiles.length > 1
-    ? "Listeden başka bir oyuncuya tıklayarak ikinci oyuncuyu değiştirin; × ya da listede adına tıklayarak çıkarın. "
-      + "Radarlarda ve dağılımda ikinci oyuncu birincil oyuncunun emsal grubunda sıralanır."
-    : "Karşılaştırmak için listeden ikinci bir oyuncuya tıklayın.";
+    ? t("Listeden başka bir oyuncuya tıklayarak ikinci oyuncuyu değiştirin; × ya da listede adına tıklayarak çıkarın. Radarlarda ve dağılımda ikinci oyuncu birincil oyuncunun emsal grubunda sıralanır.")
+    : t("Karşılaştırmak için listeden ikinci bir oyuncuya tıklayın.");
 }
 
 const STATISTICS_LEGEND_TITLES = ["statistics-radar-title", "statistics-detailed-title", "statistics-facts-title",
@@ -268,7 +267,7 @@ function renderStatisticsFacts(profiles) {
       matches.length ? displayNumber(Math.max(...matches.map((row) => number(row.points_total) ?? 0))) : "—",
     ];
   });
-  const labels = ["Maç", "Dakika", "Gol", "Asist", "Şut", "Kilit pas", "Reyting", "Fantezi puanı", "FP / maç", "En iyi maç (FP)"];
+  const labels = [t({ tr: "Maç", en: "Matches" }), t("Dakika"), t("Gol"), t("Asist"), t("Şut"), t("Kilit pas"), t("Reyting"), t("Fantezi puanı"), t("FP / maç"), t("En iyi maç (FP)")];
   const list = document.createDocumentFragment();
   labels.forEach((label, row) => {
     const item = element("div"), value = element("dd");
@@ -333,7 +332,7 @@ function statisticsPlayerMatches(player, teams, fixtures) {
     return { fixture_id: id, time, round: String(fixture?.["round.name"] || spare?.round || ""),
       date: Number.isFinite(time) ? fantasyDate(new Date(time).toISOString()) : "",
       opponent: teamName(opponent, teams),
-      code: (teams.get(opponent)?.short_code || teamName(opponent, teams)) + (home === null ? "" : home ? " (İ)" : " (D)"),
+      code: (teams.get(opponent)?.short_code || teamName(opponent, teams)) + (home === null ? "" : ` (${home ? t("İ") : t("D")})`),
       rating: ratings.get(id)?.rating ?? null, minutes: ratings.get(id)?.minutes ?? null,
       points: points.has(id) ? points.get(id) : null };
   });
@@ -379,7 +378,7 @@ function statisticsMatchLabels(parts, slots, columns, frame) {
   slots.forEach((slot, index) => {
     if (index % columns.every && index !== slots.length - 1) return;
     const centre = columns.x(index).toFixed(1), base = frame.height - frame.bottom;
-    if (slot.round) parts.push(`<text x="${centre}" y="${base + 15}" text-anchor="middle" font-size="10" fill="var(--ink)">${statisticsEscape(`${slot.round}. hf`)}</text>`);
+    if (slot.round) parts.push(`<text x="${centre}" y="${base + 15}" text-anchor="middle" font-size="10" fill="var(--ink)">${statisticsEscape(t("{round}. hf", { round: slot.round }))}</text>`);
     // One opponent line per player, primary first; compared, each line takes
     // its player's colour so the column says whose fixture it is.
     slot.entries.forEach((entry, which) => {
@@ -400,7 +399,7 @@ function statisticsAverageLines(parts, averages, y, frame, format, attribute) {
     const stroke = compared ? STATISTICS_SERIES[entry.which].line : "var(--ink)";
     const mean = y(entry.value).toFixed(1);
     parts.push(`<line ${attribute}="${entry.value}" x1="${frame.left}" y1="${mean}" x2="${frame.width - frame.right + 4}" y2="${mean}" stroke="${stroke}" stroke-width="1.5" stroke-dasharray="4 3"/>`);
-    parts.push(`<text x="${frame.width - frame.right + 8}" y="${(entry.at + 4).toFixed(1)}" font-size="10" font-weight="600" fill="${stroke}">Ort. ${format(entry.value)}</text>`);
+    parts.push(`<text x="${frame.width - frame.right + 8}" y="${(entry.at + 4).toFixed(1)}" font-size="10" font-weight="600" fill="${stroke}">${statisticsEscape(t("Ort. {value}", { value: format(entry.value) }))}</text>`);
   }
 }
 
@@ -408,7 +407,7 @@ const statisticsEscape = (value) => String(value ?? "").replace(/[&<>"']/g,
   (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
 
 function statisticsMatchDetail(entry, tail) {
-  return statisticsEscape(`${entry.round ? `${entry.round}. hafta · ` : ""}${entry.date ? `${entry.date} · ` : ""}${entry.opponent} · ${tail}`);
+  return statisticsEscape(`${entry.round ? `${t("{round}. hafta", { round: entry.round })} · ` : ""}${entry.date ? `${entry.date} · ` : ""}${entry.opponent} · ${tail}`);
 }
 
 function statisticsTimelineSvg(slots, averages, names) {
@@ -445,20 +444,20 @@ function statisticsTimelineSvg(slots, averages, names) {
       const entry = slot.entries[which];
       if (entry?.points == null) return;
       const centre = x(index).toFixed(1);
-      const detail = statisticsMatchDetail(entry, `${names[which]} · ${displayNumber(entry.points)} fantezi puanı`);
+      const detail = statisticsMatchDetail(entry, `${names[which]} · ${t("{points} fantezi puanı", { points: displayNumber(entry.points) })}`);
       parts.push(`<circle data-timeline-point="${which}" cx="${centre}" cy="${y(entry.points).toFixed(1)}" r="4" fill="${colour}" stroke="var(--surface)" stroke-width="1.5"><title>${detail}</title></circle>`);
       if (columns.showValues) parts.push(`<text x="${centre}" y="${(y(entry.points) - 8).toFixed(1)}" text-anchor="middle" font-size="10" fill="var(--muted)">${displayNumber(entry.points)}</text>`);
     });
   }
   statisticsMatchLabels(parts, slots, columns, frame);
   statisticsAverageLines(parts, averages, y, frame, displayNumber, "data-timeline-average");
-  return `<svg viewBox="0 0 ${width} ${height}" width="100%" role="img" aria-label="Maç maç fantezi puanı: ${statisticsEscape(averages.map((entry) => `${names[entry.which]} ortalama ${displayNumber(entry.value)}`).join(", "))}">${parts.join("")}</svg>`;
+  return `<svg viewBox="0 0 ${width} ${height}" width="100%" role="img" aria-label="${statisticsEscape(t("Maç maç fantezi puanı: {averages}", { averages: averages.map((entry) => t("{name} ortalama {value}", { name: names[entry.which], value: displayNumber(entry.value) })).join(", ") }))}">${parts.join("")}</svg>`;
 }
 
 function renderStatisticsTimeline(profiles, slots) {
   if (fantasyState.season !== state.seasonSlug) {
     $("statistics-timeline-chart").replaceChildren();
-    $("statistics-timeline-note").textContent = "Fantezi analizi yüklenmedi. Sayfayı yenileyin.";
+    $("statistics-timeline-note").textContent = t("Fantezi analizi yüklenmedi. Sayfayı yenileyin.");
     return;
   }
   const summaries = profiles.map((player, which) => {
@@ -470,13 +469,13 @@ function renderStatisticsTimeline(profiles, slots) {
   if (!averages.length) {
     $("statistics-timeline-chart").replaceChildren();
     $("statistics-timeline-note").textContent = profiles.length > 1
-      ? "Bu oyuncular için kayıtlı fantezi puanı yok." : "Bu oyuncu için kayıtlı fantezi puanı yok.";
+      ? t("Bu oyuncular için kayıtlı fantezi puanı yok.") : t("Bu oyuncu için kayıtlı fantezi puanı yok.");
     return;
   }
   $("statistics-timeline-chart").innerHTML = statisticsTimelineSvg(slots, averages, profiles.map((player) => player.name));
   const line = (entry) => (entry.count
-    ? `${entry.count} maç · toplam ${displayNumber(entry.total)} fantezi puanı · maç başına ${displayNumber(entry.average)}`
-    : "kayıtlı fantezi puanı yok");
+    ? t("{count} maç · toplam {total} fantezi puanı · maç başına {average}", { count: entry.count, total: displayNumber(entry.total), average: displayNumber(entry.average) })
+    : t("kayıtlı fantezi puanı yok"));
   $("statistics-timeline-note").textContent = profiles.length > 1
     ? `${summaries.map((entry) => `${entry.player.name}: ${line(entry)}`).join(" · ")}.`
     : `${line(summaries[0])}.`;
@@ -510,14 +509,14 @@ function statisticsRatingsSvg(slots, averages, names) {
     slot.entries.forEach((entry, which) => {
       if (entry?.rating == null) return;
       const centre = x(index) + offset(which), below = entry.rating < mean.get(which);
-      const detail = statisticsMatchDetail(entry, `${names[which]} · ${entry.minutes === null ? "—" : displayNumber(entry.minutes)} dk · Reyting ${ratingText(entry.rating)}`);
+      const detail = statisticsMatchDetail(entry, `${names[which]} · ${t("{minutes} dk", { minutes: entry.minutes === null ? "—" : displayNumber(entry.minutes) })} · ${t("Reyting {rating}", { rating: ratingText(entry.rating) })}`);
       parts.push(`<rect data-rating-bar="${index}" data-rating-player="${which}" x="${(centre - bar / 2).toFixed(1)}" y="${y(entry.rating).toFixed(1)}" width="${bar.toFixed(1)}" height="${(y(0) - y(entry.rating)).toFixed(1)}" rx="2" fill="${STATISTICS_SERIES[which].line}" fill-opacity="${below ? 0.4 : 0.9}"><title>${detail}</title></rect>`);
       if (columns.showValues) parts.push(`<text x="${centre.toFixed(1)}" y="${(y(entry.rating) - 5).toFixed(1)}" text-anchor="middle" font-size="10" fill="var(--muted)">${ratingText(entry.rating)}</text>`);
     });
   });
   statisticsMatchLabels(parts, slots, columns, frame);
   statisticsAverageLines(parts, averages, y, frame, ratingText, "data-rating-average");
-  return `<svg viewBox="0 0 ${width} ${height}" width="100%" role="img" aria-label="Maç maç reyting: ${statisticsEscape(averages.map((entry) => `${names[entry.which]} ortalama ${ratingText(entry.value)}`).join(", "))}">${parts.join("")}</svg>`;
+  return `<svg viewBox="0 0 ${width} ${height}" width="100%" role="img" aria-label="${statisticsEscape(t("Maç maç reyting: {averages}", { averages: averages.map((entry) => t("{name} ortalama {value}", { name: names[entry.which], value: ratingText(entry.value) })).join(", ") }))}">${parts.join("")}</svg>`;
 }
 
 function renderStatisticsRatings(profiles, slots) {
@@ -530,23 +529,23 @@ function renderStatisticsRatings(profiles, slots) {
   if (!averages.length) {
     $("statistics-ratings-chart").replaceChildren();
     $("statistics-ratings-note").textContent = profiles.length > 1
-      ? "Bu oyuncular için geçerli reyting yok." : "Bu oyuncu için geçerli reyting yok.";
+      ? t("Bu oyuncular için geçerli reyting yok.") : t("Bu oyuncu için geçerli reyting yok.");
     return;
   }
   $("statistics-ratings-chart").innerHTML = statisticsRatingsSvg(slots, averages, profiles.map((player) => player.name));
   const line = (entry, weighting = "") => (entry.ratings.length
-    ? `${entry.ratings.length} reytingli maç · ortalama ${ratingText(entry.average)}${weighting}`
-      + ` · en yüksek ${ratingText(Math.max(...entry.ratings))} · en düşük ${ratingText(Math.min(...entry.ratings))}`
-    : "geçerli reyting yok");
+    ? t("{count} reytingli maç · ortalama {average}{weighting} · en yüksek {high} · en düşük {low}", { count: entry.ratings.length,
+      average: ratingText(entry.average), weighting, high: ratingText(Math.max(...entry.ratings)), low: ratingText(Math.min(...entry.ratings)) })
+    : t("geçerli reyting yok"));
   if (profiles.length > 1) {
     $("statistics-ratings-note").textContent = `${summaries.map((entry) => `${entry.player.name}: ${line(entry)}`).join(" · ")}. `
-      + "Ortalamalar dakikaya göre ağırlıksızdır; kesikli çizgiler oyuncuların ortalamasıdır, altındaki maçlar soluk gösterilir.";
+      + t("Ortalamalar dakikaya göre ağırlıksızdır; kesikli çizgiler oyuncuların ortalamasıdır, altındaki maçlar soluk gösterilir.");
     return;
   }
   const [only] = summaries;
-  $("statistics-ratings-note").textContent = `${line(only, " (dakikaya göre ağırlıksız)")}. `
-    + "Kesikli çizgi oyuncunun ortalamasıdır; altındaki maçlar soluk gösterilir."
-    + (only.unrated > 0 ? ` ${only.unrated} maçta Sportmonks reyting vermedi.` : "");
+  $("statistics-ratings-note").textContent = `${line(only, ` (${t("dakikaya göre ağırlıksız")})`)}. `
+    + t("Kesikli çizgi oyuncunun ortalamasıdır; altındaki maçlar soluk gösterilir.")
+    + (only.unrated > 0 ? ` ${t("{count} maçta Sportmonks reyting vermedi.", { count: only.unrated }, only.unrated)}` : "");
 }
 
 function renderStatisticsProfile(players) {
@@ -555,7 +554,7 @@ function renderStatisticsProfile(players) {
     || players[0];
   if (!selected) {
     $("statistics-profile-name").textContent = "—";
-    $("statistics-profile-note").textContent = "Oyuncu bulunamadı.";
+    $("statistics-profile-note").textContent = t("Oyuncu bulunamadı.");
     for (const id of ["statistics-radar-chart", "statistics-detailed-chart", "statistics-radar-details",
       "statistics-detailed-details", "statistics-facts-list", "statistics-timeline-chart", "statistics-ratings-chart",
       "statistics-distribution-chart"]) {
@@ -586,7 +585,7 @@ function renderStatisticsProfile(players) {
     for (const id of ["statistics-radar-chart", "statistics-detailed-chart", "statistics-radar-details",
       "statistics-detailed-details"]) $(id).replaceChildren();
     for (const id of ["statistics-radar-note", "statistics-detailed-note"]) {
-      $(id).textContent = "Radar dosyaları yüklenemedi; src/web/serve.py'yi yeniden başlatıp sayfayı yenileyin.";
+      $(id).textContent = t("Radar dosyaları yüklenemedi; src/web/serve.py'yi yeniden başlatıp sayfayı yenileyin.");
       $(id).hidden = false;
     }
   }

@@ -168,9 +168,9 @@ const SUPERLIG_GOALKEEPER_KITS = {
   "3897": { name: "Göztepe kaleci", base: "#2B2B2B", pattern: "plain", alt: "#DFA30A", collar: "#DFA30A", cuff: "#DFA30A", print: "#DFA30A", source: "approximate" },
 };
 
-const NEUTRAL_GOALKEEPER_KIT = { name: "Kaleci", base: "#2B2B2B", pattern: "plain", alt: "#9ED923", collar: "#9ED923", cuff: "#9ED923", print: "#FFFFFF", source: "approximate" };
+const NEUTRAL_GOALKEEPER_KIT = { name: t("Kaleci"), base: "#2B2B2B", pattern: "plain", alt: "#9ED923", collar: "#9ED923", cuff: "#9ED923", print: "#FFFFFF", source: "approximate" };
 
-const NEUTRAL_KIT = { name: "Bilinmeyen takım", base: "#8C9A8F", pattern: "plain", alt: "#B8C4BA", print: "#20302A", source: "approximate" };
+const NEUTRAL_KIT = { name: t("Bilinmeyen takım"), base: "#8C9A8F", pattern: "plain", alt: "#B8C4BA", print: "#20302A", source: "approximate" };
 
 // Back-view silhouette. Every panel below clips to this.
 const SHIRT_PATH = "M31,7 C37,3 44,9 50,9 C56,9 63,3 69,7 L95,23 L86,45 L75,36 L75,101 C63,105 37,105 25,101 L25,36 L14,45 L5,23 Z";
@@ -270,7 +270,10 @@ function shirtSVG(teamId, options = {}) {
     print.push(`<text x="50" y="${surname ? 74 : 68}" font-family="Oswald,Archivo,Impact,sans-serif" font-weight="700" font-size="34" fill="${kit.print}" stroke="${edge}" stroke-width="1.6" paint-order="stroke" text-anchor="middle" style="font-variant-numeric:tabular-nums">${kitEscape(number)}</text>`);
   }
 
-  const label = options.title || `${kit.name} forması${number ? `, ${number} numara` : ""}`;
+  // What a screen reader hears, in the page's language. A goalkeeper kit is
+  // named "<club> kaleci" in the table above; only that word is translated.
+  const kitName = kit.name.replace(/ kaleci$/, ` ${t("kaleci")}`);
+  const label = options.title || (number ? t("{kit} forması, {number} numara", { kit: kitName, number }) : t("{kit} forması", { kit: kitName }));
 
   return [
     `<svg width="${size}" height="${Math.round(size * 1.12)}" viewBox="0 0 100 112" role="img" aria-label="${kitEscape(label)}">`,

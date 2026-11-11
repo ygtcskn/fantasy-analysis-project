@@ -4,10 +4,10 @@
 // failures, so an old projection can never follow a new season into the builder.
 const fantasyState = {
   request: 0, season: "", summaries: new Map(), matches: new Map(), projections: new Map(),
-  generatedAt: "", note: "Fantezi analizi henüz yüklenmedi.",
+  generatedAt: "", note: t("Fantezi analizi henüz yüklenmedi."),
 };
 
-function resetFantasyData(note = "Fantezi analizi henüz yüklenmedi.") {
+function resetFantasyData(note = t("Fantezi analizi henüz yüklenmedi.")) {
   fantasyState.request++;
   fantasyState.season = "";
   fantasyState.summaries = new Map();
@@ -29,8 +29,8 @@ function fantasyKickoff(fixture) {
 
 function fantasyDate(value, includeTime = false) {
   const time = fantasyTime(value);
-  if (!Number.isFinite(time)) return "Bilinmiyor";
-  return new Intl.DateTimeFormat("tr-TR", {
+  if (!Number.isFinite(time)) return t("Bilinmiyor");
+  return new Intl.DateTimeFormat(LOCALE, {
     day: "numeric", month: "short", year: "numeric", timeZone: MATCH_TIME_ZONE,
     ...(includeTime ? { hour: "2-digit", minute: "2-digit", hourCycle: "h23" } : {}),
   }).format(time);
@@ -61,10 +61,10 @@ function fantasyManifest(rows, season) {
 
 async function loadFantasyData() {
   const season = state.seasonSlug;
-  resetFantasyData("Fantezi analizi okunuyor…");
+  resetFantasyData(t("Fantezi analizi okunuyor…"));
   const request = fantasyState.request, tables = state.tables;
   if (!season) {
-    fantasyState.note = "Bu sezonun fantezi analizini yüklemek için yerel site sunucusunu açın.";
+    fantasyState.note = t("Bu sezonun fantezi analizini yüklemek için yerel site sunucusunu açın.");
     return;
   }
   const statusPath = "fantasy_pipeline/pipeline_status.csv";
@@ -111,14 +111,14 @@ async function loadFantasyData() {
     for (const rows of projections.values()) rows.sort((a, b) => fantasyTime(a.kickoff_utc) - fantasyTime(b.kickoff_utc));
     if (request !== fantasyState.request || tables !== state.tables) return;
     Object.assign(fantasyState, { season, summaries, matches, projections, generatedAt: after.generated_at_utc,
-      note: `Fantezi analizi güncellendi: ${fantasyDate(after.generated_at_utc, true)}. Fantezi puanları ve sonraki maçı için bir oyuncu açın.` });
+      note: t("Fantezi analizi güncellendi: {date}. Fantezi puanları ve sonraki maçı için bir oyuncu açın.", { date: fantasyDate(after.generated_at_utc, true) }) });
   } catch (error) {
     if (request !== fantasyState.request || tables !== state.tables) return;
     fantasyState.note = error.message === "stale"
-      ? "Kaydedilen maç verisi fantezi analizinden daha yeni. Pipeline'ı çalıştırın, sonra sayfayı yenileyin."
+      ? t("Kaydedilen maç verisi fantezi analizinden daha yeni. Pipeline'ı çalıştırın, sonra sayfayı yenileyin.")
       : error.message === "changed"
-        ? "Fantezi analizi güncelleniyor. Pipeline bitince sayfayı yenileyin."
-        : "Bu sezon için fantezi analizi yok. Pipeline'ı çalıştırın, sonra sayfayı yenileyin.";
+        ? t("Fantezi analizi güncelleniyor. Pipeline bitince sayfayı yenileyin.")
+        : t("Bu sezon için fantezi analizi yok. Pipeline'ı çalıştırın, sonra sayfayı yenileyin.");
   }
 }
 
@@ -150,8 +150,8 @@ function builderFantasyData(player) {
     return Number.isFinite(fantasyTime(row.generated_at_utc)) && fantasyTime(row.generated_at_utc) <= now + 300000;
   }) || null;
   return { summary, matches, projection, note: projection ? "" : rows.length
-    ? "Bu tahmin, kaydedilen maç veya seçim son tarihi için artık güncel değil. Fantezi analizini yenileyin."
-    : "Bu oyuncu için sonraki maç tahmini yok." };
+    ? t("Bu tahmin, kaydedilen maç veya seçim son tarihi için artık güncel değil. Fantezi analizini yenileyin.")
+    : t("Bu oyuncu için sonraki maç tahmini yok.") };
 }
 
 function fantasyProjectionNumber(projection, field) {
@@ -167,11 +167,11 @@ function fantasyProbability(projection, field) {
 }
 
 function fantasyAvailability(projection) {
-  return ({ out: "Oynamayacak", expected_out: "Oynaması beklenmiyor", doubtful: "Şüpheli", no_reported_absence: "Bildirilen eksiklik yok", unknown: "Durumu bilinmiyor" })[projection?.availability_status] || "Durumu bilinmiyor";
+  return ({ out: t("Oynamayacak"), expected_out: t("Oynaması beklenmiyor"), doubtful: t("Şüpheli"), no_reported_absence: t("Bildirilen eksiklik yok"), unknown: t("Durumu bilinmiyor") })[projection?.availability_status] || t("Durumu bilinmiyor");
 }
 
 function fantasyFixtureDifficulty(projection, side) {
   const value = number(projection?.[`${side}_fixture_difficulty`]);
   return value !== null && value >= 1 && value <= 5
-    ? `${value}/5 · ${["", "Kolay", "Elverişli", "Orta", "Zor", "Çok zor"][value]}` : "—";
+    ? `${value}/5 · ${["", t("Kolay"), t("Elverişli"), t({ tr: "Orta", en: "Medium" }), t("Zor"), t("Çok zor")][value]}` : "—";
 }

@@ -15,8 +15,8 @@ const expected = {
 };
 const $ = (id) => document.getElementById(id);
 const number = (value) => value === undefined || value === null || String(value).trim() === "" ? null : Number.isFinite(Number(value)) ? Number(value) : null;
-const displayNumber = (value) => number(value) === null ? "—" : new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 2 }).format(Number(value));
-const teamName = (id, teams) => teams.get(id)?.name || (id ? `Takım ${id}` : "—");
+const displayNumber = (value) => number(value) === null ? "—" : new Intl.NumberFormat(LOCALE, { maximumFractionDigits: 2 }).format(Number(value));
+const teamName = (id, teams) => teams.get(id)?.name || (id ? t("Takım {id}", { id }) : "—");
 
 async function loadFiles(files, { replace = false, local = false } = {}) {
   if (state.busy) return;
@@ -25,17 +25,17 @@ async function loadFiles(files, { replace = false, local = false } = {}) {
   const sourceSeasons = new Set();
   if (typeof files === "function") {
     try { files = await files(); }
-    catch (error) { messages.push(`${error.message} Önceden yüklenen veriler korundu.`); files = []; }
+    catch (error) { messages.push(`${error.message} ${t("Önceden yüklenen veriler korundu.")}`); files = []; }
   }
   for (const file of files) {
     if (!expected[file.name]) continue;
-    if (names.has(file.name)) { messages.push(`Her yüklemede yalnızca bir ${file.name} seçin.`); continue; }
+    if (names.has(file.name)) { messages.push(t("Her yüklemede yalnızca bir {file} seçin.", { file: file.name })); continue; }
     names.add(file.name);
     try {
-      if (file.size > 40 * 1024 * 1024) throw new Error("Dosya 40 MB sınırını aşıyor.");
+      if (file.size > 40 * 1024 * 1024) throw new Error(t("Dosya 40 MB sınırını aşıyor."));
       const table = parseCSV(await file.text());
       const missing = expected[file.name].filter((field) => !table.header.includes(field));
-      if (missing.length) throw new Error(`Eksik sütunlar: ${missing.join(", ")}.`);
+      if (missing.length) throw new Error(t("Eksik sütunlar: {columns}.", { columns: missing.join(", ") }));
       incoming[file.name] = table.records;
       accepted.push(file.name);
       if (file.sourceSeason) sourceSeasons.add(file.sourceSeason);
@@ -44,29 +44,29 @@ async function loadFiles(files, { replace = false, local = false } = {}) {
   // A new fixture file starts a new dataset to avoid silently mixing seasons.
   const next = replace || (incoming["fixtures.csv"] && state.tables["fixtures.csv"]) ? { ...incoming } : { ...state.tables, ...incoming };
   const fixtures = next["fixtures.csv"] || [];
-  if (sourceSeasons.size > 1) messages.push("Yükleme sırasında sunucunun sezonu değişti. Sayfayı yeniden yükleyin.");
+  if (sourceSeasons.size > 1) messages.push(t("Yükleme sırasında sunucunun sezonu değişti. Sayfayı yeniden yükleyin."));
   const seasonIds = new Set(fixtures.map((row) => row.season_id).filter(Boolean));
-  if (seasonIds.size > 1) messages.push("Lütfen tek bir sezonun fikstürünü seçin.");
+  if (seasonIds.size > 1) messages.push(t("Lütfen tek bir sezonun fikstürünü seçin."));
   const squadSeasons = new Set((next["squads.csv"] || []).map((row) => row.season_id).filter(Boolean));
-  if (squadSeasons.size > 1 || (seasonIds.size && [...squadSeasons].some((id) => !seasonIds.has(id)))) messages.push("Kadro ve fikstür dosyalarını aynı sezondan seçin.");
+  if (squadSeasons.size > 1 || (seasonIds.size && [...squadSeasons].some((id) => !seasonIds.has(id)))) messages.push(t("Kadro ve fikstür dosyalarını aynı sezondan seçin."));
   const standingSeasons = new Set((next["standings.csv"] || []).map((row) => row.season_id).filter(Boolean));
   const allSeasons = new Set([...seasonIds, ...squadSeasons, ...standingSeasons]);
-  if (allSeasons.size > 1) messages.push("Puan durumu, kadro ve fikstür dosyalarını aynı sezondan seçin.");
+  if (allSeasons.size > 1) messages.push(t("Puan durumu, kadro ve fikstür dosyalarını aynı sezondan seçin."));
   for (const [file, key] of [["fixtures.csv", (row) => row.fixture_id], ["player_match_stats.csv", (row) => `${row.fixture_id}:${row.player_id}`], ["players.csv", (row) => row.id], ["teams.csv", (row) => row.id]]) {
     const ids = new Set();
     for (const row of next[file] || []) {
       const id = key(row);
-      if (id && ids.has(id)) { messages.push(`${file} dosyasında yinelenen kayıtlar var; iki kez sayılmamaları için yüklemeden önce düzeltin.`); break; }
+      if (id && ids.has(id)) { messages.push(t("{file} dosyasında yinelenen kayıtlar var; iki kez sayılmamaları için yüklemeden önce düzeltin.", { file })); break; }
       ids.add(id);
     }
   }
   if (fixtures.length && next["player_match_stats.csv"]) {
     const ids = new Set(fixtures.map((row) => row.fixture_id));
-    if (next["player_match_stats.csv"].some((row) => !ids.has(row.fixture_id))) messages.push("Bazı oyuncu kayıtları bu fikstürle eşleşmiyor. Aynı sezonun dosyalarını birlikte seçin.");
+    if (next["player_match_stats.csv"].some((row) => !ids.has(row.fixture_id))) messages.push(t("Bazı oyuncu kayıtları bu fikstürle eşleşmiyor. Aynı sezonun dosyalarını birlikte seçin."));
   }
   if (fixtures.length && next["fixture_scores.csv"]) {
     const ids = new Set(fixtures.map((row) => row.fixture_id));
-    if (next["fixture_scores.csv"].some((row) => !ids.has(row.fixture_id))) messages.push("Bazı skorlar bu fikstürle eşleşmiyor. Aynı sezonun dosyalarını birlikte seçin.");
+    if (next["fixture_scores.csv"].some((row) => !ids.has(row.fixture_id))) messages.push(t("Bazı skorlar bu fikstürle eşleşmiyor. Aynı sezonun dosyalarını birlikte seçin."));
   }
   if (!messages.length && accepted.length) {
     const previousSeason = state.tables["fixtures.csv"]?.find((row) => row.season_id)?.season_id;
@@ -93,10 +93,10 @@ async function loadFiles(files, { replace = false, local = false } = {}) {
     state.standingsGroup = null;
     resetTierFilters();
     resetFilters();
-    if (!local) messages.push(`${accepted.join(", ")} yüklendi. Sezon değiştirirken yeni sezonun dosyalarını birlikte seçin.`);
+    if (!local) messages.push(t("{files} yüklendi. Sezon değiştirirken yeni sezonun dosyalarını birlikte seçin.", { files: accepted.join(", ") }));
     $("message").classList.remove("error");
   } else {
-    if (!messages.length) messages.push(`Sezonun csv klasöründen desteklenen dosyaları seçin: ${Object.keys(expected).join(", ")}.`);
+    if (!messages.length) messages.push(t("Sezonun csv klasöründen desteklenen dosyaları seçin: {files}.", { files: Object.keys(expected).join(", ") }));
     $("message").classList.add("error");
   }
   $("message").textContent = messages.join(" ");
@@ -107,7 +107,7 @@ async function loadFiles(files, { replace = false, local = false } = {}) {
 
 async function loadLocalData() {
   if (state.busy) return;
-  resetFantasyData("Fantezi analizi okunuyor…");
+  resetFantasyData(t("Fantezi analizi okunuyor…"));
   resetMatchweekOdds();
   $("message").classList.remove("error");
   $("message").textContent = "";
@@ -119,7 +119,7 @@ async function loadLocalData() {
         // no-cache still asks the server every time; an unchanged file returns as a short 304.
         const response = await fetch(`/local-data/${name}`, { cache: "no-cache", signal: controller.signal });
         if (!response.ok) throw new Error(`${name}: HTTP ${response.status}`);
-        if (response.headers.get("X-Superlig-Local") !== "1") throw new Error("Siteyi src/web/serve.py ile başlatın.");
+        if (response.headers.get("X-Superlig-Local") !== "1") throw new Error(t("Siteyi src/web/serve.py ile başlatın."));
         const blob = await response.blob();
         const file = new File([blob], name, { type: "text/csv" });
         file.sourceSeason = response.headers.get("X-Superlig-Season") || "";
@@ -127,12 +127,12 @@ async function loadLocalData() {
       } finally { clearTimeout(timeout); }
     }));
     const failures = results.filter((result) => result.status === "rejected");
-    const advice = siteMode === "local" ? "Yerel sunucunun çalıştığını ve indirmenin bittiğini kontrol edin." : "Sayfayı yeniden yükleyin.";
-    if (failures.length) throw new Error(`Kaydedilen CSV dosyaları okunamadı. ${failures.map((result) => result.reason.message).join("; ")}. ${advice}`);
+    const advice = siteMode === "local" ? t("Yerel sunucunun çalıştığını ve indirmenin bittiğini kontrol edin.") : t("Sayfayı yeniden yükleyin.");
+    if (failures.length) throw new Error(`${t("Kaydedilen CSV dosyaları okunamadı.")} ${failures.map((result) => result.reason.message).join("; ")}. ${advice}`);
     return results.map((result) => result.value);
   }, { replace: true, local: true });
   if (loaded) await Promise.allSettled([loadFantasyData(), loadMatchweekOdds(), loadCurrentSquads()]);
-  else resetFantasyData("Kaydedilen sezon verisi yenilenemediği için fantezi analizi kullanılamıyor.");
+  else resetFantasyData(t("Kaydedilen sezon verisi yenilenemediği için fantezi analizi kullanılamıyor."));
   if (state.view === "builder") renderSquadBuilder();
   if (state.view === "matchweek") renderMatchweek();
   if (state.view === "tiers") renderTierList();
@@ -174,7 +174,7 @@ function records() {
   return (state.tables["player_match_stats.csv"] || []).map((row) => {
     const fixture = fixtures.get(row.fixture_id);
     return { ...row, date: fixture?.kickoff, dateText: fixture ? kickoffText(fixture) : "—", team: teamName(row.team_id, teams),
-      match: fixture?.name || (fixture ? `${teamName(fixture.home_team_id, teams)} - ${teamName(fixture.away_team_id, teams)}` : `Maç ${row.fixture_id}`),
+      match: fixture?.name || (fixture ? `${teamName(fixture.home_team_id, teams)} - ${teamName(fixture.away_team_id, teams)}` : t("Maç {id}", { id: row.fixture_id })),
       xg: number(row.xg_expected_goals) ?? number(row.expected_goals),
     };
   });
@@ -193,7 +193,7 @@ function render() {
   const homeView = state.view === "home";
   const fixtureView = state.view === "fixtures";
   const loaded = Object.keys(state.tables).length > 0;
-  $("data-table-container").setAttribute("aria-label", fixtureView ? "Kaydırılabilir fikstür tablosu" : "Kaydırılabilir veri tablosu");
+  $("data-table-container").setAttribute("aria-label", fixtureView ? t("Kaydırılabilir fikstür tablosu") : t("Kaydırılabilir veri tablosu"));
   document.body.classList.toggle("home-view", homeView);
   document.body.classList.toggle("standings-view", standingsView);
   document.body.classList.toggle("fixtures-view", fixtureView);
@@ -216,30 +216,30 @@ function render() {
   if (socialView || squadsView) {
     for (const id of ["dataset-stats", "empty-state", "workspace"]) $(id).hidden = true;
   }
-  $("view-title").textContent = homeView ? "Ana Sayfa" : tierView ? "Oyuncu Listesi" : playerView ? "Oyuncu Katılımları" : "Fikstür";
-  $("view-description").textContent = homeView ? "Oynanan maçlar, puan durumu ve seçtiğin maçın özeti." : tierView ? "Tüm oyuncular, sezon performansları ve reytinglerini oluşturan maçlar." : playerView ? "Dakikalar, fırsatlar ve hücum katkısı. Her satır bir oyuncunun bir maçıdır." : "Sezonun bütün maçları, haftalara göre sıralanır.";
+  $("view-title").textContent = homeView ? t("Ana Sayfa") : tierView ? t("Oyuncu Listesi") : playerView ? t("Oyuncu Katılımları") : t("Fikstür");
+  $("view-description").textContent = homeView ? t("Oynanan maçlar, puan durumu ve seçtiğin maçın özeti.") : tierView ? t("Tüm oyuncular, sezon performansları ve reytinglerini oluşturan maçlar.") : playerView ? t("Dakikalar, fırsatlar ve hücum katkısı. Her satır bir oyuncunun bir maçıdır.") : t("Sezonun bütün maçları, haftalara göre sıralanır.");
   if (standingsView) {
-    $("view-title").textContent = "Puan Durumu";
-    $("view-description").textContent = "Maçlar, galibiyetler, goller ve form durumu — sezonun ayrıntılı tablosu.";
+    $("view-title").textContent = t("Puan Durumu");
+    $("view-description").textContent = t("Maçlar, galibiyetler, goller ve form durumu — sezonun ayrıntılı tablosu.");
   }
   if (builderView) {
-    $("view-title").textContent = "Kadro Kur";
-    $("view-description").textContent = "Kaydedilen sezon verisindeki oyunculardan ilk on birini kurun.";
+    $("view-title").textContent = t("Kadro Kur");
+    $("view-description").textContent = t("Kaydedilen sezon verisindeki oyunculardan ilk on birini kurun.");
   }
   if (matchweekView) {
-    $("view-title").textContent = "Maç Haftası";
-    $("view-description").textContent = "Haftalık fantezi futbol analizleri.";
+    $("view-title").textContent = t("Maç Haftası");
+    $("view-description").textContent = t("Haftalık fantezi futbol analizleri.");
   }
   if (statisticsView) {
-    $("view-title").textContent = "Oyuncu İstatistikleri";
-    $("view-description").textContent = "Sezonun önde gelen oyuncuları ve tüm oyuncu listesi.";
+    $("view-title").textContent = t("Oyuncu İstatistikleri");
+    $("view-description").textContent = t("Sezonun önde gelen oyuncuları ve tüm oyuncu listesi.");
   }
   if (teamStatisticsView) {
-    $("view-title").textContent = "Takım İstatistikleri";
-    $("view-description").textContent = "Takımları sezon sonuçları, maç istatistikleri ve fantezi puanlarıyla karşılaştırın.";
+    $("view-title").textContent = t("Takım İstatistikleri");
+    $("view-description").textContent = t("Takımları sezon sonuçları, maç istatistikleri ve fantezi puanlarıyla karşılaştırın.");
   }
-  $("table-heading").textContent = playerView ? "Oyuncu katılımları" : "Fikstür";
-  $("table-caption").textContent = playerView ? "Kaydedilen maç istatistikleri. Sıralamak için sütun başlığına tıklayın." : "Saatler Türkiye saatiyledir.";
+  $("table-heading").textContent = playerView ? t("Oyuncu katılımları") : t("Fikstür");
+  $("table-caption").textContent = playerView ? t("Kaydedilen maç istatistikleri. Sıralamak için sütun başlığına tıklayın.") : t("Saatler Türkiye saatiyledir.");
   $("position-filter").hidden = !playerView;
   $("minutes-filter").hidden = !playerView;
   document.querySelectorAll("[data-view]").forEach((button) => {
@@ -251,18 +251,18 @@ function render() {
   }
   const years = [...new Set((state.tables["fixtures.csv"] || []).map((row) => row.kickoff?.slice(0, 4)).filter(Boolean))].sort();
   $("season-label").textContent = years.length ? years.length === 1 ? years[0] : `${years[0]} / ${years[years.length - 1].slice(2)}` : "—";
-  $("view-eyebrow").textContent = years.length ? `SÜPER LİG · ${$("season-label").textContent} SEZONU` : "SÜPER LİG";
+  $("view-eyebrow").textContent = years.length ? t("SÜPER LİG · {season} SEZONU", { season: $("season-label").textContent }) : t("SÜPER LİG");
   if (socialView) {
-    $("view-title").textContent = "Maç Tribünü";
-    $("view-description").textContent = "Haftanın maçlarını konuş, kendi konunu aç, tribünün sesine katıl.";
-    $("view-eyebrow").textContent = "SOSYAL · MAÇ TRİBÜNÜ";
+    $("view-title").textContent = t("Maç Tribünü");
+    $("view-description").textContent = t("Haftanın maçlarını konuş, kendi konunu aç, tribünün sesine katıl.");
+    $("view-eyebrow").textContent = t("SOSYAL · MAÇ TRİBÜNÜ");
     renderSocial();
     return;
   }
   if (squadsView) {
-    $("view-title").textContent = "Kadrolar";
-    $("view-description").textContent = "Paylaşılan fantezi kadroları, maç haftalarına göre.";
-    $("view-eyebrow").textContent = "SOSYAL · KADROLAR";
+    $("view-title").textContent = t("Kadrolar");
+    $("view-description").textContent = t("Paylaşılan fantezi kadroları, maç haftalarına göre.");
+    $("view-eyebrow").textContent = t("SOSYAL · KADROLAR");
     renderSharedSquads();
     return;
   }
@@ -277,12 +277,12 @@ function render() {
   const knownTeams = new Set(teamEntries.map(([id]) => id));
   for (const row of [...(state.tables["player_match_stats.csv"] || []), ...(state.tables["fixtures.csv"] || [])]) {
     for (const id of [row.team_id, row.home_team_id, row.away_team_id].filter(Boolean)) {
-      if (!knownTeams.has(id)) { teamEntries.push([id, `Takım ${id}`]); knownTeams.add(id); }
+      if (!knownTeams.has(id)) { teamEntries.push([id, t("Takım {id}", { id })]); knownTeams.add(id); }
     }
   }
-  options($("team"), teamEntries.sort((a, b) => a[1].localeCompare(b[1], "tr")), "Tüm takımlar");
+  options($("team"), teamEntries.sort((a, b) => a[1].localeCompare(b[1], LOCALE)), t("Tüm takımlar"));
   const positions = [...new Set((state.tables["player_match_stats.csv"] || []).map((row) => row.position).filter(Boolean))].sort();
-  options($("position"), positions.map((value) => [value, value]), "Tüm mevkiler");
+  options($("position"), positions.map((value) => [value, value]), t("Tüm mevkiler"));
   const search = $("search").value.toLocaleLowerCase().trim();
   const minimum = Math.max(0, number($("minutes").value) ?? 0);
   const rows = records().filter((row) => {
@@ -292,10 +292,10 @@ function render() {
     return !playerView || !search || [row.name, row.team, row.match, row.date].filter(Boolean).join(" ").toLocaleLowerCase().includes(search);
   });
   const columns = playerView ? [
-    ["name", "Oyuncu"], ["team", "Takım"], ["position", "Mevki"], ["date", "Başlama"], ["match", "Maç"],
-    ["rating", "Reyting", true], ["minutes_played", "Dakika", true], ["started", "İlk 11", true], ["goals", "Gol", true], ["assists", "Asist", true],
-    ["xg", "xG", true], ["shots_total", "Şut", true], ["shots_on_target", "İsabetli şut", true], ["key_passes", "Kilit pas", true],
-  ] : [["time", "Saat"], ["home", "Ev Sahibi"], ["score", "Skor"], ["away", "Deplasman"]];
+    ["name", t("Oyuncu")], ["team", t("Takım")], ["position", t("Mevki")], ["date", t("Başlama")], ["match", t("Maç")],
+    ["rating", t("Reyting"), true], ["minutes_played", t("Dakika"), true], ["started", t("İlk 11"), true], ["goals", t("Gol"), true], ["assists", t("Asist"), true],
+    ["xg", "xG", true], ["shots_total", t("Şut"), true], ["shots_on_target", t("İsabetli şut"), true], ["key_passes", t("Kilit pas"), true],
+  ] : [["time", t("Saat")], ["home", t("Ev Sahibi")], ["score", t("Skor")], ["away", t("Deplasman")]];
   const numeric = columns.find(([key]) => key === state.sort)?.[2];
   rows.sort(playerView ? (a, b) => {
     const left = numeric ? number(a[state.sort]) : a[state.sort];
@@ -345,7 +345,7 @@ function render() {
       const round = String(row.round || "").trim();
       const roundName = round.replace(/^matchweek\s*/i, "");
       const date = roundDates.get(String(row.round || ""))?.display;
-      groupCell.textContent = `${round ? `Maç Haftası ${roundName}` : "Diğer Maçlar"}${date ? ` - ${date}` : ""}`;
+      groupCell.textContent = `${round ? t("Maç Haftası {round}", { round: roundName }) : t("Diğer Maçlar")}${date ? ` - ${date}` : ""}`;
       groupRow.append(groupCell);
       fragment.append(groupRow);
       previousRound = row.round;
@@ -358,7 +358,7 @@ function render() {
       td.textContent = numeric ? displayNumber(row[key]) : key === "date" && playerView ? row.dateText : row[key] || "—";
       const clubId = key === "team" ? row.team_id : key === "home" ? row.home_team_id : key === "away" ? row.away_team_id : null;
       if (clubId) {
-        const name = row[key] || `Takım ${clubId}`;
+        const name = row[key] || t("Takım {id}", { id: clubId });
         const link = createTeamLink(clubId, name, `fixture-team-link fixture-${key}-team`);
         link.replaceChildren(createTeamLogo(clubId, fixtureTeams, false), element("span", "", name));
         td.replaceChildren(link);
@@ -371,15 +371,15 @@ function render() {
   if (!rows.length) {
     const tr = document.createElement("tr"), td = document.createElement("td");
     td.colSpan = columns.length; td.className = "no-results";
-    td.textContent = !state.tables[playerView ? "player_match_stats.csv" : "fixtures.csv"] ? playerView ? "Bu kayıtları görmek için player_match_stats.csv dosyasını açın." : "Fikstürü görüntülemek için fixtures.csv dosyasını açın." : playerView ? "Bu filtrelerle eşleşen kayıt yok. Filtreleri sıfırlamayı deneyin." : "Gösterilecek maç bulunamadı.";
+    td.textContent = !state.tables[playerView ? "player_match_stats.csv" : "fixtures.csv"] ? playerView ? t("Bu kayıtları görmek için player_match_stats.csv dosyasını açın.") : t("Fikstürü görüntülemek için fixtures.csv dosyasını açın.") : playerView ? t("Bu filtrelerle eşleşen kayıt yok. Filtreleri sıfırlamayı deneyin.") : t("Gösterilecek maç bulunamadı.");
     tr.append(td); fragment.append(tr);
   }
   $("table-body").replaceChildren(fragment);
-  $("result-count").textContent = `${displayNumber(rows.length)} kayıt`;
-  $("page-label").textContent = `Sayfa ${state.page + 1} / ${pageCount}`;
+  $("result-count").textContent = t("{count} kayıt", { count: displayNumber(rows.length) }, rows.length);
+  $("page-label").textContent = t("Sayfa {page} / {pages}", { page: state.page + 1, pages: pageCount });
   $("previous").disabled = state.page === 0;
   $("next").disabled = state.page + 1 >= pageCount;
-  $("table-note").textContent = playerView ? "— sıfır değil, veri sağlanmadı demektir. İlk 11: 1 = evet, 0 = hayır." : "Kaydedilen sonuçlar · Önce ev sahibi skoru · — veri sağlanmadı demektir · Saatler Türkiye saatiyle.";
+  $("table-note").textContent = playerView ? t("— sıfır değil, veri sağlanmadı demektir. İlk 11: 1 = evet, 0 = hayır.") : t("Kaydedilen sonuçlar · Önce ev sahibi skoru · — veri sağlanmadı demektir · Saatler Türkiye saatiyle.");
 }
 
 function goToTablePage(page) {
@@ -429,5 +429,5 @@ navigateView(new URLSearchParams(location.search).get("view"));
 if (siteMode !== "none") {
   loadLocalData();
 } else {
-  $("message").textContent = "Siteyi görmek için python src/web/serve.py --season 2026/2027 komutunu çalıştırıp http://127.0.0.1:8000 adresini açın.";
+  $("message").textContent = t("Siteyi görmek için python src/web/serve.py --season 2026/2027 komutunu çalıştırıp http://127.0.0.1:8000 adresini açın.");
 }

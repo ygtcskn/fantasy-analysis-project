@@ -11,14 +11,18 @@
 // Guests get a few answers, then the chat asks them to sign in. The server
 // keeps that count and checks a signed-in visitor's Supabase token itself;
 // what this page shows about it is only a convenience.
+//
+// The AI answers in the language of the question, so the examples are in the
+// page's language. What the server says itself (a limit reached, an error) is
+// always Turkish; knownText shows the English kept for it in core/english.js.
 
-const HOME_CHAT_EXAMPLES = ["2023-24 gol kralı kim?", "Fenerbahçe bu sezon evinde nasıl?", "Son derbiyi kim kazandı?"];
+const HOME_CHAT_EXAMPLES = [t("2023-24 gol kralı kim?"), t("Fenerbahçe bu sezon evinde nasıl?"), t("Son derbiyi kim kazandı?")];
 const HOME_CHAT_PROVIDERS = ["claude", "openai"];
 const HOME_CHAT_MODELS = { "claude-haiku-5-5": "Claude Haiku 5.5", "gpt-6-luna": "GPT-6 Luna" };
-const HOME_CHAT_GREETING = "Merhaba! Süper Lig maçları, oyuncular ve sezon istatistikleri hakkında soru sorabilirsin.";
+const HOME_CHAT_GREETING = t("Merhaba! Süper Lig maçları, oyuncular ve sezon istatistikleri hakkında soru sorabilirsin.");
 const HOME_CHAT_GUEST_QUESTIONS = 3;
 const HOME_CHAT_TIMEOUT = 90000;
-const HOME_CHAT_PLACEHOLDER = "Buraya yaz";
+const HOME_CHAT_PLACEHOLDER = t("Buraya yaz");
 const HOME_CHAT_HISTORY = 6;   // question-and-answer pairs sent along with a question
 const homeChat = { busy: false, provider: "claude", conversation: "", guest: "", guestLeft: null, needsLogin: false, history: [] };
 
@@ -63,7 +67,7 @@ function homeChatMessage(role, text, meta, detail) {
 function homeChatLoginMessage(text) {
   const item = homeChatMessage("login", text);
   if (typeof authEnabled === "function" && authEnabled()) {
-    const button = element("button", "home-chat-login", "Giriş yap");
+    const button = element("button", "home-chat-login", t("Giriş yap"));
     button.type = "button";
     button.addEventListener("click", () => openAuthDialog());
     item.append(button);
@@ -74,7 +78,7 @@ function homeChatLoginMessage(text) {
 // Three jumping dots while the answer is on its way.
 function homeChatTyping() {
   const item = element("li", "home-chat-message is-assistant is-typing");
-  item.setAttribute("aria-label", "Asistan yazıyor");
+  item.setAttribute("aria-label", t("Asistan yazıyor"));
   const dots = element("span", "home-chat-dots");
   dots.setAttribute("aria-hidden", "true");
   dots.append(element("i"), element("i"), element("i"));
@@ -100,15 +104,15 @@ function homeChatNote() {
   const left = homeChat.guestLeft ?? HOME_CHAT_GUEST_QUESTIONS;
   note.hidden = !homeChatEndpoint() || homeChatSignedIn() || homeChat.needsLogin;
   note.textContent = left === HOME_CHAT_GUEST_QUESTIONS
-    ? `Misafir olarak ${left} soru sorabilirsin; sonrası için giriş yapman gerekir.`
-    : `Misafir olarak ${left} soru hakkın kaldı.`;
+    ? t("Misafir olarak {count} soru sorabilirsin; sonrası için giriş yapman gerekir.", { count: left }, left)
+    : t("Misafir olarak {count} soru hakkın kaldı.", { count: left }, left);
 }
 
 function homeChatSync() {
   const offline = !homeChatEndpoint(), locked = offline || homeChat.needsLogin;
   const input = $("home-chat-input");
   input.disabled = locked;
-  input.placeholder = homeChat.needsLogin ? "Devam etmek için giriş yap" : HOME_CHAT_PLACEHOLDER;
+  input.placeholder = homeChat.needsLogin ? t("Devam etmek için giriş yap") : HOME_CHAT_PLACEHOLDER;
   $("home-chat-send").disabled = locked || homeChat.busy || !input.value.trim();
   for (const button of document.querySelectorAll(".home-chat-provider button")) {
     button.setAttribute("aria-pressed", String(button.dataset.provider === homeChat.provider));
@@ -125,10 +129,10 @@ function startHomeChat() {
   $("home-chat-messages").replaceChildren();
   homeChatMessage("assistant", HOME_CHAT_GREETING);
   if (!homeChatEndpoint()) {
-    homeChatMessage("error", "Asistan bu sayfada çalışmıyor: siteyi fantezianaliz.com'dan ya da yerel sunucudan (serve.py) aç.");
+    homeChatMessage("error", t("Asistan bu sayfada çalışmıyor: siteyi fantezianaliz.com'dan ya da yerel sunucudan (serve.py) aç."));
     $("home-chat-suggestions").hidden = true;
   } else if (homeChat.needsLogin) {
-    homeChatLoginMessage("Misafir olarak 3 soru hakkını kullandın. Devam etmek için giriş yap.");
+    homeChatLoginMessage(t("Misafir olarak 3 soru hakkını kullandın. Devam etmek için giriş yap."));
     $("home-chat-suggestions").hidden = true;
   } else {
     $("home-chat-suggestions").hidden = false;
@@ -178,7 +182,7 @@ async function askHomeChat(question) {
 function homeChatMeta(row) {
   const model = HOME_CHAT_MODELS[row.model] || row.model;
   const cost = Number(row.cost_usd);
-  return [model, row.rounds ? `${row.rounds} tur` : "", Number.isFinite(cost) ? `$${cost.toFixed(4)}` : ""].filter(Boolean).join(" · ");
+  return [model, row.rounds ? t("{count} tur", { count: row.rounds }, Number(row.rounds)) : "", Number.isFinite(cost) ? `$${cost.toFixed(4)}` : ""].filter(Boolean).join(" · ");
 }
 
 function homeChatGuestLeft(row) {
@@ -204,24 +208,26 @@ async function sendHomeChat(text) {
     if (conversation !== homeChat.conversation) return;
     homeChatGuestLeft(row);
     if (row.status === "ok") {
-      homeChatMessage("assistant", row.text, homeChatMeta(row), row.tool_calls ? `Araçlar: ${row.tool_calls}` : "Araç kullanılmadı");
+      // The AI's answer as it came; knownText changes only the few lines the
+      // server writes itself when the AI gave none.
+      homeChatMessage("assistant", knownText(row.text), homeChatMeta(row), row.tool_calls ? t("Araçlar: {tools}", { tools: row.tool_calls }) : t("Araç kullanılmadı"));
       homeChat.history = [...homeChat.history, { q: question, a: row.text }].slice(-HOME_CHAT_HISTORY);
       // That was a guest's last question: ask them to sign in now, not after they type another.
       if (homeChat.guestLeft === 0 && !homeChatSignedIn()) {
         homeChat.needsLogin = true;
-        homeChatLoginMessage("Misafir olarak 3 soru hakkını kullandın. Devam etmek için giriş yap.");
+        homeChatLoginMessage(t("Misafir olarak 3 soru hakkını kullandın. Devam etmek için giriş yap."));
       }
     } else if (row.status === "login") {
       homeChat.needsLogin = true;
-      homeChatLoginMessage(row.text);
+      homeChatLoginMessage(knownText(row.text));
     } else {
-      homeChatMessage("error", row.text || "Yanıt alınamadı.");
+      homeChatMessage("error", knownText(row.text) || t("Yanıt alınamadı."));
     }
   } catch (error) {
     if (conversation === homeChat.conversation) {
-      homeChatMessage("error", error.name === "AbortError" ? "Yanıt çok gecikti; tekrar deneyin."
-        : siteMode === "local" ? "Yerel sunucuya ulaşılamadı. serve.py çalışıyor mu? Kod değiştiyse yeniden başlatın."
-          : "Asistana şu an ulaşılamadı. Biraz sonra tekrar dene.");
+      homeChatMessage("error", error.name === "AbortError" ? t("Yanıt çok gecikti; tekrar deneyin.")
+        : siteMode === "local" ? t("Yerel sunucuya ulaşılamadı. serve.py çalışıyor mu? Kod değiştiyse yeniden başlatın.")
+          : t("Asistana şu an ulaşılamadı. Biraz sonra tekrar dene."));
     }
   } finally {
     typing.remove();
@@ -234,7 +240,7 @@ async function sendHomeChat(text) {
 function homeChatAuthChanged() {
   if (homeChatSignedIn() && homeChat.needsLogin) {
     homeChat.needsLogin = false;
-    homeChatMessage("assistant", "Giriş yaptın; sorularına devam edebilirsin.");
+    homeChatMessage("assistant", t("Giriş yaptın; sorularına devam edebilirsin."));
   }
   homeChatSync();
 }

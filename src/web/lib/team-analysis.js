@@ -8,6 +8,11 @@
 // Only finished fixtures with a saved score count. A fixture the last download
 // caught in play (INPLAY_2ND_HALF) is left out until it is downloaded again,
 // rather than counted with half its statistics.
+//
+// Text is written in Turkish and shown in the page's language (t, from
+// core/language.js). Node loads this file on its own, so it fetches that
+// script itself there; the text then stays as written.
+if (typeof t === "undefined") Object.assign(globalThis, require("../core/language.js"));
 
 const TeamAnalysis = (() => {
   const finishedStates = new Set(["FT", "AET", "FT_PEN", "AWARDED", "WO"]);
@@ -20,7 +25,7 @@ const TeamAnalysis = (() => {
     return Number.isFinite(result) ? result : null;
   };
   const text = (value, digits = 2) => (value === null || !Number.isFinite(value) ? "—"
-    : value.toLocaleString("tr-TR", { minimumFractionDigits: 0, maximumFractionDigits: digits }));
+    : value.toLocaleString(LOCALE, { minimumFractionDigits: 0, maximumFractionDigits: digits }));
   const fixed = (value) => value.toFixed(1);
   const mean = (values) => (values.length ? values.reduce((a, b) => a + b, 0) / values.length : null);
   const stateOf = (fixture) => String(fixture["state.developer_name"] || fixture.state || "").toUpperCase();
@@ -32,7 +37,7 @@ const TeamAnalysis = (() => {
     return Number.isFinite(parsed) ? parsed : Infinity;
   }
   const label = (names, id) => names.get(id)?.short_code || names.get(id)?.name || `#${id}`;
-  const fullName = (names, id) => names.get(id)?.name || `Takım ${id}`;
+  const fullName = (names, id) => names.get(id)?.name || t("Takım {id}", { id });
 
   // ------------------------------------------------------------------ matches
   // One entry per team and finished fixture: result from the saved CURRENT
@@ -74,19 +79,21 @@ const TeamAnalysis = (() => {
     return { round, finished, scheduled, matches: new Set(played.map((match) => match.fixtureId)).size };
   }
 
+  // A result's letter and word in the page's language: G, B, M or W, D, L.
+  const resultLetter = { W: t("G"), D: t("B"), L: t("M") };
   const record = (list) => {
     const count = (outcome) => list.filter((match) => match.result === outcome).length;
-    return `${count("W")}G ${count("D")}B ${count("L")}M`;
+    return `${count("W")}${resultLetter.W} ${count("D")}${resultLetter.D} ${count("L")}${resultLetter.L}`;
   };
-  const resultWord = { W: "galibiyet", D: "beraberlik", L: "mağlubiyet" };
-  const matchTitle = (match, names) => `${match.round !== null ? `${match.round}. hafta · ` : ""}`
-    + `${fullName(names, match.opponentId)} (${match.home ? "İ" : "D"}) · ${match.goalsFor}-${match.goalsAgainst} ${resultWord[match.result]}`;
+  const resultWord = { W: t("galibiyet"), D: t("beraberlik"), L: t("mağlubiyet") };
+  const matchTitle = (match, names) => `${match.round !== null ? `${t("{round}. hafta", { round: match.round })} · ` : ""}`
+    + `${fullName(names, match.opponentId)} (${match.home ? t("İ") : t("D")}) · ${match.goalsFor}-${match.goalsAgainst} ${resultWord[match.result]}`;
 
   // Small multiples share one panel frame: a team's name and record above an
   // SVG, clickable to open the team's profile. On the profile itself the panel
   // already is the open team, so it is drawn plain rather than as a link.
   function panel(teamId, names, selected, heading, svg, { interactive = true } = {}) {
-    const open = interactive ? ` role="button" tabindex="0" aria-label="${escape(fullName(names, teamId))} profilini göster"` : "";
+    const open = interactive ? ` role="button" tabindex="0" aria-label="${escape(t("{name} profilini göster", { name: fullName(names, teamId) }))}"` : "";
     return `<div class="ta-panel${interactive ? "" : " ta-panel-static"}${teamId === selected ? " ta-selected" : ""}"`
       + ` data-team="${escape(teamId)}"${open}><div class="ta-panel-heading"><span>${escape(fullName(names, teamId))}</span>`
       + `<small>${escape(heading)}</small></div>${svg}</div>`;
@@ -123,10 +130,11 @@ const TeamAnalysis = (() => {
       if (plotted.length) {
         const cx = x(mean(plotted.map((match) => match.xga))), cy = y(mean(plotted.map((match) => match.xg)));
         cross = `<g stroke="var(--ink)" stroke-width="2"><line x1="${fixed(cx - 6)}" y1="${fixed(cy)}" x2="${fixed(cx + 6)}" y2="${fixed(cy)}"/><line x1="${fixed(cx)}" y1="${fixed(cy - 6)}" x2="${fixed(cx)}" y2="${fixed(cy + 6)}"/>`
-          + `<title>${escape(`Ortalama · xG ${text(mean(plotted.map((match) => match.xg)))} · xGA ${text(mean(plotted.map((match) => match.xga)))}`)}</title></g>`;
+          + `<title>${escape(`${t("Ortalama")} · xG ${text(mean(plotted.map((match) => match.xg)))} · xGA ${text(mean(plotted.map((match) => match.xga)))}`)}</title></g>`;
       }
-      const svg = `<svg viewBox="0 0 ${size} ${size}" width="100%" role="img" aria-label="${escape(`${fullName(names, teamId)}: maç maç xG ve xGA`)}">${frame.join("")}${cloud}${dots}${cross}</svg>`;
-      return panel(teamId, names, selected, `${record(own)}${plotted.length < own.length ? ` · ${own.length - plotted.length} maçta xG yok` : ""}`, svg, options);
+      const svg = `<svg viewBox="0 0 ${size} ${size}" width="100%" role="img" aria-label="${escape(t("{team}: maç maç xG ve xGA", { team: fullName(names, teamId) }))}">${frame.join("")}${cloud}${dots}${cross}</svg>`;
+      const missing = own.length - plotted.length;
+      return panel(teamId, names, selected, `${record(own)}${missing ? ` · ${t("{count} maçta xG yok", { count: missing }, missing)}` : ""}`, svg, options);
     });
     return { html: panels.join(""), scale: top, matches: known.length };
   }
@@ -134,7 +142,7 @@ const TeamAnalysis = (() => {
   // -------------------------------------------------------- fantasy by role
   // Where a team's fantasy points come from: the published ledger summed by
   // the game's positions. Negative totals are drawn left of zero.
-  const roles = [["KL", "Kaleci"], ["DEF", "Defans"], ["OS", "Orta saha"], ["FOR", "Forvet"]];
+  const roles = [["KL", t("Kaleci")], ["DEF", t("Defans")], ["OS", t("Orta saha")], ["FOR", t("Forvet")]];
   function fantasyByRole(ledgerRows, names) {
     const teams = new Map();
     for (const row of ledgerRows) {
@@ -147,7 +155,7 @@ const TeamAnalysis = (() => {
       if (row.fixture_id) entry.fixtures.add(String(row.fixture_id));
     }
     return [...teams.values()].map((entry) => ({ ...entry, matches: entry.fixtures.size }))
-      .sort((a, b) => b.total - a.total || fullName(names, a.teamId).localeCompare(fullName(names, b.teamId), "tr"));
+      .sort((a, b) => b.total - a.total || fullName(names, a.teamId).localeCompare(fullName(names, b.teamId), LOCALE));
   }
   function fantasyChart(rows, names, selected) {
     const width = 640, left = 132, right = 44, row = 22, top = 8;
@@ -170,7 +178,7 @@ const TeamAnalysis = (() => {
       }
       parts.push(`<text x="${fixed(x(positive) + 5)}" y="${y + 15}" font-size="10" fill="var(--muted)">${text(entry.total, 1)}</text>`);
     });
-    return `<svg viewBox="0 0 ${width} ${height}" width="100%" role="img" aria-label="Takımların fantezi puanı, mevkiye göre">${parts.join("")}</svg>`;
+    return `<svg viewBox="0 0 ${width} ${height}" width="100%" role="img" aria-label="${escape(t("Takımların fantezi puanı, mevkiye göre"))}">${parts.join("")}</svg>`;
   }
 
   // -------------------------------------------------------------------- luck
@@ -193,18 +201,19 @@ const TeamAnalysis = (() => {
     const column = (width - left - gap) / 2, height = top + rows.length * row + 8;
     const reach = Math.max(1, ...rows.flatMap((entry) => [Math.abs(entry.attack ?? 0), Math.abs(entry.defence ?? 0)]));
     const parts = [];
-    [["attack", "Hücum · gol − xG"], ["defence", "Savunma · xGA − yenilen"]].forEach(([key, title], block) => {
+    [["attack", t("Hücum · gol − xG")], ["defence", t("Savunma · xGA − yenilen")]].forEach(([key, title], block) => {
       const start = left + block * (column + gap), zero = start + column / 2;
       const x = (value) => zero + (value / reach) * (column / 2 - 30);
-      parts.push(`<text x="${fixed(zero)}" y="12" text-anchor="middle" font-size="11" font-weight="600" fill="var(--ink)">${title}</text>`);
+      parts.push(`<text x="${fixed(zero)}" y="12" text-anchor="middle" font-size="11" font-weight="600" fill="var(--ink)">${escape(title)}</text>`);
       parts.push(`<line x1="${fixed(zero)}" y1="${top - 6}" x2="${fixed(zero)}" y2="${height - 4}" stroke="var(--muted)"/>`);
       rows.forEach((entry, index) => {
         const value = entry[key], y = top + index * row;
         if (value === null) { parts.push(`<text x="${fixed(zero)}" y="${y + 15}" text-anchor="middle" font-size="10" fill="var(--muted)">—</text>`); return; }
         const tone = value >= 0 ? "over" : "under";
-        const detail = key === "attack" ? `${entry.goals} gol, ${text(entry.xg)} xG` : `${entry.conceded} yenilen, ${text(entry.xga)} xGA`;
+        const detail = key === "attack" ? t("{goals} gol, {xg} xG", { goals: entry.goals, xg: text(entry.xg) })
+          : t("{conceded} yenilen, {xga} xGA", { conceded: entry.conceded, xga: text(entry.xga) });
         parts.push(`<rect x="${fixed(Math.min(zero, x(value)))}" y="${y + 5}" width="${fixed(Math.abs(x(value) - zero))}" height="${row - 10}" fill="var(--ta-${tone})">`
-          + `<title>${escape(`${fullName(names, entry.teamId)} · ${detail} · fark ${value > 0 ? "+" : ""}${text(value)} (${entry.matches} maç)`)}</title></rect>`);
+          + `<title>${escape(`${fullName(names, entry.teamId)} · ${detail} · ${t("fark {value} ({count} maç)", { value: `${value > 0 ? "+" : ""}${text(value)}`, count: entry.matches })}`)}</title></rect>`);
         parts.push(`<text x="${fixed(value >= 0 ? x(value) + 4 : x(value) - 4)}" y="${y + 15}" text-anchor="${value >= 0 ? "start" : "end"}" font-size="10" fill="var(--muted)">${value > 0 ? "+" : ""}${text(value, 1)}</text>`);
       });
     });
@@ -212,7 +221,7 @@ const TeamAnalysis = (() => {
       const bold = entry.teamId === selected ? ' font-weight="700"' : "";
       parts.push(`<text x="${left - 8}" y="${top + index * row + 15}" text-anchor="end" font-size="11" fill="var(--ink)"${bold} data-team="${escape(entry.teamId)}" class="ta-link">${escape(fullName(names, entry.teamId))}</text>`);
     });
-    return `<svg viewBox="0 0 ${width} ${height}" width="100%" role="img" aria-label="Gol ve xG farkı, hücum ve savunma">${parts.join("")}</svg>`;
+    return `<svg viewBox="0 0 ${width} ${height}" width="100%" role="img" aria-label="${escape(t("Gol ve xG farkı, hücum ve savunma"))}">${parts.join("")}</svg>`;
   }
 
   // -------------------------------------------------------------------- form
@@ -234,9 +243,9 @@ const TeamAnalysis = (() => {
         const cx = left + slot * index + slot / 2, detail = escape(`${matchTitle(match, names)} · xG ${text(match.xg)} · xGA ${text(match.xga)}`);
         if (match.xg !== null) parts.push(`<rect x="${fixed(cx - bar / 2)}" y="${fixed(middle - y(match.xg))}" width="${fixed(bar)}" height="${fixed(y(match.xg))}" fill="var(--statistics-plot-line)"><title>${detail}</title></rect>`);
         if (match.xga !== null) parts.push(`<rect x="${fixed(cx - bar / 2)}" y="${middle}" width="${fixed(bar)}" height="${fixed(y(match.xga))}" fill="var(--ta-under)"><title>${detail}</title></rect>`);
-        parts.push(`<text x="${fixed(cx)}" y="${height - 4}" text-anchor="middle" font-size="9" font-weight="700" fill="var(--ta-${match.result})">${{ W: "G", D: "B", L: "M" }[match.result]}</text>`);
+        parts.push(`<text x="${fixed(cx)}" y="${height - 4}" text-anchor="middle" font-size="9" font-weight="700" fill="var(--ta-${match.result})">${resultLetter[match.result]}</text>`);
       });
-      const svg = `<svg viewBox="0 0 ${width} ${height}" width="100%" role="img" aria-label="${escape(`${fullName(names, teamId)}: maç maç xG formu`)}">${parts.join("")}</svg>`;
+      const svg = `<svg viewBox="0 0 ${width} ${height}" width="100%" role="img" aria-label="${escape(t("{team}: maç maç xG formu", { team: fullName(names, teamId) }))}">${parts.join("")}</svg>`;
       return panel(teamId, names, selected, record(own), svg, options);
     });
     return { html: panels.join(""), scale: top };
@@ -287,14 +296,15 @@ const TeamAnalysis = (() => {
       const parts = [`<line x1="${left}" y1="${middle}" x2="${width - right}" y2="${middle}" stroke="var(--muted)"/>`];
       buckets.forEach((name, index) => {
         const cx = left + slot * index + slot / 2;
-        const detail = escape(`${fullName(names, teamId)} · ${name}. dakikalar · ${entry.scored[index]} attı, ${entry.conceded[index]} yedi`);
+        const detail = escape(t("{team} · {minutes}. dakikalar · {scored} attı, {conceded} yedi", { team: fullName(names, teamId), minutes: name,
+          scored: entry.scored[index], conceded: entry.conceded[index] }));
         if (entry.scored[index]) parts.push(`<rect x="${fixed(cx - bar / 2)}" y="${fixed(middle - y(entry.scored[index]))}" width="${fixed(bar)}" height="${fixed(y(entry.scored[index]))}" fill="var(--ta-W)"><title>${detail}</title></rect>`);
         if (entry.conceded[index]) parts.push(`<rect x="${fixed(cx - bar / 2)}" y="${middle}" width="${fixed(bar)}" height="${fixed(y(entry.conceded[index]))}" fill="var(--ta-L)"><title>${detail}</title></rect>`);
         parts.push(`<text x="${fixed(cx)}" y="${height - 4}" text-anchor="middle" font-size="8" fill="var(--muted)">${name}</text>`);
       });
       const scored = entry.scored.reduce((a, b) => a + b, 0), conceded = entry.conceded.reduce((a, b) => a + b, 0);
-      const svg = `<svg viewBox="0 0 ${width} ${height}" width="100%" role="img" aria-label="${escape(`${fullName(names, teamId)}: gol dakikaları`)}">${parts.join("")}</svg>`;
-      return panel(teamId, names, selected, `${scored} attı · ${conceded} yedi`, svg, options);
+      const svg = `<svg viewBox="0 0 ${width} ${height}" width="100%" role="img" aria-label="${escape(t("{team}: gol dakikaları", { team: fullName(names, teamId) }))}">${parts.join("")}</svg>`;
+      return panel(teamId, names, selected, t("{scored} attı · {conceded} yedi", { scored, conceded }), svg, options);
     });
     return { html: panels.join(""), scale: top };
   }
@@ -358,13 +368,14 @@ const TeamAnalysis = (() => {
         if (value !== null) {
           const h = (Math.abs(value) / reach) * span;
           parts.push(`<rect x="${fixed(cx - bar / 2)}" y="${fixed(value >= 0 ? middle - h : middle)}" width="${fixed(bar)}" height="${fixed(h)}" fill="var(--ta-${value >= 0 ? "W" : "L"})">`
-            + `<title>${escape(`${fullName(names, teamId)} · ${name}. dakikalar · baskı farkı ${value > 0 ? "+" : ""}${text(value, 1)}`)}</title></rect>`);
+            + `<title>${escape(t("{team} · {minutes}. dakikalar · baskı farkı {value}", { team: fullName(names, teamId), minutes: name,
+              value: `${value > 0 ? "+" : ""}${text(value, 1)}` }))}</title></rect>`);
         }
         parts.push(`<text x="${fixed(cx)}" y="${height - 4}" text-anchor="middle" font-size="8" fill="var(--muted)">${name}</text>`);
       });
       const known = values.filter((value) => value !== null);
-      const svg = `<svg viewBox="0 0 ${width} ${height}" width="100%" role="img" aria-label="${escape(`${fullName(names, teamId)}: dakikalara göre baskı dengesi`)}">${parts.join("")}</svg>`;
-      return panel(teamId, names, selected, known.length ? `ortalama ${text(mean(known), 1)}` : "veri yok", svg, options);
+      const svg = `<svg viewBox="0 0 ${width} ${height}" width="100%" role="img" aria-label="${escape(t("{team}: dakikalara göre baskı dengesi", { team: fullName(names, teamId) }))}">${parts.join("")}</svg>`;
+      return panel(teamId, names, selected, known.length ? t("ortalama {value}", { value: text(mean(known), 1) }) : t("veri yok"), svg, options);
     });
     return { html: panels.join(""), scale: reach };
   }
@@ -447,7 +458,7 @@ const TeamAnalysis = (() => {
       const fill = colorOf ? colorOf(row.teamId) : "var(--statistics-plot-line)";
       parts.push(`<g data-team="${escape(row.teamId)}" class="ta-link"><circle cx="${fixed(cx)}" cy="${fixed(cy)}" r="${chosen ? 7 : 5}" fill="${escape(fill)}" fill-opacity="${chosen ? 1 : 0.85}" stroke="${chosen ? "var(--ink)" : "var(--surface-raised)"}" stroke-width="${chosen ? 2 : 1.5}"/>`
         + `<text x="${fixed(tx)}" y="${fixed(cy + spot[1])}" text-anchor="${spot[2]}" font-size="10" font-weight="${chosen ? 700 : 400}" fill="var(--ink)">${escape(code)}</text>`
-        + `<title>${escape(`${fullName(names, row.teamId)} · ${spec.xLabel}: ${text(row.x, spec.xDigits ?? 2)} · ${spec.yLabel}: ${text(row.y, spec.yDigits ?? 2)} (${row.matches} maç)`)}</title></g>`);
+        + `<title>${escape(`${fullName(names, row.teamId)} · ${spec.xLabel}: ${text(row.x, spec.xDigits ?? 2)} · ${spec.yLabel}: ${text(row.y, spec.yDigits ?? 2)} (${t("{count} maç", { count: row.matches }, row.matches)})`)}</title></g>`);
     }
     return `<svg viewBox="0 0 ${width} ${height}" width="100%" role="img" aria-label="${escape(spec.title)}">${parts.join("")}</svg>`;
   }
@@ -464,47 +475,47 @@ const TeamAnalysis = (() => {
   // The fixed comparisons, in reading order. Every pair is oriented so its
   // quadrant captions say which corner is good.
   const comparisons = [
-    { id: "strength", title: "Hücum ve savunma gücü", xLabel: "Maç başına yenilen xG", yLabel: "Maç başına üretilen xG",
+    { id: "strength", title: t("Hücum ve savunma gücü"), xLabel: t("Maç başına yenilen xG"), yLabel: t("Maç başına üretilen xG"),
       x: ["xga", perMatch("xga")], y: ["xg", perMatch("xg")], xDigits: 2, yDigits: 2,
-      quadrants: ["Güçlü hücum, sağlam savunma", "Güçlü hücum, zayıf savunma", "Zayıf hücum, sağlam savunma", "Zayıf hücum, zayıf savunma"],
-      note: "Takımın genel gücü: sol üst hem pozisyon üreten hem az pozisyon veren takımlar. Kesikli çizgiler lig ortalaması." },
-    { id: "points", title: "Puan ve beklenen puan", xLabel: "Beklenen puan (xPts)", yLabel: "Puan", diagonal: true, floor: 0,
+      quadrants: [t("Güçlü hücum, sağlam savunma"), t("Güçlü hücum, zayıf savunma"), t("Zayıf hücum, sağlam savunma"), t("Zayıf hücum, zayıf savunma")],
+      note: t("Takımın genel gücü: sol üst hem pozisyon üreten hem az pozisyon veren takımlar. Kesikli çizgiler lig ortalaması.") },
+    { id: "points", title: t("Puan ve beklenen puan"), xLabel: t("Beklenen puan (xPts)"), yLabel: t("Puan"), diagonal: true, floor: 0,
       x: ["xpts", (list) => sumOf(list, "xpts")], y: ["points", (list) => sumOf(list, "points")], xDigits: 1, yDigits: 0,
-      quadrants: ["Hak ettiğinden fazla puan", "", "", "Hak ettiğinden az puan"],
-      note: "Çizginin üstündeki takımların puanı oyunlarından fazla; sıralamaları gerileyebilir. Beklenen puan her maç için Sportmonks’un xG’ye dayalı değeri." },
-    { id: "finishing", title: "Gol ve xG", xLabel: "xG", yLabel: "Atılan gol", diagonal: true, floor: 0,
+      quadrants: [t("Hak ettiğinden fazla puan"), "", "", t("Hak ettiğinden az puan")],
+      note: t("Çizginin üstündeki takımların puanı oyunlarından fazla; sıralamaları gerileyebilir. Beklenen puan her maç için Sportmonks’un xG’ye dayalı değeri.") },
+    { id: "finishing", title: t("Gol ve xG"), xLabel: "xG", yLabel: t("Atılan gol"), diagonal: true, floor: 0,
       x: ["xg", (list) => sumOf(list, "xg")], y: ["goalsFor", (list) => sumOf(list, "goalsFor")], xDigits: 1, yDigits: 0,
-      quadrants: ["Pozisyonlarından fazla gol", "", "", "Pozisyonlarından az gol"],
-      note: "Çizginin üstü bitiricilikte ya da şansta lehine; bu genelde sürmez. Çizginin altındaki takımların hücumcuları ucuz alım adayıdır." },
-    { id: "keeping", title: "Yenilen gol ve xGA", xLabel: "Rakibe verilen xG", yLabel: "Yenilen gol", diagonal: true, floor: 0,
+      quadrants: [t("Pozisyonlarından fazla gol"), "", "", t("Pozisyonlarından az gol")],
+      note: t("Çizginin üstü bitiricilikte ya da şansta lehine; bu genelde sürmez. Çizginin altındaki takımların hücumcuları ucuz alım adayıdır.") },
+    { id: "keeping", title: t("Yenilen gol ve xGA"), xLabel: t("Rakibe verilen xG"), yLabel: t("Yenilen gol"), diagonal: true, floor: 0,
       x: ["xga", (list) => sumOf(list, "xga")], y: ["goalsAgainst", (list) => sumOf(list, "goalsAgainst")], xDigits: 1, yDigits: 0,
-      quadrants: ["Beklenenden fazla yiyor", "", "", "Beklenenden az yiyor"],
-      note: "Çizginin altı kaleci ya da şans sayesinde beklenenden az gol yiyen takımlar; gol yememe puanında bu fark kapanabilir." },
-    { id: "shots", title: "Şut hacmi ve kalitesi", xLabel: "Maç başına şut", yLabel: "Şut başına xG",
+      quadrants: [t("Beklenenden fazla yiyor"), "", "", t("Beklenenden az yiyor")],
+      note: t("Çizginin altı kaleci ya da şans sayesinde beklenenden az gol yiyen takımlar; gol yememe puanında bu fark kapanabilir.") },
+    { id: "shots", title: t("Şut hacmi ve kalitesi"), xLabel: t("Maç başına şut"), yLabel: t("Şut başına xG"),
       x: ["shots", perMatch("shots")], y: ["xg", (list) => sumOf(list, "xg") / sumOf(list, "shots")], need: ["xg", "shots"], xDigits: 1, yDigits: 3,
-      quadrants: ["Az ama kaliteli şut", "Çok ve kaliteli şut", "Az ve düşük kaliteli şut", "Çok ama düşük kaliteli şut"],
-      note: "Sağ üst hem çok hem iyi şut atan takımlar." },
-    { id: "shots-against", title: "Verilen şut ve kalitesi", xLabel: "Maç başına rakip şutu", yLabel: "Rakip şutu başına xG",
+      quadrants: [t("Az ama kaliteli şut"), t("Çok ve kaliteli şut"), t("Az ve düşük kaliteli şut"), t("Çok ama düşük kaliteli şut")],
+      note: t("Sağ üst hem çok hem iyi şut atan takımlar.") },
+    { id: "shots-against", title: t("Verilen şut ve kalitesi"), xLabel: t("Maç başına rakip şutu"), yLabel: t("Rakip şutu başına xG"),
       x: ["shotsConceded", perMatch("shotsConceded")], y: ["xga", (list) => sumOf(list, "xga") / sumOf(list, "shotsConceded")], need: ["xga", "shotsConceded"], xDigits: 1, yDigits: 3,
-      quadrants: ["Az ama tehlikeli şut veriyor", "Çok ve tehlikeli şut veriyor", "Az ve zararsız şut veriyor", "Çok ama zararsız şut veriyor"],
-      note: "Savunmanın aynası: sol alt en az ve en zararsız şutu veren takımlar." },
-    { id: "big-chances", title: "Büyük fırsatlar", xLabel: "Maç başına verilen büyük fırsat", yLabel: "Maç başına yaratılan büyük fırsat",
+      quadrants: [t("Az ama tehlikeli şut veriyor"), t("Çok ve tehlikeli şut veriyor"), t("Az ve zararsız şut veriyor"), t("Çok ama zararsız şut veriyor")],
+      note: t("Savunmanın aynası: sol alt en az ve en zararsız şutu veren takımlar.") },
+    { id: "big-chances", title: t("Büyük fırsatlar"), xLabel: t("Maç başına verilen büyük fırsat"), yLabel: t("Maç başına yaratılan büyük fırsat"),
       x: ["bigChancesConceded", perMatch("bigChancesConceded")], y: ["bigChances", perMatch("bigChances")], xDigits: 1, yDigits: 1,
-      quadrants: ["Çok yaratıyor, az veriyor", "Çok yaratıyor, çok veriyor", "Az yaratıyor, az veriyor", "Az yaratıyor, çok veriyor"],
-      note: "Net gol pozisyonları, iki yönde de. Sol üst en iyisi." },
-    { id: "possession", title: "Topa sahip olma ve tehlike", xLabel: "Ortalama topa sahip olma (%)", yLabel: "Maç başına tehlikeli atak",
+      quadrants: [t("Çok yaratıyor, az veriyor"), t("Çok yaratıyor, çok veriyor"), t("Az yaratıyor, az veriyor"), t("Az yaratıyor, çok veriyor")],
+      note: t("Net gol pozisyonları, iki yönde de. Sol üst en iyisi.") },
+    { id: "possession", title: t("Topa sahip olma ve tehlike"), xLabel: t("Ortalama topa sahip olma (%)"), yLabel: t("Maç başına tehlikeli atak"),
       x: ["possession", perMatch("possession")], y: ["dangerous", perMatch("dangerous")], xDigits: 0, yDigits: 0,
-      quadrants: ["Az topla tehlikeli", "Topa sahip ve tehlikeli", "Az top, az tehlike", "Topa sahip ama kısır"],
-      note: "Topu tutan mı, onu tehlikeye çeviren mi: sağ alt pas yapan ama tehlike üretemeyen takımlar." },
-    { id: "pressing", title: "Pres ve topa sahip olma", xLabel: "Ortalama topa sahip olma (%)", yLabel: "Pres yoğunluğu (rakip pası / savunma aksiyonu)",
+      quadrants: [t("Az topla tehlikeli"), t("Topa sahip ve tehlikeli"), t("Az top, az tehlike"), t("Topa sahip ama kısır")],
+      note: t("Topu tutan mı, onu tehlikeye çeviren mi: sağ alt pas yapan ama tehlike üretemeyen takımlar.") },
+    { id: "pressing", title: t("Pres ve topa sahip olma"), xLabel: t("Ortalama topa sahip olma (%)"), yLabel: t("Pres yoğunluğu (rakip pası / savunma aksiyonu)"),
       x: ["possession", perMatch("possession")], y: ["rivalPasses", (list) => sumOf(list, "rivalPasses") / (sumOf(list, "tackles") + sumOf(list, "interceptions") + sumOf(list, "fouls"))],
       need: ["possession", "rivalPasses", "tackles", "interceptions", "fouls"], invertY: true, xDigits: 0, yDigits: 1,
-      quadrants: ["Az topla yoğun pres", "Topa sahip, yoğun pres", "Geride bekliyor", "Topa sahip, pres yapmıyor"],
-      note: "Pres, rakibin yaptığı pasın müdahale, top kesme ve fauller toplamına oranı (PPDA’ya yakın); düşük değer yoğun pres demek, bu yüzden dikey eksen ters çevrildi: yukarısı daha yoğun pres. Saha bölgesi verisi olmadığı için tüm sahayı kapsar." },
-    { id: "fantasy", title: "Fantezi puanı ve xG", xLabel: "Maç başına üretilen xG", yLabel: "Maç başına takım fantezi puanı",
+      quadrants: [t("Az topla yoğun pres"), t("Topa sahip, yoğun pres"), t("Geride bekliyor"), t("Topa sahip, pres yapmıyor")],
+      note: t("Pres, rakibin yaptığı pasın müdahale, top kesme ve fauller toplamına oranı (PPDA’ya yakın); düşük değer yoğun pres demek, bu yüzden dikey eksen ters çevrildi: yukarısı daha yoğun pres. Saha bölgesi verisi olmadığı için tüm sahayı kapsar.") },
+    { id: "fantasy", title: t("Fantezi puanı ve xG"), xLabel: t("Maç başına üretilen xG"), yLabel: t("Maç başına takım fantezi puanı"),
       x: ["xg", perMatch("xg")], y: ["fantasy", perMatch("fantasy")], xDigits: 2, yDigits: 0,
-      quadrants: ["Az pozisyon, çok FP", "Çok pozisyon, çok FP", "Az pozisyon, az FP", "Çok pozisyon, az FP"],
-      note: "Takımın fantezi puanı pozisyonlarıyla destekleniyor mu: sol üst puanı pozisyonlarından fazla (gerileyebilir), sağ alt tersine (yükselebilir)." },
+      quadrants: [t("Az pozisyon, çok FP"), t("Çok pozisyon, çok FP"), t("Az pozisyon, az FP"), t("Çok pozisyon, az FP")],
+      note: t("Takımın fantezi puanı pozisyonlarıyla destekleniyor mu: sol üst puanı pozisyonlarından fazla (gerileyebilir), sağ alt tersine (yükselebilir).") },
   ];
   function comparisonRows(spec, played, order) {
     const need = spec.need || [...new Set([spec.x[0], spec.y[0]])];

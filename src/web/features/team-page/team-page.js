@@ -24,15 +24,16 @@ const optionalFiles = { "fixture_formations.csv": ["fixture_id", "participant_id
   "players.csv": ["id"], "current_squads.csv": ["team_id", "player_id"] };
 const club = { tables: {}, teams: new Map(), fixtures: [], scores: new Map(), names: new Map(), current: null,
   selected: params.get("match"), busy: false };
-const personName = (row) => club.names.get(String(row?.player_id ?? "")) || String(row?.name || "").trim() || `Oyuncu ${row?.player_id}`;
-const clubName = (id) => club.teams.get(id)?.name || (id === clubId ? el("team-name").textContent : `Takım ${id || "bilinmiyor"}`);
+const personName = (row) => club.names.get(String(row?.player_id ?? "")) || String(row?.name || "").trim() || t("Oyuncu {id}", { id: row?.player_id });
+const clubName = (id) => club.teams.get(id)?.name || (id === clubId ? el("team-name").textContent : t("Takım {id}", { id: id || t("bilinmiyor") }));
 // Finished matches and valid ratings follow the site's one rule set (core/match-rules.js).
 const status = fixtureState;
 const completed = fixtureFinished;
 const rating = validMatchRating;
-const week = (fixture) => fixture["round.name"] ? `${fixture["round.name"]}. Hafta` : "Haftası belli değil";
+const week = (fixture) => fixture["round.name"] ? t("{round}. Hafta", { round: fixture["round.name"] }) : t("Haftası belli değil");
 const opponent = (fixture) => fixture.home_team_id === clubId ? fixture.away_team_id : fixture.home_team_id;
-const venueSide = (fixture) => fixture.home_team_id === clubId ? "İ" : "D";
+const venueSide = (fixture) => fixture.home_team_id === clubId ? t("İ") : t("D");
+const ratingFigure = (value) => value.toLocaleString(LOCALE, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const orderFixtures = (a, b) => String(a.kickoff || "9999").localeCompare(String(b.kickoff || "9999")) || a.fixture_id.localeCompare(b.fixture_id);
 
 function setClubName(name) {
@@ -89,16 +90,16 @@ function renderMatchList(target, fixtures, emptyText) {
     button.type = "button";
     button.classList.toggle("selected", fixture.fixture_id === club.selected);
     button.setAttribute("aria-pressed", String(fixture.fixture_id === club.selected));
-    button.setAttribute("aria-label", `${week(fixture)} seç: ${clubName(opponent(fixture))}`);
+    button.setAttribute("aria-label", t("{week} seç: {team}", { week: week(fixture), team: clubName(opponent(fixture)) }));
     const info = node("span", "team-game-info");
     info.append(node("strong", "", clubName(opponent(fixture))), node("small", "", `${week(fixture)} · ${kickoffText(fixture)}`));
     const scores = scorePair(fixture);
     const result = node("span", "team-game-result", scores ? scores.join(" – ") : "—");
-    if (scores) result.title = "Ev sahibi skoru – deplasman skoru";
+    if (scores) result.title = t("Ev sahibi skoru – deplasman skoru");
     if (scores && completed(fixture)) {
       const [ours, theirs] = fixture.home_team_id === clubId ? scores : [...scores].reverse();
       const outcome = ours > theirs ? "W" : ours < theirs ? "L" : "D";
-      result.append(node("small", `result-${outcome.toLowerCase()}`, { W: "G", D: "B", L: "M" }[outcome]));
+      result.append(node("small", `result-${outcome.toLowerCase()}`, { W: t("G"), D: t("B"), L: t("M") }[outcome]));
     }
     button.append(node("span", "venue-chip", venueSide(fixture)), crest(opponent(fixture)), info, result);
     button.addEventListener("click", () => chooseMatch(fixture.fixture_id));
@@ -116,7 +117,7 @@ function playerToken(player, goalkeeper) {
   shirt.innerHTML = shirtSVG(player.team_id, { size: 64, number: player.jersey_number, showName: false, goalkeeper });
   const value = rating(player);
   token.append(shirt, node("span", "pitch-player-name", personName(player)),
-    node("span", "pitch-rating", value === null ? "—" : value.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })));
+    node("span", "pitch-rating", value === null ? "—" : ratingFigure(value)));
   return token;
 }
 
@@ -126,11 +127,11 @@ function renderLineup(fixture) {
   field.classList.remove("role-grouped");
   const formations = new Set((club.tables["fixture_formations.csv"] || []).filter((row) => row.fixture_id === fixture?.fixture_id && row.participant_id === clubId).map((row) => row.formation).filter(Boolean));
   const formation = formations.size === 1 ? [...formations][0] : null;
-  el("team-formation").textContent = formation ? `Diziliş ${formation}` : "Diziliş —";
+  el("team-formation").textContent = formation ? t("Diziliş {formation}", { formation }) : t("Diziliş —");
   const starters = matchRows(fixture, true).filter((row) => ["1", "true"].includes(String(row.started).toLowerCase()));
   if (!starters.length) {
-    el("lineup-note").textContent = "İlk 11, kaydedilen maç verisinde varsa görünür.";
-    field.append(node("p", "pitch-empty", fixture ? "Bu maç için ilk 11 bilgisi yok." : "İlk 11'i görmek için bir maç seçin."));
+    el("lineup-note").textContent = t("İlk 11, kaydedilen maç verisinde varsa görünür.");
+    field.append(node("p", "pitch-empty", fixture ? t("Bu maç için ilk 11 bilgisi yok.") : t("İlk 11'i görmek için bir maç seçin.")));
     return;
   }
   const widths = formation && /^\d+(?:-\d+)+$/.test(formation) ? [1, ...formation.split("-").map(Number)] : [];
@@ -144,7 +145,7 @@ function renderLineup(fixture) {
   let lines;
   if (exact) {
     lines = widths.map((_, index) => ({ goalkeeper: index === 0, players: positions.filter((p) => p.line === index + 1).sort((a, b) => a.slot - b.slot).map((p) => p.player) })).reverse();
-    el("lineup-note").textContent = "11 oyuncu · Diziliş yerleri Sportmonks verisinden. Hücum yönü ↑";
+    el("lineup-note").textContent = t("11 oyuncu · Diziliş yerleri Sportmonks verisinden. Hücum yönü ↑");
   } else {
     const groups = new Map();
     for (const player of starters) {
@@ -154,8 +155,8 @@ function renderLineup(fixture) {
     }
     const roleOrder = (role) => ["goalkeeper", "defender", "midfielder", "attacker"].indexOf(role) + 1 || 5;
     lines = [...groups].sort((a, b) => roleOrder(b[0]) - roleOrder(a[0]))
-      .map(([role, players]) => ({ label: role ? roleLabel(role) : "Mevki bilgisi yok", goalkeeper: role === "goalkeeper", players }));
-    el("lineup-note").textContent = `${starters.length} ilk 11 kaydı · Kayıtlı mevkiye göre gruplandı; kesin diziliş yerleri eksik. Diziliş etiketi ayrıca sağlanır.`;
+      .map(([role, players]) => ({ label: role ? roleLabel(role) : t("Mevki bilgisi yok"), goalkeeper: role === "goalkeeper", players }));
+    el("lineup-note").textContent = t("{count} ilk 11 kaydı · Kayıtlı mevkiye göre gruplandı; kesin diziliş yerleri eksik. Diziliş etiketi ayrıca sağlanır.", { count: starters.length });
   }
   field.classList.toggle("role-grouped", !exact);
   for (const line of lines) {
@@ -171,27 +172,27 @@ function bestPlayerRow(player, index, subtitle, value) {
   const row = node("div", "team-best-player");
   const identity = node("div", "best-player-info");
   identity.append(node("strong", "", personName(player)), node("small", "", subtitle));
-  row.append(node("span", "best-player-rank", String(index + 1).padStart(2, "0")), identity, node("strong", "team-rating", value.toFixed(2).replace(".", ",")));
+  row.append(node("span", "best-player-rank", String(index + 1).padStart(2, "0")), identity, node("strong", "team-rating", ratingFigure(value)));
   return row;
 }
 
 function renderSelected(fixture) {
   const box = el("team-score"), best = el("team-match-best");
   box.replaceChildren(); best.replaceChildren();
-  el("selected-title").textContent = fixture ? week(fixture) : "Seçilen hafta";
+  el("selected-title").textContent = fixture ? week(fixture) : t("Seçilen hafta");
   if (!fixture) {
-    box.append(node("p", "team-empty", "Ayrıntılar için bir maç seçin."));
-    best.append(node("p", "team-empty", "Reytingler burada görünecek."));
+    box.append(node("p", "team-empty", t("Ayrıntılar için bir maç seçin.")));
+    best.append(node("p", "team-empty", t("Reytingler burada görünecek.")));
     return;
   }
   const scores = scorePair(fixture);
   box.append(node("p", "team-muted", `${kickoffText(fixture)} · ${fixtureStateLabel(fixture)}`));
   const scoreline = node("div", "team-scoreline");
   scoreline.append(teamLink(fixture.home_team_id), node("strong", "team-score-value", scores ? scores.join(" – ") : "— : —"), teamLink(fixture.away_team_id));
-  box.append(scoreline, node("p", "team-muted", fixture["venue.name"] || "Stadyum bilgisi yok"));
-  const rated = matchRows(fixture).filter((row) => rating(row) !== null).sort((a, b) => rating(b) - rating(a) || personName(a).localeCompare(personName(b), "tr"));
-  rated.slice(0, 3).forEach((player, index) => best.append(bestPlayerRow(player, index, `${clubName(player.team_id)} · ${num(player.minutes_played) ?? "—"} dk`, rating(player))));
-  if (!rated.length) best.append(node("p", "team-empty", "Henüz geçerli reyting yok."));
+  box.append(scoreline, node("p", "team-muted", fixture["venue.name"] || t("Stadyum bilgisi yok")));
+  const rated = matchRows(fixture).filter((row) => rating(row) !== null).sort((a, b) => rating(b) - rating(a) || personName(a).localeCompare(personName(b), LOCALE));
+  rated.slice(0, 3).forEach((player, index) => best.append(bestPlayerRow(player, index, `${clubName(player.team_id)} · ${t("{minutes} dk", { minutes: num(player.minutes_played) ?? "—" })}`, rating(player))));
+  if (!rated.length) best.append(node("p", "team-empty", t("Henüz geçerli reyting yok.")));
 }
 
 function renderOverall() {
@@ -217,13 +218,13 @@ function renderOverall() {
   }
   const primaryRole = (id) => [...(roleMinutes.get(id) || [])].sort((a, b) => b[1] - a[1])[0]?.[0] || "";
   const minimum = Number(el("team-min-rated").value);
-  const ranked = [...players.values()].filter((player) => player.count >= minimum).map((player) => ({ ...player, average: player.sum / player.count })).sort((a, b) => b.average - a.average || b.count - a.count || personName(a).localeCompare(personName(b), "tr"));
+  const ranked = [...players.values()].filter((player) => player.count >= minimum).map((player) => ({ ...player, average: player.sum / player.count })).sort((a, b) => b.average - a.average || b.count - a.count || personName(a).localeCompare(personName(b), LOCALE));
   const list = el("team-overall");
   list.replaceChildren();
-  ranked.slice(0, 5).forEach((player, index) => list.append(bestPlayerRow(player, index, `${primaryRole(player.player_id) ? roleLabel(primaryRole(player.player_id)) : "Mevki bilgisi yok"} · ${player.count} reytingli maç`, player.average)));
-  if (!ranked.length) list.append(node("p", "team-empty", `En az ${minimum} reytingli maçı olan oyuncu yok. Daha düşük bir sınır deneyin veya daha fazla maç verisi yükleyin.`));
-  el("overall-note").textContent = "Yalnızca bu takımın tamamlanan maçlarındaki ortalama Sportmonks maç reytingi. Maçlar eşit ağırlıklıdır; reytingi olmayan ve sıfır dakikalık kayıtlar dahil edilmez."
-    + (departed.size ? ` Bu takımda oynayıp ligden ayrılan ${departed.size} oyuncu gösterilmiyor.` : "");
+  ranked.slice(0, 5).forEach((player, index) => list.append(bestPlayerRow(player, index, `${primaryRole(player.player_id) ? roleLabel(primaryRole(player.player_id)) : t("Mevki bilgisi yok")} · ${t("{count} reytingli maç", { count: player.count }, player.count)}`, player.average)));
+  if (!ranked.length) list.append(node("p", "team-empty", t("En az {count} reytingli maçı olan oyuncu yok. Daha düşük bir sınır deneyin veya daha fazla maç verisi yükleyin.", { count: minimum })));
+  el("overall-note").textContent = t("Yalnızca bu takımın tamamlanan maçlarındaki ortalama Sportmonks maç reytingi. Maçlar eşit ağırlıklıdır; reytingi olmayan ve sıfır dakikalık kayıtlar dahil edilmez.")
+    + (departed.size ? ` ${t("Bu takımda oynayıp ligden ayrılan {count} oyuncu gösterilmiyor.", { count: departed.size }, departed.size)}` : "");
 }
 
 function renderClub() {
@@ -234,13 +235,13 @@ function renderClub() {
   const select = el("team-match");
   select.replaceChildren();
   fixtures.forEach((fixture) => select.add(new Option(`${week(fixture)} · ${clubName(opponent(fixture))} (${venueSide(fixture)})`, fixture.fixture_id)));
-  if (!fixtures.length) select.add(new Option("Yüklü maç yok", ""));
+  if (!fixtures.length) select.add(new Option(t("Yüklü maç yok"), ""));
   select.value = club.selected || ""; select.disabled = !fixtures.length;
   const index = fixtures.findIndex((fixture) => fixture.fixture_id === club.selected);
   el("team-week-prev").disabled = index <= 0;
   el("team-week-next").disabled = index < 0 || index >= fixtures.length - 1;
-  el("played-count").textContent = `${played.length} maç`;
-  renderMatchList("team-played", [...played].reverse(), "Kaydedilen veride tamamlanmış maç yok.");
+  el("played-count").textContent = t("{count} maç", { count: played.length }, played.length);
+  renderMatchList("team-played", [...played].reverse(), t("Kaydedilen veride tamamlanmış maç yok."));
   const now = Date.now() / 1000;
   const today = new Date().toISOString().slice(0, 10);
   const upcoming = fixtures.filter((fixture) => {
@@ -249,19 +250,19 @@ function renderClub() {
     if (timestamp !== null) return timestamp >= now;
     return ["NS", "TBA"].includes(status(fixture)) && (!fixture.kickoff || fixture.kickoff.slice(0, 10) >= today);
   });
-  renderMatchList("team-upcoming", upcoming.slice(0, 5), "Kaydedilen veride planlanmış maç yok.");
+  renderMatchList("team-upcoming", upcoming.slice(0, 5), t("Kaydedilen veride planlanmış maç yok."));
   renderLineup(fixtures[index]); renderSelected(fixtures[index]); renderOverall();
 }
 
 function validateTables(tables) {
-  for (const name of Object.keys(requiredFiles)) if (!tables[name]) throw new Error(`${name} dosyasını ekleyin.`);
+  for (const name of Object.keys(requiredFiles)) if (!tables[name]) throw new Error(t("{file} dosyasını ekleyin.", { file: name }));
   const seasons = new Set(tables["fixtures.csv"].map((row) => row.season_id).filter(Boolean));
-  if (seasons.size > 1) throw new Error("Tek bir sezonun dosyalarını birlikte seçin.");
+  if (seasons.size > 1) throw new Error(t("Tek bir sezonun dosyalarını birlikte seçin."));
   for (const [name, key] of [["fixtures.csv", (r) => r.fixture_id], ["teams.csv", (r) => r.id], ["player_match_stats.csv", (r) => `${r.fixture_id}:${r.player_id}`]]) {
     const ids = new Set();
     for (const row of tables[name]) {
       const id = key(row);
-      if (ids.has(id)) throw new Error(`${name} dosyasında yinelenen kayıtlar var.`);
+      if (ids.has(id)) throw new Error(t("{file} dosyasında yinelenen kayıtlar var.", { file: name }));
       ids.add(id);
     }
   }
@@ -269,7 +270,7 @@ function validateTables(tables) {
   for (const name of ["player_match_stats.csv", "fixture_scores.csv", "fixture_formations.csv"]) {
     for (const row of tables[name] || []) {
       const fixture = fixtures.get(row.fixture_id);
-      if (!fixture || ![fixture.home_team_id, fixture.away_team_id].includes(row.team_id || row.participant_id)) throw new Error(`${name} bu fikstürle eşleşmeyen kayıtlar içeriyor.`);
+      if (!fixture || ![fixture.home_team_id, fixture.away_team_id].includes(row.team_id || row.participant_id)) throw new Error(t("{file} bu fikstürle eşleşmeyen kayıtlar içeriyor.", { file: name }));
     }
   }
 }
@@ -279,7 +280,7 @@ async function loadClubData(files) {
   club.busy = true;
   el("team-open").disabled = el("team-refresh").disabled = true;
   el("team-message").classList.remove("error");
-  el("team-message").textContent = "Kaydedilen takım verisi okunuyor…";
+  el("team-message").textContent = t("Kaydedilen takım verisi okunuyor…");
   try {
     const tables = {};
     if (!files) {
@@ -289,7 +290,7 @@ async function loadClubData(files) {
         try {
           const response = await fetch(`/local-data/${name}`, { cache: "no-cache", signal: controller.signal });
           if (response.status === 404 && optionalFiles[name]) return null;
-          if (!response.ok || response.headers.get("X-Superlig-Local") !== "1") throw new Error(`${name} yüklenemedi. Yerel sunucuyu yeniden başlatıp kaydedilen CSV dosyalarını kontrol edin.`);
+          if (!response.ok || response.headers.get("X-Superlig-Local") !== "1") throw new Error(t("{file} yüklenemedi. Yerel sunucuyu yeniden başlatıp kaydedilen CSV dosyalarını kontrol edin.", { file: name }));
           return new File([await response.blob()], name);
         } finally { clearTimeout(timeout); }
       }));
@@ -300,10 +301,10 @@ async function loadClubData(files) {
     for (const file of files) {
       const columns = requiredFiles[file.name] || optionalFiles[file.name];
       if (!columns) continue;
-      if (tables[file.name]) throw new Error(`Yalnızca bir ${file.name} seçin.`);
-      if (file.size > 40 * 1024 * 1024) throw new Error(`${file.name} 40 MB sınırını aşıyor.`);
+      if (tables[file.name]) throw new Error(t("Yalnızca bir {file} seçin.", { file: file.name }));
+      if (file.size > 40 * 1024 * 1024) throw new Error(t("{file} 40 MB sınırını aşıyor.", { file: file.name }));
       const parsed = parseCSV(await file.text());
-      if (columns.some((column) => !parsed.header.includes(column))) throw new Error(`${file.name} dosyasında gerekli sütunlar eksik.`);
+      if (columns.some((column) => !parsed.header.includes(column))) throw new Error(t("{file} dosyasında gerekli sütunlar eksik.", { file: file.name }));
       tables[file.name] = parsed.records;
     }
     validateTables(tables);
@@ -324,12 +325,12 @@ async function loadClubData(files) {
       club.scores.set(key, club.scores.has(key) && club.scores.get(key) !== value ? null : value);
     }
     if (club.teams.has(clubId)) setClubName(clubName(clubId));
-    el("team-season").textContent = `Sezonda ${club.fixtures.length} maç · Sportmonks`;
+    el("team-season").textContent = t("Sezonda {count} maç · Sportmonks", { count: club.fixtures.length });
     renderClub();
-    el("team-message").textContent = `Veriler yüklendi · ${new Date().toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}.${tables["fixture_formations.csv"] ? "" : " Dizilişleri görmek için fixture_formations.csv ekleyin."}`;
+    el("team-message").textContent = `${t("Veriler yüklendi · {time}.", { time: new Date().toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit" }) })}${tables["fixture_formations.csv"] ? "" : ` ${t("Dizilişleri görmek için fixture_formations.csv ekleyin.")}`}`;
   } catch (error) {
     el("team-message").classList.add("error");
-    el("team-message").textContent = `${error.message} Önceden gösterilen veriler korundu. İndirme bitince sayfayı yenileyin.`;
+    el("team-message").textContent = `${error.message} ${t("Önceden gösterilen veriler korundu. İndirme bitince sayfayı yenileyin.")}`;
   } finally {
     club.busy = false;
     el("team-open").disabled = el("team-refresh").disabled = false;
@@ -337,7 +338,7 @@ async function loadClubData(files) {
   }
 }
 
-setClubName(validClub ? (params.get("name") || `Takım ${clubId}`).slice(0, 160) : "Takım bulunamadı");
+setClubName(validClub ? (params.get("name") || t("Takım {id}", { id: clubId })).slice(0, 160) : t("Takım bulunamadı"));
 if (validClub) {
   const img = el("team-crest");
   let png = false;
@@ -363,6 +364,6 @@ if (validClub && siteMode !== "none") {
   el("team-refresh").hidden = siteMode === "published";
   loadClubData();
 } else {
-  el("team-message").textContent = validClub ? "fixtures.csv, teams.csv, player_match_stats.csv, fixture_scores.csv ve fixture_formations.csv dosyalarını birlikte açın ya da otomatik yükleme için yerel sunucuyu kullanın." : "Ana Sayfa'dan bir takım seçin.";
+  el("team-message").textContent = validClub ? t("fixtures.csv, teams.csv, player_match_stats.csv, fixture_scores.csv ve fixture_formations.csv dosyalarını birlikte açın ya da otomatik yükleme için yerel sunucuyu kullanın.") : t("Ana Sayfa'dan bir takım seçin.");
   el("team-open").disabled = !validClub;
 }

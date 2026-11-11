@@ -44,6 +44,18 @@ main {
 .rail .nav-button { min-width: 0; padding: 13px 10px; font-size: 13px; flex: none; white-space: nowrap; }
 .rail .rail-label { display: block; margin-top: 48px; }
 .rail-section + .rail-section .rail-label { margin-top: 28px; }
+/* TR / EN. It fills the gap between the wordmark and the first menu label
+   (11 + 24 + 13 = the 48px above), so the menu stays where it was. The chosen
+   language looks like the open page's menu entry. */
+.rail-language { display: inline-flex; flex: none; align-self: center; gap: 2px; margin-top: 11px; padding: 2px; border-radius: 999px; background: #0000002e; }
+.rail-language button { min-width: 36px; padding: 2px 9px; border: 0; border-radius: 999px; background: transparent; color: #bdd0c4; font-size: 11px; font-weight: 600; letter-spacing: 1px; line-height: 16px; }
+.rail-language button:hover { color: #fff; }
+.rail-language button[aria-pressed="true"] { background: #2d5641; color: var(--accent); cursor: default; }
+.rail .rail-language + .rail-section .rail-label { margin-top: 13px; }
+/* A page is written in Turkish and core/language.js turns it into the chosen
+   language as its first act; until then the page's own text stays out of sight,
+   so it never shows for a moment in the other language. */
+html:not([data-language]) main { visibility: hidden; }
 
 .sidebar-toggle {
   position: fixed;

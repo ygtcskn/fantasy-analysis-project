@@ -23,14 +23,14 @@ function squadFeedNode(tag, className, text) {
 
 function squadFeedErrorText(error) {
   // The database refused a delete: a session that has ended, or someone else's squad.
-  if (error?.code === "42501") return "Bu kadroyu yalnızca sahibi silebilir. Giriş yaptığından emin ol, sonra tekrar dene.";
+  if (error?.code === "42501") return t("Bu kadroyu yalnızca sahibi silebilir. Giriş yaptığından emin ol, sonra tekrar dene.");
   // A missing table, or one created before a column this page reads.
   if (["PGRST205", "42P01", "PGRST204", "42703"].includes(error?.code)) {
     return siteMode === "local"
-      ? "Kadro tablosu eksik: supabase/shared_squads.sql dosyasını Supabase → SQL Editor'da çalıştır."
-      : "Kadrolar şu anda gösterilemiyor. Daha sonra tekrar dene.";
+      ? t("Kadro tablosu eksik: supabase/shared_squads.sql dosyasını Supabase → SQL Editor'da çalıştır.")
+      : t("Kadrolar şu anda gösterilemiyor. Daha sonra tekrar dene.");
   }
-  return error?.message ? `Bir sorun çıktı: ${error.message}` : "Bir sorun çıktı. Tekrar dene.";
+  return error?.message ? t("Bir sorun çıktı: {reason}", { reason: error.message }) : t("Bir sorun çıktı. Tekrar dene.");
 }
 
 async function loadSharedSquads(key) {
@@ -57,7 +57,7 @@ function squadFeedRounds() {
   for (const fixture of fixtures) {
     const id = String(fixture.round_id || fixture["round.id"] || "");
     if (!id) continue;
-    if (!rounds.has(id)) rounds.set(id, { id, name: fixture["round.name"] ? `Maç Haftası ${fixture["round.name"]}` : `Tur ${id}`, fixtures: [] });
+    if (!rounds.has(id)) rounds.set(id, { id, name: fixture["round.name"] ? t("Maç Haftası {round}", { round: fixture["round.name"] }) : t("Tur {id}", { id }), fixtures: [] });
     rounds.get(id).fixtures.push(fixture);
   }
   return [...rounds.values()];
@@ -117,19 +117,19 @@ function squadActualBlock(squad) {
   const block = squadFeedNode("div", "squad-actual");
   const actual = squadActualPoints(squad);
   const started = actual && actual.finished > 0;
-  block.append(squadFeedNode("span", "", "Gerçekleşen FP"), squadFeedNode("strong", "", started ? displayNumber(actual.total) : "—"),
-    squadFeedNode("small", "", !actual ? "Puanlar yüklenmedi" : started ? `${actual.finished} / ${actual.fixtures} maç` : "Maçlar başlamadı"));
-  block.title = "İlk 11'in bu haftaki fantezi puanları; her maç bitip site verisi yenilendikçe artar. Kaptan ve yedek değişikliği yok.";
+  block.append(squadFeedNode("span", "", t("Gerçekleşen FP")), squadFeedNode("strong", "", started ? displayNumber(actual.total) : "—"),
+    squadFeedNode("small", "", !actual ? t("Puanlar yüklenmedi") : started ? t("{finished} / {total} maç", { finished: actual.finished, total: actual.fixtures }) : t("Maçlar başlamadı")));
+  block.title = t("İlk 11'in bu haftaki fantezi puanları; her maç bitip site verisi yenilendikçe artar. Kaptan ve yedek değişikliği yok.");
   return block;
 }
 
 // The author's own squads carry a "Sil" button; the database refuses anyone
 // else's delete in any case.
 function squadDeleteButton(squad, className = "squad-delete") {
-  const button = squadFeedNode("button", className, "Sil");
+  const button = squadFeedNode("button", className, t("Sil"));
   button.type = "button";
-  button.setAttribute("aria-label", "Kadronu sil");
-  button.title = "Kadronu sil";
+  button.setAttribute("aria-label", t("Kadronu sil"));
+  button.title = t("Kadronu sil");
   button.addEventListener("click", () => deleteSharedSquad(squad, button));
   return button;
 }
@@ -142,18 +142,18 @@ function setSquadsStatus(text, error = false) {
 }
 
 async function deleteSharedSquad(squad, button) {
-  if (!confirm("Bu kadro silinsin mi? Kadrolar sayfasından kalkar; istersen Kadro Kur'dan yeniden kaydedebilirsin.")) return;
+  if (!confirm(t("Bu kadro silinsin mi? Kadrolar sayfasından kalkar; istersen Kadro Kur'dan yeniden kaydedebilirsin."))) return;
   button.disabled = true;
   try {
     const client = await loadAuth();
     // Row-level security lets only the author delete; a row it refuses is simply not deleted.
     const { data, error } = await client.from("shared_squads").delete().eq("id", squad.id).select("id");
     if (error) throw error;
-    if (!data.length) throw new Error("Bu kadro silinemedi.");
+    if (!data.length) throw new Error(t("Bu kadro silinemedi."));
     squadFeedState.squads = squadFeedState.squads.filter((item) => String(item.id) !== String(squad.id));
     squadDetailState.id = "";
     if (sharedSquadParam()) openSharedSquadPage(); else renderSharedSquads();
-    setSquadsStatus("Kadron silindi.");
+    setSquadsStatus(t("Kadron silindi."));
   } catch (error) {
     button.disabled = false;
     setSquadsStatus(squadFeedErrorText(error), true);
@@ -165,7 +165,7 @@ function squadFeedCard(squad) {
   // The name is the link; it stretches over the whole card, under the button.
   const link = squadFeedNode("a", "squad-card-link", squad.author_nickname);
   link.href = `index.html?view=squads&squad=${encodeURIComponent(squad.id)}`;
-  link.setAttribute("aria-label", `${squad.author_nickname} kadrosunu aç`);
+  link.setAttribute("aria-label", t("{name} kadrosunu aç", { name: squad.author_nickname }));
   link.addEventListener("click", (event) => {
     if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button !== 0) return;
     event.preventDefault();
@@ -178,8 +178,8 @@ function squadFeedCard(squad) {
   time.dateTime = squad.shared_at;
   const points = squadFeedNode("p", "squad-card-points");
   const projected = number(squad.projected_starters) ?? 0;
-  points.append(squadFeedNode("span", "", "Beklenen FP"), squadFeedNode("strong", "", squadPointsText(squad)));
-  if (number(squad.expected_points) !== null && projected < 11) points.title = `${projected} / 11 oyuncu tahminli; toplam eksik.`;
+  points.append(squadFeedNode("span", "", t("Beklenen FP")), squadFeedNode("strong", "", squadPointsText(squad)));
+  if (number(squad.expected_points) !== null && projected < 11) points.title = t("{count} / 11 oyuncu tahminli; toplam eksik.", { count: projected });
   text.append(name, time, points);
   const side = squadFeedNode("div", "squad-card-side");
   if (siteAuth.user?.id && siteAuth.user.id === squad.user_id) side.append(squadDeleteButton(squad));
@@ -211,11 +211,11 @@ function squadFeedWeek(name, squads, current) {
   const section = squadFeedNode("section", "squad-week");
   const header = squadFeedNode("header", "squad-week-header");
   const title = squadFeedNode("h2", "", name);
-  if (current) title.append(squadFeedNode("span", "squad-week-current", "Bu hafta"));
-  header.append(title, squadFeedNode("span", "squad-week-count", `${squads.length} kadro`));
+  if (current) title.append(squadFeedNode("span", "squad-week-current", t("Bu hafta")));
+  header.append(title, squadFeedNode("span", "squad-week-count", t("{count} kadro", { count: squads.length }, squads.length)));
   section.append(header);
   if (!squads.length) {
-    section.append(squadFeedNode("p", "squad-empty", "Bu hafta henüz kadro paylaşılmadı."));
+    section.append(squadFeedNode("p", "squad-empty", t("Bu hafta henüz kadro paylaşılmadı.")));
     return section;
   }
   const grid = squadFeedNode("div", "squad-grid");
@@ -236,17 +236,17 @@ function renderSharedSquads() {
   container.replaceChildren();
   const rounds = squadFeedRounds();
   if (!rounds.length) {
-    container.append(squadFeedNode("p", "squad-empty", "Henüz fikstür yüklenmedi. Sezon verileri yüklendiğinde paylaşılan kadrolar haftalara göre burada görünecek."));
+    container.append(squadFeedNode("p", "squad-empty", t("Henüz fikstür yüklenmedi. Sezon verileri yüklendiğinde paylaşılan kadrolar haftalara göre burada görünecek.")));
     return;
   }
   if (!authEnabled()) {
-    container.append(squadFeedNode("p", "squad-empty", "Kadrolar şu anda gösterilemiyor."));
+    container.append(squadFeedNode("p", "squad-empty", t("Kadrolar şu anda gösterilemiyor.")));
     return;
   }
   const loadKey = `season:${state.seasonSlug}`;
   if (loadKey !== squadFeedState.loadedKey) loadSharedSquads(loadKey);
   if (squadFeedState.status === "loading") {
-    container.append(squadFeedNode("p", "squad-empty", "Kadrolar yükleniyor…"));
+    container.append(squadFeedNode("p", "squad-empty", t("Kadrolar yükleniyor…")));
     return;
   }
   if (squadFeedState.status === "error") {
@@ -267,7 +267,7 @@ function renderSharedSquads() {
   // A week the loaded fixtures do not know, rather than silently leaving it out.
   const known = new Set(rounds.map((round) => round.id));
   const unknown = [...byRound].filter(([id]) => !known.has(id)).flatMap(([, squads]) => squads);
-  if (unknown.length) container.append(squadFeedWeek("Haftası bilinmeyen kadrolar", unknown, false));
+  if (unknown.length) container.append(squadFeedWeek(t("Haftası bilinmeyen kadrolar"), unknown, false));
 }
 
 // A squad saved on Kadro Kur shows the next time this page is opened.
@@ -279,5 +279,5 @@ document.addEventListener("site-auth-change", () => {
 document.getElementById("squads-refresh").addEventListener("click", () => {
   squadFeedState.loadedKey = "";
   renderSharedSquads();
-  document.getElementById("squads-status").textContent = "Kadrolar yenilendi.";
+  document.getElementById("squads-status").textContent = t("Kadrolar yenilendi.");
 });

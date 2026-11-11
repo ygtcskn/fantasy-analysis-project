@@ -50,8 +50,8 @@ async function loadTeamHistory(currentRows) {
     if (teamHistory.key !== key) return;
     Object.assign(teamHistory, { state: "unavailable", teams: [], seasons: [],
       message: error.message === "missing"
-        ? "Sunucu önceki sezonları henüz sunmuyor; src/web/serve.py'yi yeniden başlatın."
-        : "Önceki sezonlar okunamadı." });
+        ? t("Sunucu önceki sezonları henüz sunmuyor; src/web/serve.py'yi yeniden başlatın.")
+        : t("Önceki sezonlar okunamadı.") });
   }
   if (state.view === "team-statistics" && statisticsHistoryKey() === key) renderTeamStatistics();
 }
@@ -72,7 +72,7 @@ function renderTeamRadars(teamId, names) {
   };
   if (spiderStatsState.key !== state.seasonSlug) loadSpiderStats();
   if (spiderStatsState.state !== "ready") {
-    clear(spiderStatsState.state === "unavailable" ? spiderStatsState.message : "Radar verileri yükleniyor…");
+    clear(spiderStatsState.state === "unavailable" ? spiderStatsState.message : t("Radar verileri yükleniyor…"));
     return;
   }
   const rows = spiderStatsState.teams;
@@ -83,7 +83,7 @@ function renderTeamRadars(teamId, names) {
   const entities = RadarTeams.entities(rows, fixtures, scope).map((team) => ({ ...team, name: names(team.id) }));
   const target = entities.find((team) => team.id === teamId);
   if (!scope || !target) {
-    clear(!scope ? "Radar için fikstürlerde sezon ve lig kimliği gerekli." : "Bu takım için kayıtlı maç istatistiği yok.");
+    clear(!scope ? t("Radar için fikstürlerde sezon ve lig kimliği gerekli.") : t("Bu takım için kayıtlı maç istatistiği yok."));
     return;
   }
   const config = { minimumMinutes: statisticsSuggestedMinutes(entities) };
@@ -103,19 +103,19 @@ function renderTeamRadars(teamId, names) {
     if (!entries.some((item) => item.results.some((result) => Number.isFinite(result.score)))) {
       const notice = element("div", "statistics-radar-empty");
       notice.setAttribute("role", "status");
-      notice.append(element("strong", "", "Radar puanı hesaplanamıyor."));
+      notice.append(element("strong", "", t("Radar puanı hesaplanamıyor.")));
       notice.append(element("p", "", reference.peerCount < reference.config.minimumPeers
-        ? `${statisticsBarLabel(config.minimumMinutes, "TEAM")} oynamış ${reference.peerCount} takım var; en az ${reference.config.minimumPeers} gerekli.`
-        : "Ölçütlerde yeterli geçerli veri yok. Eksik değerler sıfır kabul edilmez."));
+        ? t("{bar} oynamış {teams} takım var; en az {needed} gerekli.", { bar: statisticsBarLabel(config.minimumMinutes, "TEAM"), teams: reference.peerCount, needed: reference.config.minimumPeers })
+        : t("Ölçütlerde yeterli geçerli veri yok. Eksik değerler sıfır kabul edilmez.")));
       $(chartId).prepend(notice);
     }
   };
   renderChart("team-statistics-radar-chart", "team-statistics-radar-details", attributes,
     series(models.map((model) => RadarAttributes.evaluate(target, model, reference))),
-    `${target.name} · genel nitelikler`);
+    t("{names} · genel nitelikler", { names: target.name }));
   renderChart("team-statistics-detailed-chart", "team-statistics-detailed-details", profile,
     series(profile.map((axis) => RadarScoring.evaluate(target, axis, reference))),
-    `${target.name} · ayrıntılı ölçütler`);
+    t("{names} · ayrıntılı ölçütler", { names: target.name }));
   statisticsAlignRadars(["team-statistics-radar-chart", "team-statistics-detailed-chart"]);
   for (const id of ["team-statistics-radar-note", "team-statistics-detailed-note"]) {
     $(id).textContent = "";

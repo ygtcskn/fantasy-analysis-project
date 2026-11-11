@@ -8,11 +8,14 @@ const standingsMetrics = [
 ];
 
 const europeanPlaces = new Map([
-  [1, { competition: "ucl", label: "UEFA Şampiyonlar Ligi" }],
-  [2, { competition: "ucl", label: "UEFA Şampiyonlar Ligi" }],
-  [3, { competition: "uel", label: "UEFA Avrupa Ligi" }],
-  [4, { competition: "uecl", label: "UEFA Konferans Ligi" }],
+  [1, { competition: "ucl", label: t("UEFA Şampiyonlar Ligi") }],
+  [2, { competition: "ucl", label: t("UEFA Şampiyonlar Ligi") }],
+  [3, { competition: "uel", label: t("UEFA Avrupa Ligi") }],
+  [4, { competition: "uecl", label: t("UEFA Konferans Ligi") }],
 ]);
+// A result is kept as G, B or M (galibiyet, beraberlik, mağlubiyet) and shown
+// as the page's language writes it: W, D, L in English.
+const RESULT_LETTERS = { G: t("G"), B: t("B"), M: t("M") };
 
 // The position cell carries the European-place marker on its left edge, so the
 // table needs no separate marker column (which read as an empty gap).
@@ -72,7 +75,7 @@ function standingFigureCell(row, metric, derivedKey, results) {
   const value = official ?? results().values[derivedKey];
   const fromResults = official === null && value !== null;
   const cell = element("td", "numeric", displayNumber(value) + (fromResults ? "*" : ""));
-  cell.title = value === null ? "Veri eksik veya sonuçlar tamamlanmamış." : fromResults ? "Kaydedilmiş tamamlanan maçlardan hesaplandı." : "Sportmonks puan tablosu verisi.";
+  cell.title = value === null ? t("Veri eksik veya sonuçlar tamamlanmamış.") : fromResults ? t("Kaydedilmiş tamamlanan maçlardan hesaplandı.") : t("Sportmonks puan tablosu verisi.");
   return cell;
 }
 
@@ -82,7 +85,7 @@ function renderDetailedStandings() {
   const groups = [...new Set(source.map(standingGroupKey))];
   if (!groups.includes(state.standingsGroup)) state.standingsGroup = groups[0] ?? null;
   const groupRows = source.filter((row) => standingGroupKey(row) === state.standingsGroup);
-  const rows = groupRows.sort((a, b) => (number(a.position) ?? Infinity) - (number(b.position) ?? Infinity) || teamName(a.participant_id, teams).localeCompare(teamName(b.participant_id, teams), "tr"));
+  const rows = groupRows.sort((a, b) => (number(a.position) ?? Infinity) - (number(b.position) ?? Infinity) || teamName(a.participant_id, teams).localeCompare(teamName(b.participant_id, teams), LOCALE));
   const body = document.createDocumentFragment();
   const scores = currentFixtureScores();
   for (const row of rows) {
@@ -95,22 +98,22 @@ function renderDetailedStandings() {
     const results = standingResults(row, scores);
     for (const [metric, derivedKey] of standingsMetrics) tr.append(standingFigureCell(row, metric, derivedKey, () => results));
     const points = element("td", "numeric detailed-points", displayNumber(row.points));
-    points.title = "Sportmonks tarafından verilen puan; yeniden hesaplanmaz.";
+    points.title = t("Sportmonks tarafından verilen puan; yeniden hesaplanmaz.");
     tr.append(points);
     const formCell = element("td"), form = element("div", "standings-form");
     for (const game of results.games.slice(-5)) {
-      const link = element("a", `form-result form-${game.result === "G" ? "win" : game.result === "M" ? "loss" : game.result === "B" ? "draw" : "unknown"}`, game.result);
+      const link = element("a", `form-result form-${game.result === "G" ? "win" : game.result === "M" ? "loss" : game.result === "B" ? "draw" : "unknown"}`, RESULT_LETTERS[game.result] || game.result);
       link.href = `team.html?${new URLSearchParams({ id: row.participant_id, name: teamName(row.participant_id, teams), match: game.fixture.fixture_id })}`;
-      const label = `${kickoffText(game.fixture)} · ${teamName(game.opponent, teams)} · ${game.isHome ? "İç saha" : "Deplasman"} · ${game.valid ? `${game.own}–${game.other}` : "Skor yok"}`;
+      const label = `${kickoffText(game.fixture)} · ${teamName(game.opponent, teams)} · ${game.isHome ? t("İç saha") : t("Deplasman")} · ${game.valid ? `${game.own}–${game.other}` : t("Skor yok")}`;
       link.title = label;
-      link.setAttribute("aria-label", `${label} · Maç detaylarını aç`);
+      link.setAttribute("aria-label", `${label} · ${t("Maç detaylarını aç")}`);
       form.append(link);
     }
     if (!results.games.length) form.append(element("span", "", "—"));
     formCell.append(form); tr.append(formCell); body.append(tr);
   }
   if (!rows.length) {
-    const tr = element("tr"), cell = element("td", "no-results", "Puan tablosu için standings.csv dosyasını yükleyin.");
+    const tr = element("tr"), cell = element("td", "no-results", t("Puan tablosu için standings.csv dosyasını yükleyin."));
     cell.colSpan = 11; tr.append(cell); body.append(tr);
   }
   $("detailed-standings-body").replaceChildren(body);

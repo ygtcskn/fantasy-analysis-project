@@ -3,28 +3,30 @@
 // A separate live snapshot: never overwrite saved fixtures, odds or analysis.
 const liveCentre = { rows: [], selected: "", controller: null, timer: null, nextFetch: 0, season: "" };
 const liveStateLabels = {
-  INPLAY_1ST_HALF: "İlk yarı", HT: "Devre arası", INPLAY_2ND_HALF: "İkinci yarı",
-  BREAK: "Uzatma bekleniyor", INPLAY_ET: "Uzatma", EXTRA_TIME_BREAK: "Uzatma arası",
-  PEN_BREAK: "Penaltılar bekleniyor", INPLAY_PENALTIES: "Penaltılar",
-  SUSPENDED: "Maç durduruldu", INTERRUPTED: "Ara verildi", AWAITING_UPDATES: "Güncelleme bekleniyor",
+  INPLAY_1ST_HALF: t("İlk yarı"), HT: t("Devre arası"), INPLAY_2ND_HALF: t("İkinci yarı"),
+  BREAK: t("Uzatma bekleniyor"), INPLAY_ET: t("Uzatma"), EXTRA_TIME_BREAK: t("Uzatma arası"),
+  PEN_BREAK: t("Penaltılar bekleniyor"), INPLAY_PENALTIES: t("Penaltılar"),
+  SUSPENDED: t("Maç durduruldu"), INTERRUPTED: t("Ara verildi"), AWAITING_UPDATES: t("Güncelleme bekleniyor"),
 };
 const liveStatistics = [
-  [45, "Topa sahip olma", true], [42, "Toplam şut"], [86, "İsabetli şut"],
-  [34, "Korner"], [44, "Tehlikeli atak"], [56, "Faul"], [84, "Sarı kart"],
+  [45, t("Topa sahip olma"), true], [42, t("Toplam şut")], [86, t("İsabetli şut")],
+  [34, t("Korner")], [44, t("Tehlikeli atak")], [56, t("Faul")], [84, t("Sarı kart")],
   // Sportmonks' red-card count (83) includes dismissals for a second yellow;
   // 85 is how many of them were.
-  [83, "Kırmızı kart (toplam)"], [85, "İkinci sarıdan kırmızı"],
+  [83, t("Kırmızı kart (toplam)")], [85, t("İkinci sarıdan kırmızı")],
 ];
+// One event, so English says Goal, Yellow card and Corner where the statistics
+// above count Goals, Yellow cards and Corners.
 const liveEventLabels = {
-  GOAL: "Gol", OWNGOAL: "Kendi kalesine", OWN_GOAL: "Kendi kalesine",
-  PENALTY: "Penaltı golü", MISSED_PENALTY: "Kaçan penaltı",
-  YELLOWCARD: "Sarı kart", REDCARD: "Kırmızı kart", YELLOWREDCARD: "İkinci sarı kart",
-  SUBSTITUTION: "Oyuncu değişikliği", VAR: "VAR", VAR_CARD: "VAR · Kart",
-  GOAL_UNDER_REVIEW: "Gol inceleniyor", GOAL_CONFIRMED: "Gol onaylandı",
-  GOAL_DISALLOWED: "Gol iptal", GOAL_CANCELLED: "Gol iptal",
-  PENALTY_CONFIRMED: "Penaltı onaylandı", PENALTY_DISALLOWED: "Penaltı iptal",
-  PENALTY_SHOOTOUT_GOAL: "Seri penaltı · Gol", PENALTY_SHOOTOUT_MISS: "Seri penaltı · Kaçtı",
-  CORNER: "Korner",
+  GOAL: t({ tr: "Gol", en: "Goal" }), OWNGOAL: t("Kendi kalesine"), OWN_GOAL: t("Kendi kalesine"),
+  PENALTY: t("Penaltı golü"), MISSED_PENALTY: t("Kaçan penaltı"),
+  YELLOWCARD: t({ tr: "Sarı kart", en: "Yellow card" }), REDCARD: t({ tr: "Kırmızı kart", en: "Red card" }), YELLOWREDCARD: t("İkinci sarı kart"),
+  SUBSTITUTION: t("Oyuncu değişikliği"), VAR: "VAR", VAR_CARD: t("VAR · Kart"),
+  GOAL_UNDER_REVIEW: t("Gol inceleniyor"), GOAL_CONFIRMED: t("Gol onaylandı"),
+  GOAL_DISALLOWED: t("Gol iptal"), GOAL_CANCELLED: t("Gol iptal"),
+  PENALTY_CONFIRMED: t("Penaltı onaylandı"), PENALTY_DISALLOWED: t("Penaltı iptal"),
+  PENALTY_SHOOTOUT_GOAL: t("Seri penaltı · Gol"), PENALTY_SHOOTOUT_MISS: t("Seri penaltı · Kaçtı"),
+  CORNER: t({ tr: "Korner", en: "Corner" }),
 };
 
 function liveCentreActive() {
@@ -84,7 +86,7 @@ async function fetchLiveMatchCentre() {
     if (liveCentre.controller !== controller || !liveCentreActive() || season !== state.seasonSlug) return;
     delay = Math.max(delay, 120000);
     liveCentre.rows = [];
-    renderLiveMatchCentre({ status: "unavailable", message: "Canlı bağlantı kesildi. Veriler yeniden alındığında maç merkezi güncellenecek." });
+    renderLiveMatchCentre({ status: "unavailable", message: t("Canlı bağlantı kesildi. Veriler yeniden alındığında maç merkezi güncellenecek.") });
   } finally {
     clearTimeout(timeout);
     if (liveCentre.controller === controller) {
@@ -104,7 +106,7 @@ function setNavLive(count) {
   const pill = document.querySelector(".nav-live");
   if (!pill) return;
   pill.hidden = !(count > 0);
-  pill.title = count > 0 ? `${count} canlı maç` : "";
+  pill.title = count > 0 ? t("{count} canlı maç", { count }, count) : "";
 }
 
 async function pollNavLive() {
@@ -193,8 +195,9 @@ function renderLiveMatchCentre(meta = liveCentre.rows.find((row) => row.record_t
   $("live-fixture-control").hidden = unavailable || !fixtures.length;
   if (panel.hidden) { $("live-announcement").textContent = ""; return; }
   if (unavailable) {
-    $("live-centre-note").textContent = meta.message || "Canlı veriler şu anda alınamıyor.";
-    $("live-announcement").textContent = "Canlı maç bağlantısı kullanılamıyor.";
+    // The server's reason is in Turkish (src/web/live.py); knownText shows its English.
+    $("live-centre-note").textContent = knownText(meta.message) || t("Canlı veriler şu anda alınamıyor.");
+    $("live-announcement").textContent = t("Canlı maç bağlantısı kullanılamıyor.");
     return;
   }
   if (!fixtures.some((row) => row.fixture_id === liveCentre.selected)) liveCentre.selected = fixtures[0].fixture_id;
@@ -220,8 +223,8 @@ function renderLiveMatchCentre(meta = liveCentre.rows.find((row) => row.record_t
   if (focused) tabs.querySelector(`[data-live-fixture="${focused}"]`)?.focus({ preventScroll: true });
   $("live-centre-note").textContent = "";
   const teams = new Map([
-    [fixture.home_team_id, { name: fixture.home_name || "Ev sahibi" }],
-    [fixture.away_team_id, { name: fixture.away_name || "Deplasman" }],
+    [fixture.home_team_id, { name: fixture.home_name || t("Ev sahibi") }],
+    [fixture.away_team_id, { name: fixture.away_name || t("Deplasman") }],
   ]);
   const club = (id) => {
     const node = element("div", "live-club");
@@ -280,24 +283,24 @@ function renderLiveEvents(fixture, teams, rows = liveCentre.rows, list = $("live
     // Lets Ana Sayfa find the row again (its pressure strip's slider lights it).
     if (event.event_id) row.dataset.eventId = event.event_id;
     const code = String(event.code || "").toUpperCase().replace(/[- ]/g, "_");
-    const label = liveEventLabels[code] || translateEventText(event.label) || "Maç olayı";
+    const label = liveEventLabels[code] || translateEventText(event.label) || t("Maç olayı");
     // The site's one name per player; the feed's own spelling only for someone it does not know.
     const player = event.player_id ? playerName(event.player_id, event.player_name) : event.player_name || "";
     const relatedName = event.related_player_id ? playerName(event.related_player_id, event.related_player_name) : event.related_player_name || "";
-    const related = relatedName ? (code === "SUBSTITUTION" ? `Çıkan: ${relatedName}` : `İlgili oyuncu: ${relatedName}`) : "";
-    const person = code === "SUBSTITUTION" && player ? `Giren: ${player}` : player;
+    const related = relatedName ? (code === "SUBSTITUTION" ? t("Çıkan: {name}", { name: relatedName }) : t("İlgili oyuncu: {name}", { name: relatedName })) : "";
+    const person = code === "SUBSTITUTION" && player ? t("Giren: {name}", { name: player }) : player;
     const icon = /RED|YELLOW/.test(code) ? "▮" : /GOAL|PENALTY/.test(code) ? "⚽" : code === "SUBSTITUTION" ? "⇄" : "•";
     const symbol = element("span", `live-event-icon ${/RED/.test(code) ? "is-red" : /YELLOW/.test(code) ? "is-yellow" : ""}`, icon);
     symbol.setAttribute("aria-hidden", "true");
     const title = element("strong", "", `${label}${event.result ? ` · ${translateEventText(event.result)}` : ""}`);
     details.append(title, element("span", "", [person, related].filter(Boolean).join(" · ")));
     const extra = [teams.get(event.team_id)?.name, translateEventText(event.info), translateEventText(event.addition),
-      /^(true|1)$/i.test(event.rescinded) ? "Geri alındı" : ""].filter(Boolean).join(" · ");
+      /^(true|1)$/i.test(event.rescinded) ? t("Geri alındı") : ""].filter(Boolean).join(" · ");
     if (extra) details.append(element("small", "", extra));
     row.append(element("time", "live-event-minute", liveMinute(event) || "—"), symbol, details);
     content.append(row);
   }
-  if (!events.length) content.append(element("li", "live-events-empty", fixture.events_available === "1" ? "Henüz kaydedilen maç olayı yok." : "Maç olayları henüz sağlanmadı."));
+  if (!events.length) content.append(element("li", "live-events-empty", fixture.events_available === "1" ? t("Henüz kaydedilen maç olayı yok.") : t("Maç olayları henüz sağlanmadı.")));
   list.replaceChildren(content);
   list.scrollTop = scroll;
 }

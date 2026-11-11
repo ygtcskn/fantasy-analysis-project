@@ -1,9 +1,12 @@
 "use strict";
 
 const builderState = { selected: new Map(), activeSlot: null, expandedPlayerId: null, role: "" };
-// Slots keep internal role codes; the reader sees the fantasy game's own labels.
+// Slots keep internal role codes; the reader sees the fantasy game's own labels
+// (KL, DEF, OS, FOR), which an English page writes GK, DEF, MID, FWD
+// (fantasyPositionCode in core/locale.js).
 const BUILDER_ROLE_CODE = { GK: "KL", DEF: "DEF", MID: "OS", FWD: "FOR" };
-const BUILDER_ROLE_NAME = { GK: "kaleci", DEF: "defans", MID: "orta saha", FWD: "forvet" };
+const BUILDER_ROLE_NAME = { GK: t("kaleci"), DEF: t("defans"), MID: t("orta saha"), FWD: t("forvet") };
+const builderRoleLabel = (role) => fantasyPositionCode(BUILDER_ROLE_CODE[role]);
 
 function builderFormationRows() {
   const parts = $("builder-formation").value.split("-").map(Number);
@@ -11,7 +14,9 @@ function builderFormationRows() {
   const rows = [];
   parts.forEach((count, index) => {
     const role = index === 0 ? "DEF" : index === parts.length - 1 ? "FWD" : "MID";
-    const label = role === "DEF" ? "Defans" : role === "FWD" ? "Forvet" : index === parts.length - 2 ? "Ofansif orta saha" : "Orta saha";
+    // A line of the pitch, not one player's role: Defence, Midfield, Attack.
+    const label = role === "DEF" ? t({ tr: "Defans", en: "Defence" }) : role === "FWD" ? t({ tr: "Forvet", en: "Attack" })
+      : index === parts.length - 2 ? t({ tr: "Ofansif orta saha", en: "Attacking midfield" }) : t({ tr: "Orta saha", en: "Midfield" });
     const slots = [];
     for (let item = 0; item < count; item++) {
       const roleIndex = role === "DEF" ? defenderIndex++ : role === "FWD" ? forwardIndex++ : midfielderIndex++;
@@ -20,7 +25,7 @@ function builderFormationRows() {
     rows.push({ label, slots });
   });
   rows.reverse();
-  rows.push({ label: "Kaleci", slots: [{ key: "GK-0", role: "GK" }] });
+  rows.push({ label: t("Kaleci"), slots: [{ key: "GK-0", role: "GK" }] });
   return rows;
 }
 
@@ -29,7 +34,7 @@ function builderSlots() {
 }
 
 function builderBenchSlots() {
-  return Array.from({ length: 4 }, (_, index) => ({ key: `BENCH-${index}`, role: "BENCH", bench: true, label: `Yedek ${index + 1}` }));
+  return Array.from({ length: 4 }, (_, index) => ({ key: `BENCH-${index}`, role: "BENCH", bench: true, label: t("Yedek {number}", { number: index + 1 }) }));
 }
 
 function builderPrice(playerId) {
@@ -117,21 +122,21 @@ function placeBuilderPlayer(playerId, targetKey = builderState.activeSlot) {
   if (!targetKey) {
     if (sourceKey) {
       builderState.activeSlot = sourceKey;
-      builderMessage(`${player.name} zaten kadroda. Taşımak veya değiştirmek için uygun başka bir mevki seçin.`);
+      builderMessage(t("{name} zaten kadroda. Taşımak veya değiştirmek için uygun başka bir mevki seçin.", { name: player.name }));
       renderSquadBuilder();
       return;
     }
     targetKey = slots.find((slot) => !builderState.selected.has(slot.key) && canUseBuilderSlot(player, slot))?.key;
     if (!targetKey) {
-      const roles = [...builderPlayerRoles(player)].map((role) => BUILDER_ROLE_CODE[role]).join("/") || "uygun";
-      builderMessage(`${player.name} için boş ${roles} mevkisi yok. Değiştirmek için dolu bir mevki seçin.`, true);
+      const roles = [...builderPlayerRoles(player)].map(builderRoleLabel).join("/") || t("uygun");
+      builderMessage(t("{name} için boş {roles} mevkisi yok. Değiştirmek için dolu bir mevki seçin.", { name: player.name, roles }), true);
       return;
     }
   }
   const target = slots.find((slot) => slot.key === targetKey);
   if (!target) return;
   if (!canUseBuilderSlot(player, target)) {
-    builderMessage(`${player.name} oraya yerleştirilemez. Bir ${BUILDER_ROLE_NAME[target.role]} oyuncusu seçin.`, true);
+    builderMessage(t("{name} oraya yerleştirilemez. Bir {role} oyuncusu seçin.", { name: player.name, role: BUILDER_ROLE_NAME[target.role] }), true);
     return;
   }
   const displacedId = builderState.selected.get(targetKey);
@@ -140,7 +145,7 @@ function placeBuilderPlayer(playerId, targetKey = builderState.activeSlot) {
     const displaced = builderPlayer(displacedId);
     const source = slots.find((slot) => slot.key === sourceKey);
     if (displaced && source && !canUseBuilderSlot(displaced, source)) {
-      builderMessage(`${player.name} ile ${displaced.name} yer değiştiremez; mevkileri uyumsuz.`, true);
+      builderMessage(t("{first} ile {second} yer değiştiremez; mevkileri uyumsuz.", { first: player.name, second: displaced.name }), true);
       return;
     }
     next.set(sourceKey, displacedId);
@@ -150,11 +155,11 @@ function placeBuilderPlayer(playerId, targetKey = builderState.activeSlot) {
   next.set(targetKey, playerId);
   const budget = builderBudget(next);
   if (budget.missing) {
-    builderMessage("Kadrodaki her oyuncunun fiyatı bilinmeli. Fiyatı olmayan oyuncuyu çıkarın veya fantezi verisini yenileyin.", true);
+    builderMessage(t("Kadrodaki her oyuncunun fiyatı bilinmeli. Fiyatı olmayan oyuncuyu çıkarın veya fantezi verisini yenileyin."), true);
     return;
   }
   if (budget.remaining < 0) {
-    builderMessage("İlk 11 ve yedeklerin toplam fiyatı ₺100M bütçesini aşıyor.", true);
+    builderMessage(t("İlk 11 ve yedeklerin toplam fiyatı ₺100M bütçesini aşıyor."), true);
     return;
   }
   const clubs = new Map();
@@ -163,12 +168,14 @@ function placeBuilderPlayer(playerId, targetKey = builderState.activeSlot) {
     if (club) clubs.set(club, (clubs.get(club) || 0) + 1);
   }
   if ([...clubs.values()].some((count) => count > 3)) {
-    builderMessage("İlk 11 ve yedekler dahil bir takımdan en fazla 3 oyuncu seçebilirsiniz.", true);
+    builderMessage(t("İlk 11 ve yedekler dahil bir takımdan en fazla 3 oyuncu seçebilirsiniz."), true);
     return;
   }
   builderState.selected = next;
   builderState.activeSlot = null;
-  builderMessage(displacedId && displacedId !== playerId ? `${player.name}, ${builderPlayer(displacedId)?.name || "önceki oyuncunun"} yerine girdi.` : `${player.name} kadroya eklendi.`);
+  builderMessage(displacedId && displacedId !== playerId
+    ? t("{name}, {other} yerine girdi.", { name: player.name, other: builderPlayer(displacedId)?.name || t("önceki oyuncunun") })
+    : t("{name} kadroya eklendi.", { name: player.name }));
   renderSquadBuilder();
   focusBuilderSlot(targetKey);
 }
@@ -177,7 +184,7 @@ function removeBuilderPlayer(slotKey) {
   const player = builderPlayer(builderState.selected.get(slotKey));
   builderState.selected.delete(slotKey);
   if (builderState.activeSlot === slotKey) builderState.activeSlot = null;
-  builderMessage(player ? `${player.name} kadrodan çıkarıldı.` : "Mevki boşaltıldı.");
+  builderMessage(player ? t("{name} kadrodan çıkarıldı.", { name: player.name }) : t("Mevki boşaltıldı."));
   renderSquadBuilder();
   focusBuilderSlot(slotKey);
 }
@@ -198,7 +205,8 @@ function changeBuilderFormation() {
   }
   builderState.selected = next;
   builderState.activeSlot = null;
-  builderMessage(removed ? `Diziliş ${$("builder-formation").value} oldu. Uyumsuz ${removed} oyuncu listeye geri döndü.` : `Diziliş ${$("builder-formation").value} oldu.`);
+  const formation = $("builder-formation").value;
+  builderMessage(removed ? t("Diziliş {formation} oldu. Uyumsuz {count} oyuncu listeye geri döndü.", { formation, count: removed }, removed) : t("Diziliş {formation} oldu.", { formation }));
   renderSquadBuilder();
 }
 
@@ -245,12 +253,12 @@ function builderPlayerDetails(player, teams) {
   const heading = element("div", "builder-player-details-heading");
   const identity = element("div");
   identity.append(
-    element("span", "builder-player-details-label", "Fantezi istatistikleri"),
-    element("span", "builder-player-details-meta", `${fantasyState.season || "Bu sezon"} · ${summary?.fantasy_position || projection?.position || roleLabel(playerPrimaryRole(player))}`),
+    element("span", "builder-player-details-label", t("Fantezi istatistikleri")),
+    element("span", "builder-player-details-meta", `${fantasyState.season || t("Bu sezon")} · ${fantasyPositionCode(summary?.fantasy_position || projection?.position || "") || roleLabel(playerPrimaryRole(player))}`),
   );
   const actions = element("div", "builder-player-details-actions");
   if (player.matches.length) {
-    const history = element("button", "secondary builder-detail-history", "Maç geçmişi");
+    const history = element("button", "secondary builder-detail-history", t("Maç geçmişi"));
     history.type = "button";
     history.addEventListener("click", () => openTierPlayer(player.id));
     actions.append(history);
@@ -261,21 +269,21 @@ function builderPlayerDetails(player, teams) {
   if (projection) {
     const opponent = element("span", "builder-opponent");
     opponent.append(createTeamLogo(projection.opponent_id, teams, false), element("span", "", projection.venue ? `(${projection.venue})` : ""));
-    const next = builderFantasyMetrics(`Sonraki maç · ${projection.matchweek}. Hafta`, [
-      ["Beklenen FP", displayNumber(fantasyProjectionNumber(projection, "expected_points"))],
-      ["İlk 11 olasılığı", fantasyProbability(projection, "chance_starting")],
-      ["Gol olasılığı", fantasyProbability(projection, "chance_scoring")],
-      ["Fiyat", number(projection.price_million_try) === null ? "—" : `₺${displayNumber(Number(projection.price_million_try).toFixed(1))}M`],
-      ["Rakip", opponent],
-      ["Beklenen dakika", displayNumber(fantasyProjectionNumber(projection, "expected_minutes"))],
+    const next = builderFantasyMetrics(t("Sonraki maç · {round}. Hafta", { round: projection.matchweek }), [
+      [t("Beklenen FP"), displayNumber(fantasyProjectionNumber(projection, "expected_points"))],
+      [t("İlk 11 olasılığı"), fantasyProbability(projection, "chance_starting")],
+      [t("Gol olasılığı"), fantasyProbability(projection, "chance_scoring")],
+      [t("Fiyat"), number(projection.price_million_try) === null ? "—" : `₺${displayNumber(Number(projection.price_million_try).toFixed(1))}M`],
+      [t("Rakip"), opponent],
+      [t("Beklenen dakika"), displayNumber(fantasyProjectionNumber(projection, "expected_minutes"))],
     ]);
-    if (projection.strength_context_status === "league_average_fallback") next.append(element("p", "builder-player-details-note", "Takım geçmişinin bir kısmı eksik; lig ortalaması güç kullanıldı."));
+    if (projection.strength_context_status === "league_average_fallback") next.append(element("p", "builder-player-details-note", t("Takım geçmişinin bir kısmı eksik; lig ortalaması güç kullanıldı.")));
     if (projection.availability_status !== "no_reported_absence") {
       const availability = element("p", `builder-availability builder-availability-${["out", "expected_out", "doubtful"].includes(projection.availability_status) ? "caution" : "neutral"}`, fantasyAvailability(projection));
-      if (projection.estimated_return_date) availability.append(document.createTextNode(` · Tahmini dönüş ${fantasyDate(projection.estimated_return_date)}`));
+      if (projection.estimated_return_date) availability.append(document.createTextNode(` · ${t("Tahmini dönüş {date}", { date: fantasyDate(projection.estimated_return_date) })}`));
       next.append(availability);
       if (projection.availability_reason) next.append(element("p", "builder-player-details-note", projection.availability_reason.replaceAll("_", " ")));
-      if (["expected_out", "doubtful", "unknown"].includes(projection.availability_status)) next.append(element("p", "builder-player-details-note", "Oynama durumu belirsizken tahmin gösterilmez."));
+      if (["expected_out", "doubtful", "unknown"].includes(projection.availability_status)) next.append(element("p", "builder-player-details-note", t("Oynama durumu belirsizken tahmin gösterilmez.")));
     }
     wrapper.append(next);
   } else {
@@ -289,7 +297,7 @@ function renderBuilderPitch(playersById) {
   const bench = $("builder-bench-slots");
   pitch.replaceChildren();
   bench.replaceChildren();
-  for (const rowData of [...builderFormationRows(), { label: "Yedekler", bench: true, slots: builderBenchSlots() }]) {
+  for (const rowData of [...builderFormationRows(), { label: t("Yedekler"), bench: true, slots: builderBenchSlots() }]) {
     const row = element("div", "builder-line");
     if (!rowData.bench) row.append(element("span", "builder-line-label", rowData.label));
     const positions = element("div", "builder-line-slots");
@@ -310,18 +318,18 @@ function renderBuilderPitch(playersById) {
       const select = element("button", "builder-position-select");
       select.type = "button";
       select.setAttribute("aria-pressed", String(builderState.activeSlot === slot.key));
-      const label = slot.label || BUILDER_ROLE_CODE[slot.role];
-      select.setAttribute("aria-label", player ? `${player.name}, ${label}. Bu mevkiyi seç.` : `Boş ${label} mevkisi. Seç.`);
+      const label = slot.label || builderRoleLabel(slot.role);
+      select.setAttribute("aria-label", player ? t("{name}, {position}. Bu mevkiyi seç.", { name: player.name, position: label }) : t("Boş {position} mevkisi. Seç.", { position: label }));
       if (player) {
         select.append(builderShirt(player, slot.role === "GK" || (slot.bench && builderPlayerRoles(player).has("GK"))), element("span", "builder-position-name", player.name), element("span", "builder-position-rating", ratingText(player.average)));
         const price = builderPrice(player.id);
-        select.append(element("span", "builder-position-price", price === null ? "Fiyat yok" : `₺${displayNumber(price / 1_000_000)}M`));
+        select.append(element("span", "builder-position-price", price === null ? t("Fiyat yok") : `₺${displayNumber(price / 1_000_000)}M`));
       } else {
-        select.append(element("span", "builder-empty-plus", "+"), element("span", "builder-position-name", `Boş ${label}`));
+        select.append(element("span", "builder-empty-plus", "+"), element("span", "builder-position-name", t("Boş {position}", { position: label })));
       }
       select.addEventListener("click", () => {
         builderState.activeSlot = builderState.activeSlot === slot.key ? null : slot.key;
-        builderMessage(builderState.activeSlot ? `${label} seçildi. Listeden uygun bir oyuncu seçin veya sürükleyin.` : "Mevki seçimi kaldırıldı.");
+        builderMessage(builderState.activeSlot ? t("{position} seçildi. Listeden uygun bir oyuncu seçin veya sürükleyin.", { position: label }) : t("Mevki seçimi kaldırıldı."));
         renderSquadBuilder();
         focusBuilderSlot(slot.key);
       });
@@ -329,7 +337,7 @@ function renderBuilderPitch(playersById) {
       if (player) {
         const remove = element("button", "builder-remove", "×");
         remove.type = "button";
-        remove.setAttribute("aria-label", `${player.name} oyuncusunu çıkar`);
+        remove.setAttribute("aria-label", t("{name} oyuncusunu çıkar", { name: player.name }));
         remove.addEventListener("click", () => removeBuilderPlayer(slot.key));
         position.append(remove);
       }
@@ -341,7 +349,7 @@ function renderBuilderPitch(playersById) {
 
 function renderBuilderPool(players, teams) {
   const teamIds = [...new Set(players.flatMap((player) => [...player.teams]))];
-  options($("builder-team"), teamIds.map((id) => [id, teamName(id, teams)]).sort((a, b) => a[1].localeCompare(b[1], "tr")), "Tüm takımlar");
+  options($("builder-team"), teamIds.map((id) => [id, teamName(id, teams)]).sort((a, b) => a[1].localeCompare(b[1], LOCALE)), t("Tüm takımlar"));
   const query = $("builder-search").value.trim().toLocaleLowerCase();
   const team = $("builder-team").value;
   document.querySelectorAll("[data-builder-role]").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.builderRole === builderState.role)));
@@ -358,7 +366,7 @@ function renderBuilderPool(players, teams) {
   const expected = new Map(filtered.map((player) => [player.id, fantasyProjectionNumber(builderFantasyData(player).projection, "expected_points")]));
   const sortValue = $("builder-sort").value === "expected" ? (player) => expected.get(player.id) : (player) => player.average;
   const visible = filtered.sort((a, b) => (sortValue(b) ?? -Infinity) - (sortValue(a) ?? -Infinity) || b.ratings.length - a.ratings.length || a.name.localeCompare(b.name));
-  $("builder-result-count").textContent = `${visible.length} oyuncu`;
+  $("builder-result-count").textContent = t("{count} oyuncu", { count: visible.length }, visible.length);
   const body = document.createDocumentFragment();
   for (const player of visible) {
     const selected = Boolean(selectedSlotFor(player.id));
@@ -376,25 +384,27 @@ function renderBuilderPool(players, teams) {
     const toggle = element("button", "builder-player-button builder-player-toggle", player.name);
     toggle.id = `builder-player-toggle-${player.id}`;
     toggle.type = "button";
-    toggle.title = `${roleLabel(playerPrimaryRole(player))} · ${player.ratings.length} reytingli maç`;
+    toggle.title = `${roleLabel(playerPrimaryRole(player))} · ${t("{count} reytingli maç", { count: player.ratings.length }, player.ratings.length)}`;
     toggle.setAttribute("aria-expanded", String(expanded));
     toggle.setAttribute("aria-controls", `builder-player-details-${player.id}`);
-    toggle.setAttribute("aria-label", `${player.name} fantezi istatistiklerini ${expanded ? "gizle" : "göster"}`);
+    toggle.setAttribute("aria-label", expanded ? t("{name} fantezi istatistiklerini gizle", { name: player.name }) : t("{name} fantezi istatistiklerini göster", { name: player.name }));
     toggle.addEventListener("click", () => toggleBuilderPlayerDetails(player.id));
     const add = element("button", "builder-player-add", "+");
     add.type = "button";
-    add.setAttribute("aria-label", `${player.name} oyuncusunu ${selected ? "taşı" : "ekle"}; ${builderTffRole(player.id) || roleLabel(playerPrimaryRole(player))}`);
+    const tffRole = fantasyPositionCode(builderTffRole(player.id) || "");
+    add.setAttribute("aria-label", selected ? t("{name} oyuncusunu taşı; {role}", { name: player.name, role: tffRole || roleLabel(playerPrimaryRole(player)) })
+      : t("{name} oyuncusunu ekle; {role}", { name: player.name, role: tffRole || roleLabel(playerPrimaryRole(player)) }));
     add.addEventListener("click", () => placeBuilderPlayer(player.id));
     nameRow.append(toggle, add);
     nameCell.append(nameRow);
     const rating = element("td", "numeric builder-pool-rating", ratingText(player.average));
-    rating.title = `${player.ratings.length} maçın Sportmonks reyting ortalaması`;
-    rating.setAttribute("aria-label", player.average === null ? "Reyting yok" : `Ortalama reyting ${ratingText(player.average)}`);
+    rating.title = t("{count} maçın Sportmonks reyting ortalaması", { count: player.ratings.length });
+    rating.setAttribute("aria-label", player.average === null ? t("Reyting yok") : t("Ortalama reyting {rating}", { rating: ratingText(player.average) }));
     const expectedPoints = expected.get(player.id);
     const points = element("td", "numeric builder-pool-rating", expectedPoints === null ? "—" : displayNumber(expectedPoints.toFixed(2)));
-    points.title = "Sonraki maç için beklenen fantezi puanı";
-    points.setAttribute("aria-label", expectedPoints === null ? "Beklenen fantezi puanı yok" : `Beklenen fantezi puanı ${displayNumber(expectedPoints.toFixed(2))}`);
-    tr.append(logoCell, nameCell, element("td", "builder-pool-role", builderTffRole(player.id) || "—"), rating, points);
+    points.title = t("Sonraki maç için beklenen fantezi puanı");
+    points.setAttribute("aria-label", expectedPoints === null ? t("Beklenen fantezi puanı yok") : t("Beklenen fantezi puanı {points}", { points: displayNumber(expectedPoints.toFixed(2)) }));
+    tr.append(logoCell, nameCell, element("td", "builder-pool-role", tffRole || "—"), rating, points);
     body.append(tr);
     if (expanded) {
       const detailsRow = element("tr", `builder-player-details-row${selected ? " builder-player-selected" : ""}`);
@@ -410,7 +420,7 @@ function renderBuilderPool(players, teams) {
     }
   }
   if (!visible.length) {
-    const tr = element("tr"), cell = element("td", "no-results", players.length ? "Bu filtrelerle eşleşen oyuncu yok." : "Oyuncu havuzunu görmek için oyuncu, kadro ve maç CSV dosyalarını yükleyin.");
+    const tr = element("tr"), cell = element("td", "no-results", players.length ? t("Bu filtrelerle eşleşen oyuncu yok.") : t("Oyuncu havuzunu görmek için oyuncu, kadro ve maç CSV dosyalarını yükleyin."));
     cell.colSpan = 5; tr.append(cell); body.append(tr);
   }
   $("builder-player-list").replaceChildren(body);
@@ -424,7 +434,8 @@ function renderSquadBuilder() {
   $("builder-count").textContent = `${builderState.selected.size} / 15`;
   const budget = builderBudget();
   $("builder-budget").textContent = budget.missing ? "— / 100" : `${displayNumber(budget.spent / 1_000_000)} / 100`;
-  $("builder-budget").title = budget.missing ? "Oyuncu fiyatı eksik; bütçe hesaplanamadı." : `Yedekler ₺${displayNumber(budget.bench / 1_000_000)}M · Kalan ₺${displayNumber(budget.remaining / 1_000_000)}M`;
+  $("builder-budget").title = budget.missing ? t("Oyuncu fiyatı eksik; bütçe hesaplanamadı.")
+    : t("Yedekler ₺{bench}M · Kalan ₺{left}M", { bench: displayNumber(budget.bench / 1_000_000), left: displayNumber(budget.remaining / 1_000_000) });
   $("builder-budget").classList.toggle("error", Boolean(budget.missing || budget.remaining < 0));
   // Only a failed or missing fantasy load needs explaining; a successful one is silent.
   $("builder-fantasy-note").textContent = fantasyState.season && fantasyState.season === state.seasonSlug ? "" : fantasyState.note;

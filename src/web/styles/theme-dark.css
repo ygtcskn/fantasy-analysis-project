@@ -94,6 +94,10 @@
 :root[data-theme="dark"] .rail-label,
 :root[data-theme="dark"] .nav-button { color: #c7bbd0; }
 :root[data-theme="dark"] .nav-button.active { background: #352348; color: #d9baff; }
+:root[data-theme="dark"] .rail-language { background: var(--surface-raised); }
+:root[data-theme="dark"] .rail-language button { color: #c7bbd0; }
+:root[data-theme="dark"] .rail-language button:hover { color: var(--ink); }
+:root[data-theme="dark"] .rail-language button[aria-pressed="true"] { background: #352348; color: #d9baff; }
 :root[data-theme="dark"] .detailed-points { background: transparent; }
 :root[data-theme="dark"] .tier-toolbar { background: var(--surface-soft); }
 :root[data-theme="dark"] .tier-search-control { border-color: var(--line); background: var(--field); }

@@ -52,8 +52,8 @@ function authReturnProblem() {
   const search = new URLSearchParams(location.search), hash = new URLSearchParams(location.hash.slice(1));
   const code = search.get("error_code") || hash.get("error_code");
   const description = search.get("error_description") || hash.get("error_description");
-  if (code === "otp_expired") return "Giriş bağlantısının süresi dolmuş ya da bağlantı zaten kullanılmış. Yeni bir bağlantı iste.";
-  return code || description ? `Giriş tamamlanamadı: ${description || code}` : "";
+  if (code === "otp_expired") return t("Giriş bağlantısının süresi dolmuş ya da bağlantı zaten kullanılmış. Yeni bir bağlantı iste.");
+  return code || description ? t("Giriş tamamlanamadı: {reason}", { reason: description || code }) : "";
 }
 
 function loadAuth() {
@@ -63,7 +63,7 @@ function loadAuth() {
     script.integrity = AUTH_LIBRARY.integrity;
     script.crossOrigin = "anonymous";
     script.addEventListener("load", () => resolve(window.supabase));
-    script.addEventListener("error", () => reject(new Error("Giriş hizmeti yüklenemedi. Bağlantını kontrol edip tekrar dene.")));
+    script.addEventListener("error", () => reject(new Error(t("Giriş hizmeti yüklenemedi. Bağlantını kontrol edip tekrar dene."))));
     document.head.append(script);
   }).then(async (library) => {
     // The project's address alone: a URL copied with a path such as /rest/v1/
@@ -126,11 +126,11 @@ function renderAuthAccount() {
     if (typeof profileAvatar === "function") {
       who.append(profileAvatar({ nickname: profile?.nickname || siteAuth.user.email, avatar_path: profile?.avatar_path }, 24));
     }
-    who.append(profile?.nickname || siteAuth.user.email || "Giriş yapıldı");
-    const buttons = typeof openProfileDialog === "function" ? [authButton("☺", "Profil", () => openProfileDialog())] : [];
-    area.replaceChildren(who, ...buttons, authButton("←", "Çıkış yap", signOutAuth));
+    who.append(profile?.nickname || siteAuth.user.email || t("Giriş yapıldı"));
+    const buttons = typeof openProfileDialog === "function" ? [authButton("☺", t("Profil"), () => openProfileDialog())] : [];
+    area.replaceChildren(who, ...buttons, authButton("←", t("Çıkış yap"), signOutAuth));
   } else {
-    area.replaceChildren(authButton("→", "Giriş yap", () => openAuthDialog()));
+    area.replaceChildren(authButton("→", t("Giriş yap"), () => openAuthDialog()));
   }
 }
 
@@ -153,14 +153,14 @@ function setAuthMessage(text, error = false) {
 }
 
 function authErrorText(error) {
-  if (error?.status === 429) return "Çok fazla deneme yapıldı. Birkaç dakika sonra tekrar dene.";
-  if (/not authorized/i.test(error?.message || "")) return "Bu adrese şu anda giriş bağlantısı gönderilemiyor.";
-  return error?.message ? `Bir sorun çıktı: ${error.message}` : "Bir sorun çıktı. Tekrar dene.";
+  if (error?.status === 429) return t("Çok fazla deneme yapıldı. Birkaç dakika sonra tekrar dene.");
+  if (/not authorized/i.test(error?.message || "")) return t("Bu adrese şu anda giriş bağlantısı gönderilemiyor.");
+  return error?.message ? t("Bir sorun çıktı: {reason}", { reason: error.message }) : t("Bir sorun çıktı. Tekrar dene.");
 }
 
 async function signInWithGoogle(button) {
   button.disabled = true;
-  setAuthMessage("Google'a yönlendiriliyorsun…");
+  setAuthMessage(t("Google'a yönlendiriliyorsun…"));
   try {
     const client = await loadAuth();
     const { error } = await client.auth.signInWithOAuth({ provider: "google", options: { redirectTo: authReturnUrl() } });
@@ -175,18 +175,18 @@ async function sendAuthLink(form) {
   const input = form.querySelector("input"), fieldError = form.querySelector(".auth-field-error");
   const button = form.querySelector("button"), email = input.value.trim();
   if (!email || !input.checkValidity()) {
-    fieldError.textContent = email ? "Geçerli bir e-posta adresi yaz." : "E-posta adresini yaz.";
+    fieldError.textContent = email ? t("Geçerli bir e-posta adresi yaz.") : t("E-posta adresini yaz.");
     fieldError.hidden = false;
     input.focus();
     return;
   }
   button.disabled = true;
-  setAuthMessage("Bağlantı gönderiliyor…");
+  setAuthMessage(t("Bağlantı gönderiliyor…"));
   try {
     const client = await loadAuth();
     const { error } = await client.auth.signInWithOtp({ email, options: { emailRedirectTo: authReturnUrl(), shouldCreateUser: true } });
     if (error) throw error;
-    setAuthMessage(`Giriş bağlantısını ${email} adresine gönderdik. E-postadaki bağlantıyı bu tarayıcıda aç; birkaç dakika içinde gelmezse istenmeyen e-postalara bak.`);
+    setAuthMessage(t("Giriş bağlantısını {email} adresine gönderdik. E-postadaki bağlantıyı bu tarayıcıda aç; birkaç dakika içinde gelmezse istenmeyen e-postalara bak.", { email }));
   } catch (error) {
     setAuthMessage(authErrorText(error), true);
   } finally {
@@ -207,19 +207,20 @@ function authDialog() {
     <div class="auth-options"></div>
     <p class="auth-message" role="status" aria-live="polite"></p>
     <p class="auth-privacy">E-posta adresin yalnızca giriş için kullanılır.</p>`;
+  translateElement(dialog);
   const options = dialog.querySelector(".auth-options");
   SITE_AUTH.providers.forEach((provider, index) => {
     if (index) {
       const divider = document.createElement("p");
       divider.className = "auth-divider";
-      divider.textContent = "ya da";
+      divider.textContent = t("ya da");
       options.append(divider);
     }
     if (provider === "google") {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "secondary";
-      button.textContent = "Google ile devam et";
+      button.textContent = t("Google ile devam et");
       button.addEventListener("click", () => signInWithGoogle(button));
       options.append(button);
     } else if (provider === "email") {
@@ -231,6 +232,7 @@ function authDialog() {
         <input id="auth-email" type="email" autocomplete="email" required placeholder="ad@ornek.com" aria-describedby="auth-email-error">
         <p id="auth-email-error" class="auth-field-error" hidden></p>
         <button type="submit" class="primary">Giriş bağlantısı gönder</button>`;
+      translateElement(form);
       form.querySelector("input").addEventListener("input", () => { form.querySelector(".auth-field-error").hidden = true; });
       form.addEventListener("submit", (event) => { event.preventDefault(); sendAuthLink(form); });
       options.append(form);
@@ -264,7 +266,7 @@ function setupAuth() {
     else if (siteAuth.startError && !siteAuth.user) {
       // PKCE keeps half of the exchange in the browser that asked for the link.
       openAuthDialog(/verifier/i.test(siteAuth.startError.message || "")
-        ? "Bu bağlantı başka bir tarayıcıda istenmiş. Bağlantıyı, giriş istediğin tarayıcıda aç ya da buradan yeni bir bağlantı iste."
+        ? t("Bu bağlantı başka bir tarayıcıda istenmiş. Bağlantıyı, giriş istediğin tarayıcıda aç ya da buradan yeni bir bağlantı iste.")
         : authErrorText(siteAuth.startError));
     }
   }).catch((error) => {

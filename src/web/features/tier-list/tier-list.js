@@ -2,13 +2,13 @@
 
 // Display bands belong to this site; underlying match ratings belong to Sportmonks.
 const tierBands = [
-  { id: "S", label: "Üstün", range: "8,00–10,00", minimum: 8 },
-  { id: "A", label: "Mükemmel", range: "7,50–7,99", minimum: 7.5 },
-  { id: "B", label: "Güçlü", range: "7,00–7,49", minimum: 7 },
-  { id: "C", label: "İstikrarlı", range: "6,50–6,99", minimum: 6.5 },
-  { id: "D", label: "6,50 Altı", range: "1,00–6,49", minimum: 1 },
-  { id: "P", label: "Ön Değerlendirme", range: "Daha fazla reytingli maç gerekli" },
-  { id: "U", label: "Reytingsiz", range: "Geçerli reyting yok" },
+  { id: "S", label: t("Üstün"), range: t("8,00–10,00"), minimum: 8 },
+  { id: "A", label: t("Mükemmel"), range: t("7,50–7,99"), minimum: 7.5 },
+  { id: "B", label: t("Güçlü"), range: t("7,00–7,49"), minimum: 7 },
+  { id: "C", label: t("İstikrarlı"), range: t("6,50–6,99"), minimum: 6.5 },
+  { id: "D", label: t("6,50 Altı"), range: t("1,00–6,49"), minimum: 1 },
+  { id: "P", label: t("Ön Değerlendirme"), range: t("Daha fazla reytingli maç gerekli") },
+  { id: "U", label: t("Reytingsiz"), range: t("Geçerli reyting yok") },
 ];
 let selectedTierPlayer = null;
 let selectedTierRole = "";
@@ -34,22 +34,22 @@ function totalMetric(rows, key) {
 
 function metricText(metric) {
   const value = number(metric.value);
-  return (value === null ? "—" : new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 2 }).format(value)) + (metric.supplied > 0 && metric.supplied < metric.records ? "*" : "");
+  return (value === null ? "—" : new Intl.NumberFormat(LOCALE, { maximumFractionDigits: 2 }).format(value)) + (metric.supplied > 0 && metric.supplied < metric.records ? "*" : "");
 }
 
 function metricTitle(metric) {
-  return `${metric.records} maçın ${metric.supplied} tanesinde kayıtlı. İstatistiği kaydedilmemiş maçlar sıfır sayılmaz.`;
+  return t("{records} maçın {supplied} tanesinde kayıtlı. İstatistiği kaydedilmemiş maçlar sıfır sayılmaz.", { records: metric.records, supplied: metric.supplied });
 }
 
 function ratingText(value) {
-  return value === null ? "—" : value.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return value === null ? "—" : value.toLocaleString(LOCALE, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function createTeamLink(id, name, className = "") {
   const link = element(/^\d+$/.test(String(id || "")) ? "a" : "span", `team-link ${className}`, name);
   if (link.tagName === "A") {
     link.href = `team.html?${new URLSearchParams({ id, name })}`;
-    link.setAttribute("aria-label", document.documentElement.lang === "tr" ? `${name} takım sayfasını aç` : `Open ${name} team page`);
+    link.setAttribute("aria-label", t("{name} takım sayfasını aç", { name }));
   }
   return link;
 }
@@ -61,7 +61,7 @@ function createTeamLogo(id, teams, clickable = true) {
     const initials = teams.get(id)?.short_code || name.split(/\s+/).map((part) => part[0]).join("").slice(0, 3);
     const fallback = element("span", "club-logo-fallback", initials);
     fallback.setAttribute("role", "img");
-    fallback.setAttribute("aria-label", `${name} (logo bulunamadı)`);
+    fallback.setAttribute("aria-label", t("{name} (logo bulunamadı)", { name }));
     const img = document.createElement("img");
     img.alt = `${name} logo`;
     img.width = 32;
@@ -153,7 +153,7 @@ function goToTierPage(page) {
 function renderTierPagination(total, pageCount) {
   const first = total ? tierPage * tierPageSize + 1 : 0;
   const last = Math.min(total, (tierPage + 1) * tierPageSize);
-  $("tier-page-range").textContent = total ? `${total} oyuncunun ${first}–${last} arası gösteriliyor` : "0 oyuncu gösteriliyor";
+  $("tier-page-range").textContent = total ? t("{total} oyuncunun {first}–{last} arası gösteriliyor", { total, first, last }) : t("0 oyuncu gösteriliyor");
   $("tier-page-previous").disabled = tierPage === 0;
   $("tier-page-next").disabled = tierPage + 1 >= pageCount;
   const buttons = document.createDocumentFragment();
@@ -166,7 +166,7 @@ function renderTierPagination(total, pageCount) {
     }
     const button = element("button", "tier-page-number", String(item + 1));
     button.type = "button";
-    button.setAttribute("aria-label", `Oyuncu listesinin ${item + 1}. sayfasına git`);
+    button.setAttribute("aria-label", t("Oyuncu listesinin {page}. sayfasına git", { page: item + 1 }));
     if (item === tierPage) button.setAttribute("aria-current", "page");
     button.addEventListener("click", () => goToTierPage(item));
     buttons.append(button);
@@ -183,9 +183,9 @@ function buildTierPlayers() {
   const ensure = (id, name) => {
     if (!id) return null;
     // One name per player, from his profile (profileName in core/match-rules.js).
-    if (!players.has(id)) players.set(id, { id, name: profileName(profiles.get(id)) || name?.trim() || `Oyuncu ${id}`, teams: new Set(), positions: new Set(), matches: [] });
+    if (!players.has(id)) players.set(id, { id, name: profileName(profiles.get(id)) || name?.trim() || t("Oyuncu {id}", { id }), teams: new Set(), positions: new Set(), matches: [] });
     const player = players.get(id);
-    if (name?.trim() && player.name === `Oyuncu ${id}`) player.name = name.trim();
+    if (name?.trim() && player.name === t("Oyuncu {id}", { id })) player.name = name.trim();
     return player;
   };
   for (const profile of profiles.values()) ensure(profile.id, profile.name);
@@ -228,7 +228,7 @@ function buildTierPlayers() {
 // mentions him: match rows, the fantasy ledger, projections, the optimizer and
 // the live feed each carry their own copy, and those differ.
 function playerName(id, fallback = "") {
-  return buildTierPlayers().byId.get(String(id ?? ""))?.name || String(fallback || "").trim() || (id ? `Oyuncu ${id}` : "—");
+  return buildTierPlayers().byId.get(String(id ?? ""))?.name || String(fallback || "").trim() || (id ? t("Oyuncu {id}", { id }) : "—");
 }
 
 // Players still in the league, from Sportmonks' current domestic squads. The
@@ -278,7 +278,7 @@ function resetTierFilters() {
 function renderTierList() {
   const { players, teams } = leaguePlayers();
   const teamIds = [...new Set(players.flatMap((player) => [...player.teams]))];
-  options($("tier-team"), teamIds.map((id) => [id, teamName(id, teams)]).sort((a, b) => a[1].localeCompare(b[1])), "Tüm takımlar");
+  options($("tier-team"), teamIds.map((id) => [id, teamName(id, teams)]).sort((a, b) => a[1].localeCompare(b[1])), t("Tüm takımlar"));
   const query = $("tier-search").value.toLocaleLowerCase().trim();
   const byRating = (a, b) => (b.average ?? -1) - (a.average ?? -1) || b.ratings.length - a.ratings.length || a.name.localeCompare(b.name);
   const eligible = players.filter((player) => !["P", "U"].includes(tierFor(player))).sort(byRating);
@@ -297,11 +297,11 @@ function renderTierList() {
   const visiblePlayers = filtered.slice(tierPage * tierPageSize, (tierPage + 1) * tierPageSize);
   const scroller = element("div", "table-container tier-ranking-scroll");
   scroller.tabIndex = 0;
-  scroller.setAttribute("aria-label", "Oyuncu sıralaması. Diğer istatistikler için yatay kaydırın.");
+  scroller.setAttribute("aria-label", t("Oyuncu sıralaması. Diğer istatistikler için yatay kaydırın."));
   const table = element("table", "tier-ranking-table");
-  const caption = element("caption", "sr-only", "Ortalama Sportmonks reytingine göre sezon oyuncu sıralaması. Tüm maç istatistikleri için oyuncu adına tıklayın.");
+  const caption = element("caption", "sr-only", t("Ortalama Sportmonks reytingine göre sezon oyuncu sıralaması. Tüm maç istatistikleri için oyuncu adına tıklayın."));
   const head = element("thead"), header = element("tr");
-  const columns = ["Sıra", "Logo", "Mevki", "Oyuncu", "Kademe", "Ort. Reyting", "Reytingli Maç", "Maç", "Dakika", "Gol", "Asist", "xG", "Şut", "Kilit Pas", "Kurtarış"];
+  const columns = [t("Sıra"), "Logo", t("Mevki"), t("Oyuncu"), t("Kademe"), t("Ort. Reyting"), t("Reytingli Maç"), t({ tr: "Maç", en: "Matches" }), t("Dakika"), t("Gol"), t("Asist"), "xG", t("Şut"), t("Kilit Pas"), t("Kurtarış")];
   columns.forEach((label, index) => {
     const th = element("th", index === 0 || index >= 5 ? "numeric" : index === 1 ? "club-logo-heading" : "", label);
     th.scope = "col";
@@ -319,11 +319,11 @@ function renderTierList() {
     const playerCell = element("td", "player-cell");
     const name = element("button", "player-name-button", player.name);
     name.type = "button";
-    name.setAttribute("aria-label", `${player.name} için tüm maç ve istatistikleri göster`);
+    name.setAttribute("aria-label", t("{name} için tüm maç ve istatistikleri göster", { name: player.name }));
     name.addEventListener("click", () => openTierPlayer(player.id));
     playerCell.append(name);
     const tierCell = element("td");
-    const badge = element("span", "tier-tag", tier === "P" ? "Ön Değerlendirme" : tier === "U" ? "Reytingsiz" : tier);
+    const badge = element("span", "tier-tag", tier === "P" ? t("Ön Değerlendirme") : tier === "U" ? t("Reytingsiz") : tier);
     badge.title = tierBands.find((band) => band.id === tier).label;
     tierCell.append(badge);
     const ratingCell = element("td", "numeric");
@@ -337,7 +337,7 @@ function renderTierList() {
     body.append(tr);
   });
   if (!filtered.length) {
-    const tr = element("tr"), td = element("td", "no-results", players.length ? "Bu filtrelerle eşleşen oyuncu yok." : "Oyuncuları eklemek için player_match_stats.csv, players.csv veya squads.csv dosyasını açın.");
+    const tr = element("tr"), td = element("td", "no-results", players.length ? t("Bu filtrelerle eşleşen oyuncu yok.") : t("Oyuncuları eklemek için player_match_stats.csv, players.csv veya squads.csv dosyasını açın."));
     td.colSpan = columns.length;
     tr.append(td); body.append(tr);
   }
@@ -359,8 +359,8 @@ function openTierPlayer(id) {
     if (index) meta.append(" / ");
     meta.append(createTeamLink(teamId, player.teamNames[index]));
   });
-  if (!player.teams.size) meta.append("Takım bilgisi yok");
-  meta.append(` · ${playerPrimaryRole(player) ? roleLabel(playerPrimaryRole(player)) : "Mevki bilgisi yok"} · Oyuncu ID: ${player.id}`);
+  if (!player.teams.size) meta.append(t("Takım bilgisi yok"));
+  meta.append(` · ${playerPrimaryRole(player) ? roleLabel(playerPrimaryRole(player)) : t("Mevki bilgisi yok")} · ${t("Oyuncu ID: {id}", { id: player.id })}`);
   const summary = document.createDocumentFragment();
   const add = (label, value, title) => {
     const card = element("div");
@@ -368,17 +368,17 @@ function openTierPlayer(id) {
     if (title) card.title = title;
     summary.append(card);
   };
-  add("ORT. REYTİNG", ratingText(player.average), "Geçerli Sportmonks maç reytinglerinin aritmetik ortalaması. Dakikaya göre ağırlıklandırılmaz.");
-  add("REYTİNGLİ / OYNADIĞI MAÇ", `${player.ratings.length} / ${player.matches.length}`);
-  for (const [key, label] of [["minutes_played", "DAKİKA"], ["goals", "GOL"], ["assists", "ASİST"], ["xg", "xG"], ["shots_total", "ŞUT"], ["key_passes", "KİLİT PAS"]]) add(label, metricText(player.totals[key]), metricTitle(player.totals[key]));
+  add(t("ORT. REYTİNG"), ratingText(player.average), t("Geçerli Sportmonks maç reytinglerinin aritmetik ortalaması. Dakikaya göre ağırlıklandırılmaz."));
+  add(t("REYTİNGLİ / OYNADIĞI MAÇ"), `${player.ratings.length} / ${player.matches.length}`);
+  for (const [key, label] of [["minutes_played", t("DAKİKA")], ["goals", t("GOL")], ["assists", t("ASİST")], ["xg", "xG"], ["shots_total", t("ŞUT")], ["key_passes", t("KİLİT PAS")]]) add(label, metricText(player.totals[key]), metricTitle(player.totals[key]));
   $("player-detail-summary").replaceChildren(summary);
-  $("player-detail-coverage").textContent = `${player.matches.length} maç · ${player.ratings.length} geçerli reyting · ${tierBands.find((band) => band.id === tierFor(player)).label}. Yalnızca sahaya çıktığı bitmiş maçlar sayılır. * işaretli toplamlarda istatistiği kaydedilmemiş maç var; veri kapsamı için toplamın üzerinde bekleyin. Kaydedilmemiş maçlar sıfırla doldurulmaz.`;
+  $("player-detail-coverage").textContent = `${t("{count} maç", { count: player.matches.length }, player.matches.length)} · ${t("{count} geçerli reyting", { count: player.ratings.length }, player.ratings.length)} · ${tierBands.find((band) => band.id === tierFor(player)).label}. ${t("Yalnızca sahaya çıktığı bitmiş maçlar sayılır. * işaretli toplamlarda istatistiği kaydedilmemiş maç var; veri kapsamı için toplamın üzerinde bekleyin. Kaydedilmemiş maçlar sıfırla doldurulmaz.")}`;
   renderPlayerHistory();
   $("player-dialog").showModal();
 }
 
 function prettyField(key) {
-  const names = { xg_expected_goals: "xG · özel kaynak", expected_goals: "xG · standart kaynak", xg_expected_goals_on_target: "İsabetli xG · özel kaynak", expected_goals_on_target: "İsabetli xG · standart kaynak", rating: "Reyting", minutes_played: "Dakika", started: "İlk 11 (1/0)", goals: "Gol", assists: "Asist", shots_total: "Şut", shots_on_target: "İsabetli şut", key_passes: "Kilit pas", chances_created: "Yaratılan fırsat", tackles: "Müdahale", interceptions: "Top kesme", saves: "Kurtarış", yellowcards: "Sarı kart", redcards: "Kırmızı kart" };
+  const names = { xg_expected_goals: t("xG · özel kaynak"), expected_goals: t("xG · standart kaynak"), xg_expected_goals_on_target: t("İsabetli xG · özel kaynak"), expected_goals_on_target: t("İsabetli xG · standart kaynak"), rating: t("Reyting"), minutes_played: t("Dakika"), started: t("İlk 11 (1/0)"), goals: t("Gol"), assists: t("Asist"), shots_total: t("Şut"), shots_on_target: t("İsabetli şut"), key_passes: t("Kilit pas"), chances_created: t("Yaratılan fırsat"), tackles: t("Müdahale"), interceptions: t("Top kesme"), saves: t("Kurtarış"), yellowcards: t("Sarı kart"), redcards: t("Kırmızı kart") };
   return names[key] || key.replaceAll("_", " ").replace(/^./, (letter) => letter.toUpperCase());
 }
 
@@ -393,14 +393,14 @@ function renderPlayerHistory() {
   const core = ["rating", "minutes_played", "started", "goals", "assists", "xg_expected_goals", "expected_goals", "shots_total", "shots_on_target", "key_passes", "chances_created", "tackles", "interceptions", "saves", "yellowcards", "redcards"];
   const fields = $("all-match-stats").checked ? [...core.filter((key) => allFields.includes(key)), ...allFields.filter((key) => !core.includes(key))] : core.filter((key) => allFields.includes(key));
   const heading = element("tr");
-  for (const label of ["Tarih", "Maç", "Takım", "Hafta", "Durum", ...fields.map(prettyField)]) {
+  for (const label of [t("Tarih"), t("Maç"), t("Takım"), t("Hafta"), t("Durum"), ...fields.map(prettyField)]) {
     const th = element("th", "", label); th.scope = "col"; heading.append(th);
   }
   $("history-head").replaceChildren(heading);
   const body = document.createDocumentFragment();
   for (const row of player.matches) {
     const fixture = fixtures.get(row.fixture_id);
-    const match = fixture?.name || (fixture ? `${teamName(fixture.home_team_id, teams)} - ${teamName(fixture.away_team_id, teams)}` : `Fikstür ${row.fixture_id}`);
+    const match = fixture?.name || (fixture ? `${teamName(fixture.home_team_id, teams)} - ${teamName(fixture.away_team_id, teams)}` : t("Fikstür {id}", { id: row.fixture_id }));
     const tr = element("tr");
     for (const value of [fixture ? kickoffText(fixture) : "", match, teamName(row.team_id, teams), fixture?.["round.name"], fixture ? fixtureStateLabel(fixture) : ""]) tr.append(element("td", "", value || "—"));
     tr.children[2].replaceChildren(createTeamLink(row.team_id, teamName(row.team_id, teams)));
@@ -408,18 +408,18 @@ function renderPlayerHistory() {
       const value = row[key];
       // The match counts the totals add up, with the totals' blank rule: none
       // on a covered match. Every other field is shown as sent, numbers in
-      // Turkish format.
+      // the page's format.
       const count = HISTORY_COUNT_FIELDS.has(key) ? countedValue(row, key) : number(value);
       const shown = key === "rating" && number(value) !== null ? ratingText(number(value))
         : count !== null ? displayNumber(count) : value === undefined || value === "" ? "—" : value;
       const td = element("td", count !== null ? "numeric" : "", shown);
-      if (key === "rating" && value && validMatchRating(row) === null) td.title = "Sağlayıcı değeri geldiği biçimde gösterilir; 1–10 aralığı dışında olduğu veya kayıt açıkça sıfır dakika gösterdiği için ortalamaya alınmaz.";
+      if (key === "rating" && value && validMatchRating(row) === null) td.title = t("Sağlayıcı değeri geldiği biçimde gösterilir; 1–10 aralığı dışında olduğu veya kayıt açıkça sıfır dakika gösterdiği için ortalamaya alınmaz.");
       tr.append(td);
     }
     body.append(tr);
   }
   if (!player.matches.length) {
-    const tr = element("tr"), td = element("td", "no-results", "Bu oyuncu bu sezon henüz sahaya çıkmadı. Oyuncu, uydurma bir reyting verilmeden kadroda gösterilir.");
+    const tr = element("tr"), td = element("td", "no-results", t("Bu oyuncu bu sezon henüz sahaya çıkmadı. Oyuncu, uydurma bir reyting verilmeden kadroda gösterilir."));
     td.colSpan = fields.length + 5; tr.append(td); body.append(tr);
   }
   $("history-body").replaceChildren(body);

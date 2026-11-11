@@ -15,14 +15,14 @@ function renderBuilderRecommendations(force = false) {
   const activeSlot = builderSlots().find((slot) => slot.key === builderState.activeSlot);
   const activeRole = !activeSlot?.bench && !builderState.selected.has(activeSlot?.key) ? activeSlot?.role || "" : "";
   let problem = "";
-  if (activeSlot?.bench) problem = "Yedek oyuncuyu Oyuncular listesinden seçin. Yedeklerin fiyatı ilk 11 önerilerine ayrılan bütçeden düşülür.";
-  else if (selected.length === 11) problem = "İlk 11 tamam. Yedekleri Oyuncular listesinden seçebilirsiniz.";
-  else if (!generation || fantasyState.season !== state.seasonSlug) problem = "Öneriler için sayfayı yenileyin.";
-  else if (!players.some((player) => builderFantasyData(player).projection)) problem = "Güncel oyuncu tahmini yok. Fantezi analizini yenileyin.";
+  if (activeSlot?.bench) problem = t("Yedek oyuncuyu Oyuncular listesinden seçin. Yedeklerin fiyatı ilk 11 önerilerine ayrılan bütçeden düşülür.");
+  else if (selected.length === 11) problem = t("İlk 11 tamam. Yedekleri Oyuncular listesinden seçebilirsiniz.");
+  else if (!generation || fantasyState.season !== state.seasonSlug) problem = t("Öneriler için sayfayı yenileyin.");
+  else if (!players.some((player) => builderFantasyData(player).projection)) problem = t("Güncel oyuncu tahmini yok. Fantezi analizini yenileyin.");
   else if ([...builderState.selected].some(([key, id]) => {
     const player = players.find((p) => p.id === id), slot = builderSlots().find((s) => s.key === key);
     return !player || !slot || !canUseBuilderSlot(player, slot);
-  })) problem = "Öneriler için seçilen oyuncuları TFF fantezi mevkilerine taşıyın.";
+  })) problem = t("Öneriler için seçilen oyuncuları TFF fantezi mevkilerine taşıyın.");
   const risk = $("builder-risk").value;
   const position = { GK: "KL", DEF: "DEF", MID: "OS", FWD: "FOR" }[activeRole] || "";
   const key = [selected.join(","), bench.join(","), $("builder-formation").value, risk, position, generation, state.seasonSlug, problem].join("|");
@@ -34,7 +34,7 @@ function renderBuilderRecommendations(force = false) {
     builderRecommendations.rows = [];
     builderRecommendations.message = problem;
     if (count && !problem) {
-      builderRecommendations.message = "Kadronun kalanı hesaplanıyor…";
+      builderRecommendations.message = t("Kadronun kalanı hesaplanıyor…");
       builderRecommendations.timer = setTimeout(() => requestBuilderRecommendations(key, selected, generation, risk, position, bench), 300);
     }
   }
@@ -47,23 +47,23 @@ function renderBuilderRecommendations(force = false) {
     if (!player || selectedSlotFor(player.id)) continue;
     const tr = element("tr"), name = element("td"), club = element("div", "matchweek-club");
     club.append(createTeamLogo(row.team_id, teams, false), element("span", "", player.name));
-    name.append(club, element("span", "builder-recommendation-role", row.position));
+    name.append(club, element("span", "builder-recommendation-role", fantasyPositionCode(row.position)));
     const projection = builderFantasyData(player).projection;
     const side = ["KL", "DEF"].includes(row.position) ? "defensive" : "attacking";
     if (number(projection?.[`${side}_fixture_difficulty`]) !== null) {
-      name.append(element("span", "builder-recommendation-role", `${side === "defensive" ? "Savunma" : "Hücum"}: ${fantasyFixtureDifficulty(projection, side)}`));
+      name.append(element("span", "builder-recommendation-role", `${side === "defensive" ? t("Savunma") : t("Hücum")}: ${fantasyFixtureDifficulty(projection, side)}`));
     }
     // The season average the player list shows. The optimizer's own rating
     // column is a recency-weighted form figure it only uses to break ties.
-    if (player.average !== null) name.append(element("span", "builder-recommendation-role", `Reyting ${ratingText(player.average)}`));
+    if (player.average !== null) name.append(element("span", "builder-recommendation-role", t("Reyting {rating}", { rating: ratingText(player.average) })));
     const cost = number(row.points_below_optimal_xi);
     if (cost !== null) {
-      const label = cost < 0.005 ? "En iyi seçenek" : `En iyi kadroya göre ${displayNumber(cost)} FP eksik`;
+      const label = cost < 0.005 ? t("En iyi seçenek") : t("En iyi kadroya göre {points} FP eksik", { points: displayNumber(cost) });
       name.append(element("span", `builder-recommendation-role${cost < 0.005 ? " builder-recommendation-best" : ""}`, label));
     }
     const action = element("td"), add = element("button", "builder-player-add", "+");
     add.type = "button";
-    add.setAttribute("aria-label", `Önerilen oyuncuyu ekle: ${row.player_name}`);
+    add.setAttribute("aria-label", t("Önerilen oyuncuyu ekle: {name}", { name: row.player_name }));
     add.addEventListener("click", () => {
       // Never replace a locked player when adding a recommended next pick.
       const starterSlots = builderSlots().filter((slot) => !slot.bench);
@@ -82,7 +82,7 @@ function renderBuilderRecommendations(force = false) {
   $("builder-recommendations-body").replaceChildren(body);
   $("builder-recommendations-note").textContent = builderRecommendations.message
     || (activeRole && builderRecommendations.rows.length
-      ? "Oyuncunun kendi beklenen FP'sine göre değil, tamamladığı kadronun gücüne göre sıralanır." : "");
+      ? t("Oyuncunun kendi beklenen FP'sine göre değil, tamamladığı kadronun gücüne göre sıralanır.") : "");
 }
 
 async function requestBuilderRecommendations(key, selected, generation, risk, position, bench = []) {
@@ -92,20 +92,20 @@ async function requestBuilderRecommendations(key, selected, generation, risk, po
   try {
     const params = new URLSearchParams({ locked: selected.join(","), bench: bench.join(","), formation: $("builder-formation").value, generation, risk, position });
     const response = await fetch(`/local-recommendations.csv?${params}`, { cache: "no-store", signal: controller.signal });
-    if (!response.ok) throw new Error("Önerileri açmak için yerel site sunucusunu yeniden başlatın.");
+    if (!response.ok) throw new Error(t("Önerileri açmak için yerel site sunucusunu yeniden başlatın."));
     const parsed = parseCSV(await response.text());
-    if (!parsed.header.includes("status") || !parsed.records.length) throw new Error("Öneri yanıtı alınamadı.");
+    if (!parsed.header.includes("status") || !parsed.records.length) throw new Error(t("Öneri yanıtı alınamadı."));
     if (key !== builderRecommendations.key || builderRecommendations.controller !== controller) return;
     const first = parsed.records[0];
-    if (first.status !== "complete") throw new Error(first.message || "Kurallara uygun kadro bulunamadı.");
-    if (first.pipeline_run_id !== generation) throw new Error("Analiz değişti. Sayfayı yenileyin.");
+    if (first.status !== "complete") throw new Error(first.message || t("Kurallara uygun kadro bulunamadı."));
+    if (first.pipeline_run_id !== generation) throw new Error(t("Analiz değişti. Sayfayı yenileyin."));
     builderRecommendations.rows = parsed.records;
     // A successful solve needs no note; only problems are explained.
     builderRecommendations.message = "";
   } catch (error) {
     if (key !== builderRecommendations.key || builderRecommendations.controller !== controller) return;
     builderRecommendations.rows = [];
-    builderRecommendations.message = error.name === "AbortError" ? "Hesaplama zaman aşımına uğradı. Yeniden denemek için ↻ kullanın." : error.message;
+    builderRecommendations.message = error.name === "AbortError" ? t("Hesaplama zaman aşımına uğradı. Yeniden denemek için ↻ kullanın.") : error.message;
   } finally {
     clearTimeout(timeout);
     if (key === builderRecommendations.key && builderRecommendations.controller === controller) renderBuilderRecommendations();

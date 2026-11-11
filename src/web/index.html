@@ -1,10 +1,14 @@
 <!doctype html>
-<html lang="tr" data-theme="dark">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Süper Lig fantezi futbol analizi: puan durumu, fikstür, oyuncu ve takım istatistikleri, haftanın maç tahminleri, beklenen fantezi puanları ve Kadro Kur.">
-  <title>Fantezi Analiz — Süper Lig fantezi futbol analizi</title>
+  <!-- The page is written in Turkish; core/english.js holds its English and
+       core/language.js shows the visitor's language. Only these two lines are
+       written in English, the site's first language, because a link's preview
+       reads them without running any script; data-tr is their Turkish. -->
+  <meta name="description" content="Süper Lig fantasy football analysis: standings, fixtures, player and team statistics, the week's match predictions, expected fantasy points and a squad builder." data-tr="Süper Lig fantezi futbol analizi: puan durumu, fikstür, oyuncu ve takım istatistikleri, haftanın maç tahminleri, beklenen fantezi puanları ve Kadro Kur.">
+  <title data-tr="Fantezi Analiz — Süper Lig fantezi futbol analizi">Fantezi Analiz — Süper Lig fantasy football analysis</title>
   <link rel="icon" href="assets/brand/logo.svg" type="image/svg+xml">
   <link rel="stylesheet" href="styles/styles.css">
   <link rel="stylesheet" href="styles/panels.css">
@@ -21,6 +25,8 @@
   <link rel="stylesheet" href="features/builder/bench.css">
   <link rel="stylesheet" href="features/builder/summary.css">
   <link rel="stylesheet" href="features/home/home.css">
+  <script src="core/english.js" defer></script>
+  <script src="core/language.js" defer></script>
   <script src="core/site.js" defer></script>
   <script src="data/csv.js" defer></script>
   <script src="core/locale.js" defer></script>
@@ -64,7 +70,7 @@
       <div class="page-heading"><div><p id="view-eyebrow" class="eyebrow">SÜPER LİG</p><h1 id="view-title">Ana Sayfa</h1><p id="view-description">Oynanan maçlar, puan durumu ve seçtiğin maçın özeti.</p><p id="home-season-note" class="home-season-note"></p></div></div>
     </header>
     <p id="message" class="message" role="status" aria-live="polite"></p>
-    <section id="dataset-stats" class="stats" aria-label="Yüklenen veriler"><div><span>OYUNCU KATILIMI</span><strong id="appearance-count">—</strong></div><div><span>MAÇ</span><strong id="fixture-count">—</strong></div><div><span>TAKIM</span><strong id="team-count">—</strong></div><div><span>SEZON</span><strong id="season-label" class="season-value">—</strong></div></section>
+    <section id="dataset-stats" class="stats" aria-label="Yüklenen veriler"><div><span>OYUNCU KATILIMI</span><strong id="appearance-count">—</strong></div><div><span data-en="MATCHES">MAÇ</span><strong id="fixture-count">—</strong></div><div><span data-en="TEAMS">TAKIM</span><strong id="team-count">—</strong></div><div><span>SEZON</span><strong id="season-label" class="season-value">—</strong></div></section>
     <section id="social-workspace" aria-label="Maç Tribünü" hidden>
       <div class="social-toolbar">
         <div><p class="eyebrow">HAFTANIN SOHBETİ</p><h2>Maçlar biter, sohbet devam eder.</h2></div>
@@ -211,7 +217,7 @@
               <button type="button" data-statistics-role="midfielder" aria-label="Orta saha oyuncuları" title="Orta saha oyuncuları" aria-pressed="false"><img src="assets/roles/midfielder.svg" alt=""></button>
               <button type="button" data-statistics-role="attacker" aria-label="Forvetler" title="Forvetler" aria-pressed="false"><img src="assets/roles/attacker.svg" alt=""></button>
             </div>
-            <label class="builder-sort"><span class="sr-only">Sıralama</span><select id="statistics-sort">
+            <label class="builder-sort"><span class="sr-only" data-en="Sort by">Sıralama</span><select id="statistics-sort">
               <option value="goals">Gol ↓</option>
               <option value="assists">Asist ↓</option>
               <option value="fantasy">Fantezi puanı ↓</option>
@@ -280,7 +286,7 @@
                 <p id="statistics-ranking-note" class="builder-rating-note" role="status"></p>
                 <div class="statistics-list-scroll" tabindex="0" aria-label="Kaydırılabilir ölçüt sıralaması"><table class="statistics-table statistics-ranking-table">
                   <caption class="sr-only">Dağılımda seçilen ölçütte oyuncular, en iyiden en kötüye. Bir isme tıklayarak karşılaştırın.</caption>
-                  <thead><tr><th scope="col" class="numeric">#</th><th scope="col">Oyuncu</th><th scope="col" class="numeric">Değer</th><th scope="col" class="numeric" title="Dağılımdaki yüzdelik">Puan</th></tr></thead>
+                  <thead><tr><th scope="col" class="numeric">#</th><th scope="col">Oyuncu</th><th scope="col" class="numeric">Değer</th><th scope="col" class="numeric" title="Dağılımdaki yüzdelik" data-en="Score">Puan</th></tr></thead>
                   <tbody id="statistics-ranking-body"></tbody>
                 </table></div>
               </div>
@@ -326,7 +332,7 @@
             <div class="builder-pool-heading"><h3 id="team-statistics-list-title">Takımlar</h3></div>
             <div class="builder-filters">
               <label class="builder-search"><span class="sr-only">Takım ara</span><input id="team-statistics-search" type="search" placeholder="Takım…" autocomplete="off"></label>
-              <label class="builder-sort"><span class="sr-only">Sıralama</span><select id="team-statistics-sort">
+              <label class="builder-sort"><span class="sr-only" data-en="Sort by">Sıralama</span><select id="team-statistics-sort">
                 <option value="points">Puan ↓</option>
                 <option value="scored">Atılan gol ↓</option>
                 <option value="conceded">Yenilen gol ↑</option>
@@ -351,7 +357,7 @@
                 <button type="button" data-team-players-role="midfielder" aria-label="Orta saha oyuncuları" title="Orta saha oyuncuları" aria-pressed="false"><img src="assets/roles/midfielder.svg" alt=""></button>
                 <button type="button" data-team-players-role="attacker" aria-label="Forvetler" title="Forvetler" aria-pressed="false"><img src="assets/roles/attacker.svg" alt=""></button>
               </div>
-              <label class="builder-sort"><span class="sr-only">Sıralama</span><select id="team-statistics-players-sort">
+              <label class="builder-sort"><span class="sr-only" data-en="Sort by">Sıralama</span><select id="team-statistics-players-sort">
                 <option value="rating" selected>Reyting ↓</option>
                 <option value="fantasy">Maç başı FP ↓</option>
                 <option value="goals">Gol ↓</option>
@@ -460,7 +466,7 @@
               <button type="button" data-builder-role="MID" aria-label="Orta saha oyuncuları" title="Orta saha oyuncuları" aria-pressed="false"><img src="assets/roles/midfielder.svg" alt=""></button>
               <button type="button" data-builder-role="FWD" aria-label="Forvetler" title="Forvetler" aria-pressed="false"><img src="assets/roles/attacker.svg" alt=""></button>
             </div>
-            <label class="builder-sort"><span class="sr-only">Sıralama</span><select id="builder-sort"><option value="rating">Reyting ↓</option><option value="expected">Beklenen FP ↓</option></select></label>
+            <label class="builder-sort"><span class="sr-only" data-en="Sort by">Sıralama</span><select id="builder-sort"><option value="rating">Reyting ↓</option><option value="expected">Beklenen FP ↓</option></select></label>
           </div>
           <div class="builder-table-wrap" tabindex="0" aria-label="Kaydırılabilir oyuncu listesi"><table class="builder-table"><caption class="sr-only">Seçilebilir oyuncular. İstatistikler için oyuncu adına, kadroya eklemek için artı düğmesine basın.</caption><thead><tr><th scope="col">Takım</th><th scope="col">Oyuncu</th><th scope="col" title="TFF Fantezi Lig mevkisi">Rol</th><th scope="col" class="numeric" title="Sportmonks maç reytingi ortalaması">Reyting</th><th scope="col" class="numeric" title="Sonraki maç için beklenen fantezi puanı">Beklenen<br>FP</th></tr></thead><tbody id="builder-player-list"></tbody></table></div>
           <p id="builder-fantasy-note" class="builder-rating-note" role="status"></p>

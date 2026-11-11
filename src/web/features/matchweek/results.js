@@ -114,14 +114,14 @@ function matchweekResultStatisticsCard(fixture, sides, teams) {
   if (!confirmed.length) loadMatchweekResultMetrics();
   const rows = confirmed.length ? confirmed : matchweekResults.metrics
     .filter((row) => row.fixture_id === fixture.fixture_id && (!row.source || row.source === "statistics"));
-  const section = matchweekCard("matchweek-preview-wide", "Maç istatistikleri");
+  const section = matchweekCard("matchweek-preview-wide", t("Maç istatistikleri"));
   section.append(matchweekVersusHeader(sides, teams));
   for (const [type, label, percent] of liveStatistics) {
     const values = matchweekStatisticValues(rows, sides, type, percent);
     section.append(matchweekVersusRow(label, values.map((value) => ({
       value: value === null ? "—" : percent ? percentText(value) : displayNumber(value), note: "" })), values));
   }
-  if (!confirmed.length && matchweekResults.metricsStatus === "loading") section.append(element("p", "message", "Maç istatistikleri yükleniyor…"));
+  if (!confirmed.length && matchweekResults.metricsStatus === "loading") section.append(element("p", "message", t("Maç istatistikleri yükleniyor…")));
   return section;
 }
 
@@ -139,7 +139,7 @@ function matchweekMatchFantasy(fixture) {
       players.push({ id, name: playerName(id, row.player_name), position: row.fantasy_position, points,
         rating: validMatchRating(row), minutes: number(row.minutes_played) });
     }
-    return players.sort((a, b) => b.points - a.points || (b.rating ?? 0) - (a.rating ?? 0) || a.name.localeCompare(b.name, "tr"));
+    return players.sort((a, b) => b.points - a.points || (b.rating ?? 0) - (a.rating ?? 0) || a.name.localeCompare(b.name, LOCALE));
   });
 }
 
@@ -150,37 +150,37 @@ function renderMatchweekResult(fixture, teams, content) {
   const sides = [fixture.home_team_id, fixture.away_team_id];
   const players = matchweekResultPlayers(fixture), scores = currentFixtureScores();
   const histories = sides.map((id) => matchweekTeamHistory(id, fixture));
-  const xi = matchweekElevensCard(sides, "Bu maçın ilk 11'leri", (id) => matchweekLastXI(id, fixture, teams, { players, title: "İlk 11 · Bu maç" }));
+  const xi = matchweekElevensCard(sides, t("Bu maçın ilk 11'leri"), (id) => matchweekLastXI(id, fixture, teams, { players, title: t("İlk 11 · Bu maç") }));
 
   const fantasy = matchweekMatchFantasy(fixture);
-  const fantasyCard = matchweekCard("matchweek-preview-fantasy", "Fantezi puanları · Bu maç");
+  const fantasyCard = matchweekCard("matchweek-preview-fantasy", t("Fantezi puanları · Bu maç"));
   fantasyCard.append(matchweekVersusHeader(sides, teams));
-  for (const [key, label] of [["ALL", "Takım toplamı"], ["KL", "Kaleci"], ["DEF", "Defans"], ["OS", "Orta saha"], ["FOR", "Forvet"]]) {
+  for (const [key, label] of [["ALL", t("Takım toplamı")], ["KL", t("Kaleci")], ["DEF", t("Defans")], ["OS", t("Orta saha")], ["FOR", t("Forvet")]]) {
     const values = fantasy.map((team) => team.length
       ? team.filter((player) => key === "ALL" || player.position === key).reduce((sum, player) => sum + player.points, 0) : null);
     fantasyCard.append(matchweekVersusRow(label, values.map((value) => ({ value: value === null ? "—" : displayNumber(value), note: "" })),
       values.every((value) => value !== null && value >= 0) ? values : null));
   }
-  const best = sides.map((id, index) => matchweekPlayersCard(id, index, teams, "Maçın en iyileri", fantasy[index].slice(0, 5),
-    "Bu maçın fantezi puanları henüz yayımlanmadı.",
-    (player) => `${player.name} · ${player.position || "Mevki yok"}${player.minutes === null ? "" : ` · ${displayNumber(player.minutes)} dk`}`));
+  const best = sides.map((id, index) => matchweekPlayersCard(id, index, teams, t("Maçın en iyileri"), fantasy[index].slice(0, 5),
+    t("Bu maçın fantezi puanları henüz yayımlanmadı."),
+    (player) => `${player.name} · ${player.position ? fantasyPositionCode(player.position) : t("Mevki yok")}${player.minutes === null ? "" : ` · ${t("{minutes} dk", { minutes: displayNumber(player.minutes) })}`}`));
 
   const cards = [xi, matchweekResultStatisticsCard(fixture, sides, teams), matchweekSeasonStatsCard(fixture, sides, teams),
     matchweekFormCard(sides, histories, teams, scores), matchweekTrendCard(fixture, sides, teams), fantasyCard, ...best];
   const snapshot = matchweekCompletedSnapshot(fixture);
   if (snapshot) {
-    const events = matchweekCard("matchweek-preview-wide live-events", "Maç olayları"), list = element("ol");
+    const events = matchweekCard("matchweek-preview-wide live-events", t("Maç olayları")), list = element("ol");
     list.tabIndex = 0;
-    list.setAttribute("aria-label", "Bu maçın olayları, en yeni önce");
+    list.setAttribute("aria-label", t("Bu maçın olayları, en yeni önce"));
     renderLiveEvents(snapshot.find((row) => row.record_type === "fixture"), teams, snapshot, list);
     events.append(list); cards.push(events);
   }
   const notes = element("details", "matchweek-notes");
-  notes.append(element("summary", "", "Açıklamalar"),
-    element("p", "", "İlk 11 ve maç istatistikleri bu maçın Sportmonks kayıtlarıdır. — henüz sağlanmayan veya doğrulanamayan değer."),
+  notes.append(element("summary", "", t("Açıklamalar")),
+    element("p", "", t("İlk 11 ve maç istatistikleri bu maçın Sportmonks kayıtlarıdır. — henüz sağlanmayan veya doğrulanamayan değer.")),
     element("p", "", matchweekSeasonStatsNote),
     element("p", "", matchweekFormNote),
-    element("p", "", "Fantezi puanları bu maçın kaydedilmiş oyuncu puanlarıdır (bonus dahil); mevki satırları o mevkideki oyuncuların toplamıdır. Maçın en iyileri bu maçta en çok fantezi puanı (FP) alan oyunculardır; reyting, oyuncunun bu maçtaki Sportmonks reytingidir."),
+    element("p", "", t("Fantezi puanları bu maçın kaydedilmiş oyuncu puanlarıdır (bonus dahil); mevki satırları o mevkideki oyuncuların toplamıdır. Maçın en iyileri bu maçta en çok fantezi puanı (FP) alan oyunculardır; reyting, oyuncunun bu maçtaki Sportmonks reytingidir.")),
     element("p", "", matchweekTrendNote));
   content.append(matchweekCardGrid(sides, cards), notes);
 }

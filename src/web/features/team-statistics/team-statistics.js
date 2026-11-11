@@ -22,8 +22,8 @@ const TEAM_STATISTICS_SORTS = [
   ["points", "Puan ↓", (team) => team.points],
   ["scored", "Atılan gol ↓", (team) => team.scored],
   ["conceded", "Yenilen gol ↑", (team) => (team.conceded === null ? null : -team.conceded)],
-  ["difference", "Averaj ↓", (team) => team.difference, ["AV", "Averaj", (team) => teamStatisticsSigned(team.difference)]],
-  ["cleanSheets", "Gol yemeden ↓", (team) => team.cleanSheets, ["GY", "Gol yemeden", (team) => displayNumber(team.cleanSheets)]],
+  ["difference", "Averaj ↓", (team) => team.difference, [t("AV"), t("Averaj"), (team) => teamStatisticsSigned(team.difference)]],
+  ["cleanSheets", "Gol yemeden ↓", (team) => team.cleanSheets, [t("GY"), t("Gol yemeden"), (team) => displayNumber(team.cleanSheets)]],
 ];
 
 async function loadTeamMetrics() {
@@ -38,9 +38,9 @@ async function loadTeamMetrics() {
   } catch (error) {
     if (teamMetricsState.key !== key) return;
     Object.assign(teamMetricsState, { state: "unavailable", rows: [],
-      message: error.message === "spider" ? "Radar dosyaları yüklenemedi; src/web/serve.py'yi yeniden başlatıp sayfayı yenileyin."
-        : error.message === "missing" ? "team_metrics.csv sunulmuyor; src/web/serve.py'yi yeniden başlatın veya sezonu yeniden indirin."
-          : "Takım maç istatistikleri okunamadı." });
+      message: error.message === "spider" ? t("Radar dosyaları yüklenemedi; src/web/serve.py'yi yeniden başlatıp sayfayı yenileyin.")
+        : error.message === "missing" ? t("team_metrics.csv sunulmuyor; src/web/serve.py'yi yeniden başlatın veya sezonu yeniden indirin.")
+          : t("Takım maç istatistikleri okunamadı.") });
   }
   // Maç Haftası reads the same rows for its card rankings.
   if (state.seasonSlug !== key) return;
@@ -78,7 +78,7 @@ function teamStatisticsIdentity(team, names, label) {
   const open = element("button", "statistics-player-button", team.name);
   open.type = "button";
   open.title = team.name;
-  open.setAttribute("aria-label", `${team.name} ${label}`);
+  open.setAttribute("aria-label", label);
   open.addEventListener("click", () => {
     teamStatisticsState.selected = team.id;
     renderTeamStatistics();
@@ -98,7 +98,7 @@ function teamStatisticsFitNames() {
 }
 
 function renderTeamStatisticsList(teams, names) {
-  const query = $("team-statistics-search").value.trim().toLocaleLowerCase("tr");
+  const query = $("team-statistics-search").value.trim().toLocaleLowerCase(LOCALE);
   const [, , accessor, extra] = TEAM_STATISTICS_SORTS.find(([key]) => key === $("team-statistics-sort").value)
     || TEAM_STATISTICS_SORTS[0];
   const heading = $("team-statistics-sort-column");
@@ -106,12 +106,12 @@ function renderTeamStatisticsList(teams, names) {
   heading.textContent = extra?.[0] || "";
   heading.title = extra?.[1] || "";
   heading.closest("table").classList.toggle("has-sort-column", Boolean(extra));
-  const visible = teams.filter((team) => !query || team.name.toLocaleLowerCase("tr").includes(query))
+  const visible = teams.filter((team) => !query || team.name.toLocaleLowerCase(LOCALE).includes(query))
     .sort((a, b) => (accessor(b) ?? -Infinity) - (accessor(a) ?? -Infinity) || (a.position ?? 99) - (b.position ?? 99));
   const body = document.createDocumentFragment();
   for (const team of visible) {
     const row = element("tr"), identity = element("td");
-    identity.append(teamStatisticsIdentity(team, names, "profilini göster"));
+    identity.append(teamStatisticsIdentity(team, names, t("{name} profilini göster", { name: team.name })));
     if (team.id === teamStatisticsState.selected) row.classList.add("statistics-row-selected");
     row.append(identity, element("td", "numeric", displayNumber(team.played)),
       element("td", "numeric", displayNumber(team.scored)), element("td", "numeric", displayNumber(team.conceded)),
@@ -120,7 +120,7 @@ function renderTeamStatisticsList(teams, names) {
     body.append(row);
   }
   if (!visible.length) {
-    const row = element("tr"), cell = element("td", "no-results", "Bu aramayla takım bulunamadı.");
+    const row = element("tr"), cell = element("td", "no-results", t("Bu aramayla takım bulunamadı."));
     cell.colSpan = extra ? 6 : 5;
     row.append(cell);
     body.append(row);
@@ -142,19 +142,19 @@ function renderTeamStatisticsFacts(team, rows) {
   // Whole per cent, as the possession charts show it.
   const possession = own.length ? teamStatisticsSum(own, "ball_possession", true) : null;
   const entries = [
-    ["Sıra", displayNumber(team.position)],
-    ["Puan", displayNumber(team.points)],
-    ["Maç", displayNumber(team.played)],
-    ["G-B-M", [team.wins, team.draws, team.losses].every((value) => value !== null)
+    [t("Sıra"), displayNumber(team.position)],
+    [t("Puan"), displayNumber(team.points)],
+    [t({ tr: "Maç", en: "Matches" }), displayNumber(team.played)],
+    [t("G-B-M"), [team.wins, team.draws, team.losses].every((value) => value !== null)
       ? `${team.wins}-${team.draws}-${team.losses}` : "—"],
-    ["Averaj", teamStatisticsSigned(team.difference)],
-    ["Atılan gol", displayNumber(team.scored)],
-    ["Yenilen gol", displayNumber(team.conceded)],
-    ["Gol yemeden", displayNumber(team.cleanSheets)],
+    [t("Averaj"), teamStatisticsSigned(team.difference)],
+    [t("Atılan gol"), displayNumber(team.scored)],
+    [t("Yenilen gol"), displayNumber(team.conceded)],
+    [t("Gol yemeden"), displayNumber(team.cleanSheets)],
     ["xG", own.length ? displayNumber(teamStatisticsSum(own, "expected_goals")) : "—"],
-    ["Rakibe verilen xG", own.length ? displayNumber(teamStatisticsSum(own, "expected_goals_against")) : "—"],
-    ["Topla oynama", possession === null ? "—" : percentText(Math.round(possession))],
-    ["Şut", own.length ? displayNumber(teamStatisticsSum(own, "shots_total")) : "—"],
+    [t("Rakibe verilen xG"), own.length ? displayNumber(teamStatisticsSum(own, "expected_goals_against")) : "—"],
+    [t("Topla oynama"), possession === null ? "—" : percentText(Math.round(possession))],
+    [t("Şut"), own.length ? displayNumber(teamStatisticsSum(own, "shots_total")) : "—"],
   ];
   const list = document.createDocumentFragment();
   for (const [label, value] of entries) {
@@ -163,9 +163,9 @@ function renderTeamStatisticsFacts(team, rows) {
     list.append(item);
   }
   $("team-statistics-facts-list").replaceChildren(list);
-  $("team-statistics-facts-note").textContent = (team.unknownGames ? `${team.unknownGames} maçın skoru kayıtlı değil; gol yemeden sayılmadı. ` : "")
+  $("team-statistics-facts-note").textContent = (team.unknownGames ? `${t("{count} maçın skoru kayıtlı değil; gol yemeden sayılmadı.", { count: team.unknownGames }, team.unknownGames)} ` : "")
     + (teamMetricsState.state === "unavailable" ? teamMetricsState.message
-      : own.length ? `xG, topla oynama ve şut ${own.length} maçın istatistiğinden.` : "");
+      : own.length ? t("xG, topla oynama ve şut {count} maçın istatistiğinden.", { count: own.length }) : "");
 }
 
 function renderTeamStatisticsProfile(teams, names) {
@@ -176,7 +176,7 @@ function renderTeamStatisticsProfile(teams, names) {
   const notes = ["team-statistics-radar-note", "team-statistics-detailed-note", "team-statistics-facts-note"];
   if (!selected) {
     $("team-statistics-profile-name").textContent = "—";
-    $("team-statistics-profile-note").textContent = "Puan durumunda takım bulunamadı.";
+    $("team-statistics-profile-note").textContent = t("Puan durumunda takım bulunamadı.");
     for (const id of panels) $(id).replaceChildren();
     for (const id of notes) {
       $(id).textContent = "";
@@ -186,7 +186,7 @@ function renderTeamStatisticsProfile(teams, names) {
   }
   teamStatisticsState.selected = selected.id;
   $("team-statistics-profile-name").textContent = selected.name;
-  $("team-statistics-profile-note").textContent = "Listeden bir takıma tıklayarak profili değiştirin.";
+  $("team-statistics-profile-note").textContent = t("Listeden bir takıma tıklayarak profili değiştirin.");
   $("team-statistics-open-team").onclick = () => {
     location.href = `team.html?${new URLSearchParams({ id: selected.id, name: selected.name })}`;
   };
@@ -200,7 +200,7 @@ function renderTeamStatisticsProfile(teams, names) {
     renderTeamRadars(selected.id, (id) => teamName(id, names));
   } else {
     for (const id of panels.slice(0, 4)) $(id).replaceChildren();
-    const note = "Radar dosyaları yüklenemedi; src/web/serve.py'yi yeniden başlatıp sayfayı yenileyin.";
+    const note = t("Radar dosyaları yüklenemedi; src/web/serve.py'yi yeniden başlatıp sayfayı yenileyin.");
     for (const id of ["team-statistics-radar-note", "team-statistics-detailed-note"]) {
       $(id).textContent = note;
       $(id).hidden = !note;

@@ -7,6 +7,11 @@
 //   RadarTeams      the team catalogue and team-match rows for the same code
 //   RadarChart      the SVG wheel
 // radar-page.js wires them to the page; README.md holds the methodology.
+//
+// Labels are written in Turkish and shown in the page's language (t, from
+// core/language.js). Node loads this file on its own, so it fetches that
+// script itself there; the text then stays as written.
+if (typeof t === "undefined") Object.assign(globalThis, require("../core/language.js"));
 
 // Pure scoring pipeline. No DOM, provider requests, exports, or hidden fallbacks.
 const RadarScoring = (() => {
@@ -22,13 +27,13 @@ const RadarScoring = (() => {
     FW: ["attacker", "forward", "striker", "centre-forward", "center-forward", "st", "cf", "for"],
     DEF: ["defender", "def", "defans"], MID: ["midfielder", "os", "orta saha"],
   };
-  const positionLabels = { GK: "Kaleci", CB: "Stoper", FB: "Bek / kanat bek",
-    DM: "Defansif orta saha", CM: "Merkez orta saha", AM: "Ofansif orta saha",
-    W: "Kanat", FW: "Forvet", DEF: "Defans (genel)", MID: "Orta saha (genel)", TEAM: "Takım",
-    ALL: "Tüm saha oyuncuları" };
-  const categories = { attacking: "Hücum", creation: "Üretim", progression: "İlerleme",
-    possession: "Top kullanımı", defending: "Savunma", duels: "Mücadele",
-    goalkeeping: "Kalecilik", discipline: "Hata ve disiplin", attribute: "Genel nitelik" };
+  const positionLabels = { GK: t("Kaleci"), CB: t("Stoper"), FB: t("Bek / kanat bek"),
+    DM: t("Defansif orta saha"), CM: t("Merkez orta saha"), AM: t("Ofansif orta saha"),
+    W: t("Kanat"), FW: t("Forvet"), DEF: t("Defans (genel)"), MID: t("Orta saha (genel)"), TEAM: t("Takım"),
+    ALL: t("Tüm saha oyuncuları") };
+  const categories = { attacking: t("Hücum"), creation: t("Üretim"), progression: t("İlerleme"),
+    possession: t("Top kullanımı"), defending: t("Savunma"), duels: t("Mücadele"),
+    goalkeeping: t("Kalecilik"), discipline: t("Hata ve disiplin"), attribute: t("Genel nitelik") };
   const outfield = ["CB", "FB", "DM", "CM", "AM", "W", "FW", "DEF", "MID"];
   const allPositions = ["GK", ...outfield];
   const metrics = {};
@@ -48,51 +53,51 @@ const RadarScoring = (() => {
       minimumAttempts, transform: "percentage", direction: "higher_better",
       zeroHeavy: false, category, positions };
   }
-  combined("goal_contribution", "Gol katkısı", ["goals", "assists"], "attacking");
-  rate("goals", "Gol", "goals", "attacking");
-  rate("assists", "Asist", "assists", "creation");
+  combined("goal_contribution", t("Gol katkısı"), ["goals", "assists"], "attacking");
+  rate("goals", t("Gol"), "goals", "attacking");
+  rate("assists", t("Asist"), "assists", "creation");
   rate("xg", "xG", "xg_expected_goals", "attacking", "higher_better", false);
   metrics.xg.fallbackColumn = "expected_goals";
-  rate("shots", "Şut", "shots_total", "attacking");
-  rate("shots_on_target", "İsabetli şut", "shots_on_target", "attacking");
-  rate("big_chances", "Büyük fırsat", "big_chances_created", "creation");
-  rate("key_passes", "Kilit pas", "key_passes", "creation");
-  rate("chances", "Fırsat üretimi", "chances_created", "creation");
-  rate("accurate_crosses", "İsabetli orta", "accurate_crosses", "creation");
-  rate("final_third", "Son üçte bir pası", "passes_in_final_third", "progression", "context");
-  rate("dribbles", "Başarılı dribling", "successful_dribbles", "progression");
-  rate("fouls_drawn", "Kazanılan faul", "fouls_drawn", "possession");
-  rate("touches", "Dokunuş", "touches", "possession", "context", false);
-  rate("passes", "Pas", "passes", "possession", "context", false, allPositions);
-  rate("long_balls", "Uzun top", "long_balls", "possession", "context", "auto", allPositions);
-  percentage("pass_accuracy", "Pas isabeti %", "accurate_passes", "passes", 100, "possession", allPositions);
-  percentage("long_accuracy", "Uzun pas isabeti %", "long_balls_won", "long_balls", 30, "possession", allPositions);
-  rate("possession_lost", "Top koruma", "possession_lost", "possession", "lower_better", false);
-  rate("dispossessed", "Top kaptırmama", "dispossessed", "possession", "lower_better");
-  rate("tackles", "Müdahale", "tackles", "defending", "context");
-  rate("interceptions", "Top kesme", "interceptions", "defending", "context");
-  rate("ball_recovery", "Top kazanma", "ball_recovery", "defending", "context");
-  rate("blocks", "Blok", "blocked_shots", "defending", "context");
-  rate("clearances", "Uzaklaştırma", "clearances", "defending", "context");
-  rate("aerials_won", "Kazanılan hava topu", "aerials_won", "duels");
-  rate("duels_won", "Kazanılan ikili mücadele", "duels_won", "duels");
-  rate("duels", "İkili mücadele", "total_duels", "duels", "context");
-  percentage("duel_pct", "İkili mücadele %", "duels_won", "total_duels", 30, "duels");
-  rate("saves", "Kurtarış", "saves", "goalkeeping", "context", false, ["GK"]);
-  rate("saves_inside_box", "Ceza sahası kurtarışı", "saves_inside_box", "goalkeeping", "context", false, ["GK"]);
-  rate("claims", "Yüksek top kontrolü", "good_high_claim", "goalkeeping", "context", "auto", ["GK"]);
-  rate("punches", "Yumruklama", "punches", "goalkeeping", "context", "auto", ["GK"]);
-  rate("conceded", "Az gol yeme", "goalkeeper_goals_conceded", "goalkeeping", "lower_better", false, ["GK"]);
-  rate("errors_goal", "Gol hatasından kaçınma", "error_lead_to_goal", "discipline", "lower_better", "auto", allPositions);
-  rate("errors_shot", "Şut hatasından kaçınma", "error_lead_to_shot", "discipline", "lower_better", "auto", allPositions);
-  rate("fouls", "Faulden kaçınma", "fouls", "discipline", "lower_better", "auto", allPositions);
-  rate("yellowcards", "Sarı karttan kaçınma", "yellowcards", "discipline", "lower_better", "auto", allPositions);
-  rate("redcards", "Direkt kırmızıdan kaçınma", "redcards", "discipline", "lower_better", "auto", allPositions);
-  for (const [id, label] of Object.entries({ possession_lost: "Top kaybı", dispossessed: "Top kaptırma",
-    conceded: "Yenilen gol", errors_goal: "Gole yol açan hata", errors_shot: "Şuta yol açan hata",
-    fouls: "Yapılan faul", yellowcards: "Sarı kart", redcards: "Direkt kırmızı kart",
-    goal_contribution: "Gol + asist", pass_accuracy: "İsabetli pas",
-    long_accuracy: "İsabetli uzun pas", duel_pct: "Kazanılan ikili mücadele" })) metrics[id].rawLabel = label;
+  rate("shots", t("Şut"), "shots_total", "attacking");
+  rate("shots_on_target", t("İsabetli şut"), "shots_on_target", "attacking");
+  rate("big_chances", t("Büyük fırsat"), "big_chances_created", "creation");
+  rate("key_passes", t("Kilit pas"), "key_passes", "creation");
+  rate("chances", t("Fırsat üretimi"), "chances_created", "creation");
+  rate("accurate_crosses", t("İsabetli orta"), "accurate_crosses", "creation");
+  rate("final_third", t("Son üçte bir pası"), "passes_in_final_third", "progression", "context");
+  rate("dribbles", t("Başarılı dribling"), "successful_dribbles", "progression");
+  rate("fouls_drawn", t("Kazanılan faul"), "fouls_drawn", "possession");
+  rate("touches", t("Dokunuş"), "touches", "possession", "context", false);
+  rate("passes", t("Pas"), "passes", "possession", "context", false, allPositions);
+  rate("long_balls", t("Uzun top"), "long_balls", "possession", "context", "auto", allPositions);
+  percentage("pass_accuracy", t("Pas isabeti %"), "accurate_passes", "passes", 100, "possession", allPositions);
+  percentage("long_accuracy", t("Uzun pas isabeti %"), "long_balls_won", "long_balls", 30, "possession", allPositions);
+  rate("possession_lost", t("Top koruma"), "possession_lost", "possession", "lower_better", false);
+  rate("dispossessed", t("Top kaptırmama"), "dispossessed", "possession", "lower_better");
+  rate("tackles", t("Müdahale"), "tackles", "defending", "context");
+  rate("interceptions", t("Top kesme"), "interceptions", "defending", "context");
+  rate("ball_recovery", t("Top kazanma"), "ball_recovery", "defending", "context");
+  rate("blocks", t("Blok"), "blocked_shots", "defending", "context");
+  rate("clearances", t("Uzaklaştırma"), "clearances", "defending", "context");
+  rate("aerials_won", t("Kazanılan hava topu"), "aerials_won", "duels");
+  rate("duels_won", t("Kazanılan ikili mücadele"), "duels_won", "duels");
+  rate("duels", t("İkili mücadele"), "total_duels", "duels", "context");
+  percentage("duel_pct", t("İkili mücadele %"), "duels_won", "total_duels", 30, "duels");
+  rate("saves", t("Kurtarış"), "saves", "goalkeeping", "context", false, ["GK"]);
+  rate("saves_inside_box", t("Ceza sahası kurtarışı"), "saves_inside_box", "goalkeeping", "context", false, ["GK"]);
+  rate("claims", t("Yüksek top kontrolü"), "good_high_claim", "goalkeeping", "context", "auto", ["GK"]);
+  rate("punches", t("Yumruklama"), "punches", "goalkeeping", "context", "auto", ["GK"]);
+  rate("conceded", t("Az gol yeme"), "goalkeeper_goals_conceded", "goalkeeping", "lower_better", false, ["GK"]);
+  rate("errors_goal", t("Gol hatasından kaçınma"), "error_lead_to_goal", "discipline", "lower_better", "auto", allPositions);
+  rate("errors_shot", t("Şut hatasından kaçınma"), "error_lead_to_shot", "discipline", "lower_better", "auto", allPositions);
+  rate("fouls", t("Faulden kaçınma"), "fouls", "discipline", "lower_better", "auto", allPositions);
+  rate("yellowcards", t("Sarı karttan kaçınma"), "yellowcards", "discipline", "lower_better", "auto", allPositions);
+  rate("redcards", t("Direkt kırmızıdan kaçınma"), "redcards", "discipline", "lower_better", "auto", allPositions);
+  for (const [id, label] of Object.entries({ possession_lost: t("Top kaybı"), dispossessed: t("Top kaptırma"),
+    conceded: t("Yenilen gol"), errors_goal: t("Gole yol açan hata"), errors_shot: t("Şuta yol açan hata"),
+    fouls: t("Yapılan faul"), yellowcards: t("Sarı kart"), redcards: t("Direkt kırmızı kart"),
+    goal_contribution: t("Gol + asist"), pass_accuracy: t("İsabetli pas"),
+    long_accuracy: t("İsabetli uzun pas"), duel_pct: t("Kazanılan ikili mücadele") })) metrics[id].rawLabel = label;
 
   // One fixed set of variables per role, in the order they sit on the circle:
   // finishing, then creation and passing, then defending and duels. The chart no
@@ -534,19 +539,20 @@ const RadarScoring = (() => {
 const RadarAttributes = (() => {
   const groups = {
     outfield: [
-      { id: "attack", label: "Hücum", members: ["goals", "xg", "shots", "shots_on_target"] },
-      { id: "creation", label: "Üretim", members: ["assists", "key_passes", "chances", "big_chances", "accurate_crosses"] },
-      { id: "ball", label: "Top kullanımı", members: ["passes", "touches", "final_third", "dribbles", "possession_lost", "dispossessed"] },
-      { id: "defence", label: "Savunma", members: ["tackles", "interceptions", "blocks", "clearances", "ball_recovery"] },
-      { id: "aerial", label: "Hava ve mücadele", members: ["aerials_won", "duels_won", "duels", "fouls_drawn"] },
-      { id: "discipline", label: "Disiplin", members: ["fouls", "yellowcards", "redcards", "errors_goal", "errors_shot"] },
+      { id: "attack", label: t("Hücum"), members: ["goals", "xg", "shots", "shots_on_target"] },
+      { id: "creation", label: t("Üretim"), members: ["assists", "key_passes", "chances", "big_chances", "accurate_crosses"] },
+      { id: "ball", label: t("Top kullanımı"), members: ["passes", "touches", "final_third", "dribbles", "possession_lost", "dispossessed"] },
+      { id: "defence", label: t("Savunma"), members: ["tackles", "interceptions", "blocks", "clearances", "ball_recovery"] },
+      { id: "aerial", label: t("Hava ve mücadele"), members: ["aerials_won", "duels_won", "duels", "fouls_drawn"] },
+      { id: "discipline", label: t("Disiplin"), members: ["fouls", "yellowcards", "redcards", "errors_goal", "errors_shot"] },
     ],
     GK: [
-      { id: "shotstopping", label: "Kurtarış", members: ["saves", "saves_inside_box"] },
-      { id: "box", label: "Ceza sahası", members: ["claims", "punches"] },
-      { id: "conceding", label: "Az gol yeme", members: ["conceded"] },
-      { id: "distribution", label: "Ayakla oyun", members: ["passes", "long_balls", "touches"] },
-      { id: "discipline", label: "Disiplin", members: ["errors_goal", "errors_shot", "yellowcards"] },
+      // The quality, where the wheel's "Kurtarış" axis counts the saves.
+      { id: "shotstopping", label: t({ tr: "Kurtarış", en: "Shot-stopping" }), members: ["saves", "saves_inside_box"] },
+      { id: "box", label: t("Ceza sahası"), members: ["claims", "punches"] },
+      { id: "conceding", label: t("Az gol yeme"), members: ["conceded"] },
+      { id: "distribution", label: t("Ayakla oyun"), members: ["passes", "long_balls", "touches"] },
+      { id: "discipline", label: t("Disiplin"), members: ["errors_goal", "errors_shot", "yellowcards"] },
     ],
   };
   // Groups name their members by id in a catalogue - the player metrics here,
@@ -726,31 +732,31 @@ const RadarTeams = (() => {
   // fixtures with 9-19 shots and no key-pass value), which is why they are not
   // on the omitted-zero list.
   function add(id, label, column, category, options = {}) {
-    metrics[id] = { id, label, sourceColumn: column, transform: "per90", unit: " /maç",
+    metrics[id] = { id, label, sourceColumn: column, transform: "per90", unit: t(" /maç"),
       direction: "higher_better", zeroHeavy: false, blankIsZero: false, category, positions, ...options };
   }
-  add("goals", "Gol", "goals", "attacking", { blankIsZero: true });
+  add("goals", t("Gol"), "goals", "attacking", { blankIsZero: true });
   add("xg", "xG", "expected_goals", "attacking");
-  add("shots", "Şut", "shots_total", "attacking");
-  add("shots_on_target", "İsabetli şut", "shots_on_target", "attacking", { blankIsZero: true });
-  add("big_chances", "Büyük fırsat", "big_chances_created", "attacking", { blankIsZero: true });
-  add("dangerous_attacks", "Tehlikeli atak", "dangerous_attacks", "attacking", { direction: "context" });
-  add("possession", "Topla oynama", "ball_possession", "possession", { transform: "mean", unit: " %", direction: "context" });
-  add("passes", "Pas", "passes", "possession", { direction: "context" });
-  add("pass_accuracy", "Pas isabeti %", "successful_passes", "possession", { transform: "percentage",
-    attemptsColumn: "passes", minimumAttempts: 100, unit: " %", rawLabel: "İsabetli pas" });
-  add("key_passes", "Kilit pas", "key_passes", "creation");
-  add("accurate_crosses", "İsabetli orta", "accurate_crosses", "creation", { blankIsZero: true });
-  add("corners", "Korner", "corners", "creation", { blankIsZero: true });
-  add("conceded", "Az gol yeme", "goals_conceded", "defending", { direction: "lower_better", blankIsZero: true, rawLabel: "Yenilen gol" });
-  add("xg_against", "Az xG yeme", "expected_goals_against", "defending", { direction: "lower_better", rawLabel: "Rakibe verilen xG" });
-  add("shots_conceded", "Az şut yeme", "shots_conceded", "defending", { direction: "lower_better", rawLabel: "Rakip şutu" });
-  add("tackles", "Müdahale", "tackles", "defending", { direction: "context" });
-  add("interceptions", "Top kesme", "interceptions", "defending", { direction: "context" });
-  add("duels_won", "Kazanılan ikili", "duels_won", "duels");
-  add("fouls", "Faulden kaçınma", "fouls", "discipline", { direction: "lower_better", rawLabel: "Yapılan faul" });
-  add("yellowcards", "Sarı karttan kaçınma", "yellowcards", "discipline", { direction: "lower_better", blankIsZero: true, rawLabel: "Sarı kart" });
-  add("redcards", "Kırmızıdan kaçınma", "redcards", "discipline", { direction: "lower_better", blankIsZero: true, zeroHeavy: "auto", rawLabel: "Kırmızı kart" });
+  add("shots", t("Şut"), "shots_total", "attacking");
+  add("shots_on_target", t("İsabetli şut"), "shots_on_target", "attacking", { blankIsZero: true });
+  add("big_chances", t("Büyük fırsat"), "big_chances_created", "attacking", { blankIsZero: true });
+  add("dangerous_attacks", t("Tehlikeli atak"), "dangerous_attacks", "attacking", { direction: "context" });
+  add("possession", t("Topla oynama"), "ball_possession", "possession", { transform: "mean", unit: " %", direction: "context" });
+  add("passes", t("Pas"), "passes", "possession", { direction: "context" });
+  add("pass_accuracy", t("Pas isabeti %"), "successful_passes", "possession", { transform: "percentage",
+    attemptsColumn: "passes", minimumAttempts: 100, unit: " %", rawLabel: t("İsabetli pas") });
+  add("key_passes", t("Kilit pas"), "key_passes", "creation");
+  add("accurate_crosses", t("İsabetli orta"), "accurate_crosses", "creation", { blankIsZero: true });
+  add("corners", t("Korner"), "corners", "creation", { blankIsZero: true });
+  add("conceded", t("Az gol yeme"), "goals_conceded", "defending", { direction: "lower_better", blankIsZero: true, rawLabel: t("Yenilen gol") });
+  add("xg_against", t("Az xG yeme"), "expected_goals_against", "defending", { direction: "lower_better", rawLabel: t("Rakibe verilen xG") });
+  add("shots_conceded", t("Az şut yeme"), "shots_conceded", "defending", { direction: "lower_better", rawLabel: t("Rakip şutu") });
+  add("tackles", t("Müdahale"), "tackles", "defending", { direction: "context" });
+  add("interceptions", t("Top kesme"), "interceptions", "defending", { direction: "context" });
+  add("duels_won", t("Kazanılan ikili"), "duels_won", "duels");
+  add("fouls", t("Faulden kaçınma"), "fouls", "discipline", { direction: "lower_better", rawLabel: t("Yapılan faul") });
+  add("yellowcards", t("Sarı karttan kaçınma"), "yellowcards", "discipline", { direction: "lower_better", blankIsZero: true, rawLabel: t("Sarı kart") });
+  add("redcards", t("Kırmızıdan kaçınma"), "redcards", "discipline", { direction: "lower_better", blankIsZero: true, zeroHeavy: "auto", rawLabel: t("Kırmızı kart") });
 
   // One fixed wheel, in the same order as the player wheel: attack, then
   // possession and creation, then defending.
@@ -758,12 +764,12 @@ const RadarTeams = (() => {
     "possession", "passes", "pass_accuracy", "key_passes", "accurate_crosses",
     "conceded", "xg_against", "shots_conceded", "tackles", "interceptions"];
   const groups = [
-    { id: "attack", label: "Hücum", members: ["goals", "xg", "shots", "shots_on_target", "big_chances"] },
-    { id: "creation", label: "Üretim", members: ["key_passes", "accurate_crosses", "corners", "dangerous_attacks"] },
-    { id: "ball", label: "Top hakimiyeti", members: ["possession", "passes", "pass_accuracy"] },
-    { id: "defence", label: "Savunma", members: ["conceded", "xg_against", "shots_conceded"] },
-    { id: "duels", label: "Mücadele", members: ["tackles", "interceptions", "duels_won"] },
-    { id: "discipline", label: "Disiplin", members: ["fouls", "yellowcards", "redcards"] },
+    { id: "attack", label: t("Hücum"), members: ["goals", "xg", "shots", "shots_on_target", "big_chances"] },
+    { id: "creation", label: t("Üretim"), members: ["key_passes", "accurate_crosses", "corners", "dangerous_attacks"] },
+    { id: "ball", label: t("Top hakimiyeti"), members: ["possession", "passes", "pass_accuracy"] },
+    { id: "defence", label: t("Savunma"), members: ["conceded", "xg_against", "shots_conceded"] },
+    { id: "duels", label: t("Mücadele"), members: ["tackles", "interceptions", "duels_won"] },
+    { id: "discipline", label: t("Disiplin"), members: ["fouls", "yellowcards", "redcards"] },
   ];
   const axes = () => profile.map((id) => metrics[id]);
   const attributes = () => RadarAttributes.build(groups, metrics, "TEAM");
@@ -817,7 +823,7 @@ const RadarTeams = (() => {
     for (const row of teamRows) {
       const fixture = byFixture.get(row.fixture_id);
       if (!scope || RadarScoring.fixtureScope(fixture)?.key !== scope.key || !RadarScoring.finished(fixture)) continue;
-      if (!teams.has(row.team_id)) teams.set(row.team_id, { id: row.team_id, name: `Takım ${row.team_id}`, rows: [], position: "TEAM", scope });
+      if (!teams.has(row.team_id)) teams.set(row.team_id, { id: row.team_id, name: t("Takım {id}", { id: row.team_id }), rows: [], position: "TEAM", scope });
       teams.get(row.team_id).rows.push(row);
     }
     return [...teams.values()].map((team) => ({ ...team, minutes: team.rows.length * 90 }));
@@ -854,14 +860,14 @@ const RadarChart = (() => {
   }
   // `reason(result)` may return a few words for an axis without a score; they
   // sit under its "—" so a blank axis says why without a hover.
-  function svg(axes, series, tooltip, title = "Oyuncu radarı", reason = () => "") {
+  function svg(axes, series, tooltip, title = t("Oyuncu radarı"), reason = () => "") {
     if (axes.length < 5 || axes.length > 18) return "";
     const at = (index, distance) => {
       const angle = 2 * Math.PI * index / axes.length - Math.PI / 2;
       return [centre + Math.cos(angle) * distance, centre + Math.sin(angle) * distance];
     };
     const point = (index, fraction) => at(index, radius * fraction).map((value) => value.toFixed(2)).join(",");
-    const parts = [`<title>${escape(title)}</title><desc>0–100 ölçeği. Eksik ölçütler çizilmez; değerler ayrıntı tablosunda da bulunur.</desc>`];
+    const parts = [`<title>${escape(title)}</title><desc>${escape(t("0–100 ölçeği. Eksik ölçütler çizilmez; değerler ayrıntı tablosunda da bulunur."))}</desc>`];
     for (const ring of [20, 40, 60, 80, 100]) {
       parts.push(`<polygon points="${axes.map((_, index) => point(index, ring / 100)).join(" ")}" fill="none" stroke="var(--line)" stroke-width="1"/>`);
     }

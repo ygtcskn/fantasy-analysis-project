@@ -8,6 +8,9 @@ function summary() {
   const context = vm.createContext({
     number: value => value == null || value === '' ? null : Number(value),
   });
+  // The site's language script loads first, as it does in index.html; outside
+  // a browser it leaves every text as written.
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/web/core/language.js'), 'utf8'), context);
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/web/data/fantasy.js'), 'utf8'), context);
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/web/features/builder/summary.js'), 'utf8'), context);
   return code => vm.runInContext(code, context);

@@ -22,7 +22,9 @@ function setup() {
     // back to the name the row was saved with, as the real one does.
     playerName: (id, fallback = "") => String(fallback || "").trim() || (id ? `Oyuncu ${id}` : "—"),
   });
-  // The site's shared match rules load first, as they do in index.html.
+  // The site's language script and shared match rules load first, as they do
+  // in index.html. Outside a browser the language script leaves text as written.
+  vm.runInContext(readFileSync(join(__dirname, "../src/web/core/language.js"), "utf8"), context);
   vm.runInContext(readFileSync(join(__dirname, "../src/web/core/match-rules.js"), "utf8"), context);
   vm.runInContext(readFileSync(join(__dirname, "../src/web/features/matchweek/results.js"), "utf8") + `
     globalThis.api = { matchweekFinished, resetMatchweekResults, ingestMatchweekResults,

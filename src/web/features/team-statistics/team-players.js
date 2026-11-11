@@ -59,14 +59,14 @@ function teamPlayers(teamId) {
 function teamPlayerCountCell(count) {
   const partial = count.known > 0 && count.known < count.records;
   const cell = element("td", "numeric", `${displayNumber(count.value)}${partial ? "*" : ""}`);
-  if (count.known < count.records) cell.title = `${count.records} maçın ${count.known} tanesinde kayıtlı; eksikler sıfır sayılmadı.`;
+  if (count.known < count.records) cell.title = t("{records} maçın {known} tanesinde kayıtlı; eksikler sıfır sayılmadı.", { records: count.records, known: count.known });
   return cell;
 }
 
 function renderTeamPlayers(teamId) {
   const names = homeTeams();
   $("team-statistics-players-team").textContent = teamId ? teamName(teamId, names) : "—";
-  const query = $("team-statistics-players-search").value.trim().toLocaleLowerCase("tr");
+  const query = $("team-statistics-players-search").value.trim().toLocaleLowerCase(LOCALE);
   const accessor = TEAM_PLAYER_SORTS[$("team-statistics-players-sort").value] || TEAM_PLAYER_SORTS.rating;
   const role = teamPlayersState.role;
   const everyone = teamId ? teamPlayers(teamId) : [];
@@ -74,9 +74,9 @@ function renderTeamPlayers(teamId) {
   // Filtered and ordered exactly as Oyuncu İstatistikleri orders its list.
   const visible = everyone
     .filter((player) => player.current && (!role || player.role === role)
-      && (!query || player.name.toLocaleLowerCase("tr").includes(query)))
+      && (!query || player.name.toLocaleLowerCase(LOCALE).includes(query)))
     .sort((a, b) => (accessor(b) ?? -Infinity) - (accessor(a) ?? -Infinity)
-      || a.name.localeCompare(b.name, "tr"));
+      || a.name.localeCompare(b.name, LOCALE));
   const body = document.createDocumentFragment();
   for (const player of visible) {
     const row = element("tr");
@@ -87,7 +87,7 @@ function renderTeamPlayers(teamId) {
       typeof statisticsShortName === "function" ? statisticsShortName(player.name) : player.name);
     open.type = "button";
     open.title = player.name;
-    open.setAttribute("aria-label", `${player.name} maç istatistiklerini aç`);
+    open.setAttribute("aria-label", t("{name} maç istatistiklerini aç", { name: player.name }));
     open.addEventListener("click", () => openTierPlayer(player.id));
     club.append(open);
     identity.append(club);
@@ -95,14 +95,14 @@ function renderTeamPlayers(teamId) {
     row.append(element("td", "statistics-role", roleLabel(player.role)));
     row.append(element("td", "numeric", ratingText(player.rating)));
     const fantasy = element("td", "numeric", player.fantasy === null ? "—"
-      : player.fantasy.toLocaleString("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 1 }));
-    if (player.fantasy !== null) fantasy.title = `${player.fantasyMatches} maçta ${displayNumber(player.fantasy * player.fantasyMatches)} fantezi puanı`;
+      : player.fantasy.toLocaleString(LOCALE, { minimumFractionDigits: 1, maximumFractionDigits: 1 }));
+    if (player.fantasy !== null) fantasy.title = t("{count} maçta {points} fantezi puanı", { count: player.fantasyMatches, points: displayNumber(player.fantasy * player.fantasyMatches) });
     row.append(fantasy, teamPlayerCountCell(player.goals), teamPlayerCountCell(player.assists));
     body.append(row);
   }
   if (!visible.length) {
     const row = element("tr"), cell = element("td", "no-results",
-      !teamId ? "Takım seçilmedi." : everyone.length ? "Bu filtrelerle oyuncu bulunamadı." : "Bu takım için kayıtlı oyuncu maçı yok.");
+      !teamId ? t("Takım seçilmedi.") : everyone.length ? t("Bu filtrelerle oyuncu bulunamadı.") : t("Bu takım için kayıtlı oyuncu maçı yok."));
     cell.colSpan = 6;
     row.append(cell);
     body.append(row);
@@ -111,10 +111,10 @@ function renderTeamPlayers(teamId) {
   const fantasyReady = Boolean(fantasyState.season) && fantasyState.season === state.seasonSlug;
   const partial = visible.some((player) => [player.goals, player.assists].some((count) => count.known < count.records));
   $("team-statistics-players-note").textContent = !everyone.length ? ""
-    : `Rakamlar yalnızca ${teamName(teamId, names)} formasıyla oynanan maçlardan; FP/Maç yayımlanan fantezi puanının maç başı ortalaması.`
-      + (departed ? ` Bu takımda oynayıp ligden ayrılan ${departed} oyuncu gösterilmiyor.` : "")
+    : t("Rakamlar yalnızca {team} formasıyla oynanan maçlardan; FP/Maç yayımlanan fantezi puanının maç başı ortalaması.", { team: teamName(teamId, names) })
+      + (departed ? ` ${t("Bu takımda oynayıp ligden ayrılan {count} oyuncu gösterilmiyor.", { count: departed }, departed)}` : "")
       + (fantasyReady ? "" : ` ${fantasyState.note}`)
-      + (partial ? " * işaretli toplamların bazı maçlarında istatistik yok; eksikler sıfır sayılmadı." : "");
+      + (partial ? ` ${t("* işaretli toplamların bazı maçlarında istatistik yok; eksikler sıfır sayılmadı.")}` : "");
   requestAnimationFrame(teamStatisticsFitNames);
 }
 

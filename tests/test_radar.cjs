@@ -10,8 +10,9 @@ const vm = require("node:vm");
 const scope = { key: "1|600", seasonId: "1", competitionId: "600" };
 const high = { direction: "higher_better", zeroHeavy: false };
 const low = { direction: "lower_better", zeroHeavy: false };
-// The page scripts, loaded in the order index.html loads them.
-const pageSource = ["../src/web/lib/radar.js", "../src/web/features/statistics/radar-page.js",
+// The page scripts, loaded in the order index.html loads them. The language
+// script comes first there too; outside a browser it leaves text as written.
+const pageSource = ["../src/web/core/language.js", "../src/web/lib/radar.js", "../src/web/features/statistics/radar-page.js",
   "../src/web/features/team-statistics/team-radar-page.js",
   "../src/web/features/statistics/statistics.js", "../src/web/features/team-statistics/team-statistics.js"]
   .map((file) => fs.readFileSync(path.join(__dirname, file), "utf8")).join("\n");

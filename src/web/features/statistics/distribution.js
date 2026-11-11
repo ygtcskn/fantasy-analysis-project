@@ -10,13 +10,18 @@
 //
 // PlayerDistribution is pure (no DOM, no requests) so Node can test it;
 // renderPlayerDistribution below puts it on the page.
+//
+// Text is written in Turkish and shown in the page's language (t, from
+// core/language.js). Node loads this file on its own, so it fetches that
+// script itself there; the text then stays as written.
+if (typeof t === "undefined") Object.assign(globalThis, require("../../core/language.js"));
 
 const PlayerDistribution = (() => {
   const escape = (value) => String(value ?? "").replace(/[&<>"']/g,
     (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
   const fixed = (value) => value.toFixed(1);
   const text = (value, digits = 2) => (value === null || !Number.isFinite(value) ? "—"
-    : value.toLocaleString("tr-TR", { minimumFractionDigits: 0, maximumFractionDigits: digits }));
+    : value.toLocaleString(LOCALE, { minimumFractionDigits: 0, maximumFractionDigits: digits }));
   const stops = [0, 25, 50, 75, 100];
 
   // Linear-interpolated quantile of an ascending list, p from 0 to 1.
@@ -70,10 +75,10 @@ const PlayerDistribution = (() => {
       const pick = row.id ? ` data-dist-metric="${escape(row.id)}" class="dist-metric-label${row.selected ? " is-selected" : ""}"`
         + ` role="button" tabindex="0" aria-pressed="${row.selected ? "true" : "false"}"` : "";
       body.push(`<text x="${left - 10}" y="${base - 6}" text-anchor="end" font-size="11" font-weight="600" fill="var(--ink)"${pick}>`
-        + `${pick ? `<title>${escape(`${row.label}: oyuncuları bu ölçüte göre sırala`)}</title>` : ""}${escape(row.label)}</text>`);
+        + `${pick ? `<title>${escape(t("{label}: oyuncuları bu ölçüte göre sırala", { label: row.label }))}</title>` : ""}${escape(row.label)}</text>`);
       if (values.length < 2) {
         body.push(`<line x1="${left}" y1="${base}" x2="${plotRight}" y2="${base}" stroke="var(--line)"/>`);
-        body.push(`<text x="${left + plot / 2}" y="${base - 8}" text-anchor="middle" font-size="10" fill="var(--muted)">Yeterli emsal verisi yok</text>`);
+        body.push(`<text x="${left + plot / 2}" y="${base - 8}" text-anchor="middle" font-size="10" fill="var(--muted)">${escape(t("Yeterli emsal verisi yok"))}</text>`);
         return;
       }
       const own = Number.isFinite(row.value) ? row.value : null;
@@ -130,10 +135,10 @@ const PlayerDistribution = (() => {
     });
     parts.push(`<linearGradient id="pd-legend" x1="0" y1="0" x2="1" y2="0">${stops.map((stop) => `<stop offset="${stop / 100}" style="stop-color: var(--dist-${stop})"/>`).join("")}</linearGradient></defs>`);
     parts.push(...body);
-    parts.push(`<text x="${left + plot / 2}" y="${legendTop}" text-anchor="middle" font-size="10" fill="var(--muted)">Yüzdelik renklendirme</text>`);
+    parts.push(`<text x="${left + plot / 2}" y="${legendTop}" text-anchor="middle" font-size="10" fill="var(--muted)">${escape(t("Yüzdelik renklendirme"))}</text>`);
     parts.push(`<rect x="${left}" y="${legendTop + 6}" width="${plot}" height="10" rx="2" fill="url(#pd-legend)"/>`);
     stops.forEach((stop) => parts.push(`<text x="${fixed(left + (plot * stop) / 100)}" y="${legendTop + 30}" text-anchor="middle" font-size="9" fill="var(--muted)">${stop}</text>`));
-    return `<svg viewBox="0 0 ${width} ${height}" width="100%" role="img" aria-label="Ölçüt dağılımları ve oyuncunun yüzdeliği">${parts.join("")}</svg>`;
+    return `<svg viewBox="0 0 ${width} ${height}" width="100%" role="img" aria-label="${escape(t("Ölçüt dağılımları ve oyuncunun yüzdeliği"))}">${parts.join("")}</svg>`;
   }
   return { quantile, bandwidth, density, bucket, chart };
 })();
@@ -206,7 +211,7 @@ function renderPlayerDistribution(radar, selected) {
   const container = $("statistics-distribution-chart");
   if (!radar?.reference) {
     container.replaceChildren();
-    $("statistics-distribution-note").textContent = radar?.note || "Dağılım için radar verisi yok.";
+    $("statistics-distribution-note").textContent = radar?.note || t("Dağılım için radar verisi yok.");
     renderSectionRoles(null);
     renderMetricRanking(radar, null);
     return;
@@ -218,8 +223,8 @@ function renderPlayerDistribution(radar, selected) {
   // has it; a goalkeeper's wheel has other axes, so it falls back to the first.
   if (!profile.some((metric) => metric.id === statisticsState.rankMetric)) statisticsState.rankMetric = profile[0]?.id ?? null;
   const detail = (who, metric, result, count) => `${who.name} · ${metric.label}: ${displayNumber(result.value)} ${statisticsUnit(metric)}`
-    + (result.prior ? ` (gözlenen ${displayNumber(result.observedValue)}, kendi payı %${displayNumber(Math.round(result.reliability * 100))})` : "")
-    + ` · yüzdelik ${Number.isFinite(result.score) ? RadarChart.display(result.score) : "—"} · ${count} emsal değeri`;
+    + (result.prior ? ` (${t("gözlenen {observed}, kendi payı {share}", { observed: displayNumber(result.observedValue), share: percentSign(displayNumber(Math.round(result.reliability * 100))) })})` : "")
+    + ` · ${t("yüzdelik {score} · {count} emsal değeri", { score: Number.isFinite(result.score) ? RadarChart.display(result.score) : "—", count })}`;
   const rows = profile.map((metric, index) => {
     const result = results[index], values = reference.metrics.get(metric.id) || [];
     const other = guest?.results[index];
@@ -232,17 +237,17 @@ function renderPlayerDistribution(radar, selected) {
   container.innerHTML = PlayerDistribution.chart(rows, RadarChart.display,
     guest ? STATISTICS_SERIES.map((series) => series.line) : null);
   const same = view.role === view.own;
-  $("statistics-distribution-note").textContent = `${selected?.name || player.name} · ${statisticsReferenceLabel(reference)}. `
-    + "Her satırda eğri emsallerin o ölçütteki dağılımı, kesikli çizgi oyuncunun değeri, renkli bölüm geride bıraktığı emsaller, "
-    + "sağdaki sayı yüzdeliği. "
-    + (same ? "Ayrıntılı Ölçütler radarıyla aynı emsaller ve aynı radar puanı. "
-      : `Grup radarlardan farklı: ${player.name} bu grupta konuk olarak sıralanır; radarlar oyuncunun kendi grubunu kullanır. `)
-    + "Renk yüzdeliği gösterir: turuncu düşük, nötr orta, lacivert yüksek. Düşük değerin iyi olduğu ölçütlerde (ör. yenilen gol) "
-    + "renkli bölüm oyuncunun değerinden yukarı uzanır. "
-    + "Değerler ve eğriler az dakikalı oranlar emsal ortalamasına çekildikten sonraki değerlerdir; gözlenen değer satırın üzerinde bekleyince görünür. "
-    + (guest ? `Mavi çizgi ${guest.player.name}; aynı emsallere göre sıralanır, renkli bölüm ${player.name} içindir. ` : "")
-    + "Bir ölçütün adına tıklayın: Sıralama, oyuncuları o ölçütte en iyiden en kötüye dizer. "
-    + (radar.pool || "");
+  $("statistics-distribution-note").textContent = [
+    `${selected?.name || player.name} · ${statisticsReferenceLabel(reference)}.`,
+    t("Her satırda eğri emsallerin o ölçütteki dağılımı, kesikli çizgi oyuncunun değeri, renkli bölüm geride bıraktığı emsaller, sağdaki sayı yüzdeliği."),
+    same ? t("Ayrıntılı Ölçütler radarıyla aynı emsaller ve aynı radar puanı.")
+      : t("Grup radarlardan farklı: {name} bu grupta konuk olarak sıralanır; radarlar oyuncunun kendi grubunu kullanır.", { name: player.name }),
+    t("Renk yüzdeliği gösterir: turuncu düşük, nötr orta, lacivert yüksek. Düşük değerin iyi olduğu ölçütlerde (ör. yenilen gol) renkli bölüm oyuncunun değerinden yukarı uzanır."),
+    t("Değerler ve eğriler az dakikalı oranlar emsal ortalamasına çekildikten sonraki değerlerdir; gözlenen değer satırın üzerinde bekleyince görünür."),
+    guest ? t("Mavi çizgi {guest}; aynı emsallere göre sıralanır, renkli bölüm {player} içindir.", { guest: guest.player.name, player: player.name }) : "",
+    t("Bir ölçütün adına tıklayın: Sıralama, oyuncuları o ölçütte en iyiden en kötüye dizer."),
+    radar.pool || "",
+  ].filter(Boolean).join(" ");
   renderMetricRanking(radar, view);
 }
 
@@ -270,7 +275,7 @@ function renderMetricRanking(radar, view) {
   if (!radar?.reference || !view || !metric) {
     body.replaceChildren();
     $("statistics-ranking-metric").textContent = "—";
-    $("statistics-ranking-note").textContent = radar?.note || "Sıralama için radar verisi yok.";
+    $("statistics-ranking-note").textContent = radar?.note || t("Sıralama için radar verisi yok.");
     return;
   }
   const { reference, guest } = view, player = radar.player;
@@ -284,7 +289,7 @@ function renderMetricRanking(radar, view) {
     .map((entry) => ({ entry, result: RadarScoring.evaluate(entry, metric, reference, { guest: true }) }))
     .filter(({ result }) => Number.isFinite(result.score) && Number.isFinite(result.value))
     .sort((a, b) => b.result.score - a.result.score || better(a.result.value, b.result.value)
-      || a.entry.name.localeCompare(b.entry.name, "tr"));
+      || a.entry.name.localeCompare(b.entry.name, LOCALE));
   const unit = statisticsUnit(metric), rows = document.createDocumentFragment();
   let rank = 0;
   ranked.forEach(({ entry, result }, index) => {
@@ -298,33 +303,34 @@ function renderMetricRanking(radar, view) {
     club.append(createTeamLogo([...(profile?.teams || [])][0] || "unknown", teams, false));
     const open = element("button", "statistics-player-button", statisticsShortName(entry.name));
     open.type = "button";
-    open.title = entry.name + (result.guest ? " · bu grubun dışında, konuk olarak sıralandı" : "")
-      + (result.smallSample ? ` · ${displayNumber(entry.minutes)} dk, emsal eşiğinin altında` : "");
-    open.setAttribute("aria-label", `${entry.name} ile karşılaştır`);
+    open.title = entry.name + (result.guest ? ` · ${t("bu grubun dışında, konuk olarak sıralandı")}` : "")
+      + (result.smallSample ? ` · ${t("{minutes} dk, emsal eşiğinin altında", { minutes: displayNumber(entry.minutes) })}` : "");
+    open.setAttribute("aria-label", t("{name} ile karşılaştır", { name: entry.name }));
     open.addEventListener("click", () => statisticsPick(entry.id));
     club.append(open);
-    if (result.guest) club.append(element("small", "statistics-ranking-flag", "konuk"));
-    else if (result.smallSample) club.append(element("small", "statistics-ranking-flag", "az dk"));
+    if (result.guest) club.append(element("small", "statistics-ranking-flag", t("konuk")));
+    else if (result.smallSample) club.append(element("small", "statistics-ranking-flag", t("az dk")));
     identity.append(club);
     const value = element("td", "numeric", displayNumber(result.value));
     value.append(element("small", "statistics-ranking-unit", ` ${unit}`));
-    if (result.prior) value.title = `Gözlenen ${displayNumber(result.observedValue)} ${unit}; az dakika emsal ortalamasına çekildi.`;
+    if (result.prior) value.title = t("Gözlenen {value}; az dakika emsal ortalamasına çekildi.", { value: `${displayNumber(result.observedValue)} ${unit}` });
     row.append(identity, value, element("td", "numeric", RadarChart.display(result.score)));
     rows.append(row);
   });
   if (!ranked.length) {
-    const row = element("tr"), cell = element("td", "no-results", "Bu ölçütte sıralanacak oyuncu yok.");
+    const row = element("tr"), cell = element("td", "no-results", t("Bu ölçütte sıralanacak oyuncu yok."));
     cell.colSpan = 4;
     row.append(cell);
     rows.append(row);
   }
   body.replaceChildren(rows);
   $("statistics-ranking-metric").textContent = metric.label;
-  $("statistics-ranking-note").textContent = `${statisticsBarLabel(reference.config.minimumMinutes, reference.position)}`
-    + ` · bu sezon ${ranked.length} oyuncu, en iyiden en kötüye. Değer ve puan Dağılım ile aynıdır`
-    + (metric.direction === "lower_better" ? "; düşük değer daha iyidir. " : metric.direction === "context"
-      ? "; bağlam ölçütü: yüksek değer daha fazla etkinliktir. " : ". ")
-    + "Bir isme tıklayarak karşılaştırın.";
+  const ranking = { bar: statisticsBarLabel(reference.config.minimumMinutes, reference.position), count: ranked.length };
+  $("statistics-ranking-note").textContent = `${metric.direction === "lower_better"
+    ? t("{bar} · bu sezon {count} oyuncu, en iyiden en kötüye. Değer ve puan Dağılım ile aynıdır; düşük değer daha iyidir.", ranking)
+    : metric.direction === "context"
+      ? t("{bar} · bu sezon {count} oyuncu, en iyiden en kötüye. Değer ve puan Dağılım ile aynıdır; bağlam ölçütü: yüksek değer daha fazla etkinliktir.", ranking)
+      : t("{bar} · bu sezon {count} oyuncu, en iyiden en kötüye. Değer ve puan Dağılım ile aynıdır.", ranking)} ${t("Bir isme tıklayarak karşılaştırın.")}`;
 }
 
 if (typeof module !== "undefined" && module.exports) module.exports = { PlayerDistribution };

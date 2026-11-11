@@ -12,6 +12,9 @@ function builder() {
     state: { seasonSlug: '2026-2027' },
     fantasyState: { season: '2026-2027', projections: new Map(), summaries: new Map() },
   });
+  // The site's language script loads first, as it does in index.html; outside
+  // a browser it leaves every text as written.
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/web/core/language.js'), 'utf8'), context);
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/web/features/builder/builder.js'), 'utf8'), context);
   vm.runInContext(`
     const testPlayers = [

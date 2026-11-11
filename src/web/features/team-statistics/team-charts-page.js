@@ -66,30 +66,31 @@ function teamAnalysisBlock(id, content, note) {
 function renderTeamProfileCharts(played, selected, names, statsMissing) {
   const order = selected ? [selected] : [];
   const plain = { interactive: false };
-  const missing = selected ? "" : "Profil için takım seçilmedi.";
+  const missing = selected ? "" : t("Profil için takım seçilmedi.");
 
   const grid = TeamAnalysis.xgGrid(played, order, names, selected, plain);
-  teamAnalysisBlock("ta-xg", grid.html, missing || (statsMissing + `Her nokta bir maç: yatayda rakibe verilen xG, dikeyde üretilen xG (0–${grid.scale}). `
-    + "Kesikli çizginin üstünde takım rakibinden fazla pozisyon üretti; gölgeli yarıda üretemedi. "
-    + `Gri noktalar bu sezonun ${grid.matches} takım-maçı, artı işareti takımın ortalaması. Renk sonucu gösterir.`));
+  teamAnalysisBlock("ta-xg", grid.html, missing || (statsMissing + [
+    t("Her nokta bir maç: yatayda rakibe verilen xG, dikeyde üretilen xG (0–{scale}).", { scale: grid.scale }),
+    t("Kesikli çizginin üstünde takım rakibinden fazla pozisyon üretti; gölgeli yarıda üretemedi."),
+    t("Gri noktalar bu sezonun {count} takım-maçı, artı işareti takımın ortalaması. Renk sonucu gösterir.", { count: grid.matches }),
+  ].join(" ")));
 
   const form = TeamAnalysis.formGrid(played, order, names, selected, plain);
   teamAnalysisBlock("ta-form", form.html, missing || (statsMissing
-    + `Maç maç, eskiden yeniye: çizginin üstü üretilen xG, altı rakibe verilen xG (ölçek 0–${form.scale}). Harf sonucu gösterir.`));
+    + t("Maç maç, eskiden yeniye: çizginin üstü üretilen xG, altı rakibe verilen xG (ölçek 0–{scale}). Harf sonucu gösterir.", { scale: form.scale })));
 
   if (!teamAnalysisExtras.events) {
     teamAnalysisBlock("ta-timing", "", teamAnalysisExtras.state === "ready"
-      ? "events.csv okunamadı; src/web/serve.py'yi yeniden başlatın." : "Gol dakikaları yükleniyor…");
+      ? t("events.csv okunamadı; src/web/serve.py'yi yeniden başlatın.") : t("Gol dakikaları yükleniyor…"));
   } else {
     const timing = TeamAnalysis.goalTiming(teamAnalysisExtras.events, played);
     const chart = TeamAnalysis.timingGrid(timing, played, order, names, selected, plain);
-    teamAnalysisBlock("ta-timing", chart.html, missing || ("Atılan (üstte) ve yenilen (altta) goller 15 dakikalık dilimlerde. Uzatma dakikaları devrenin son dilimine eklenir; "
-      + `kendi kalesine atılan gol, golden yararlanan takıma yazılır. Dikey ölçek ligin en yüklü dilimine göre (0–${chart.scale}).`));
+    teamAnalysisBlock("ta-timing", chart.html, missing || t("Atılan (üstte) ve yenilen (altta) goller 15 dakikalık dilimlerde. Uzatma dakikaları devrenin son dilimine eklenir; kendi kalesine atılan gol, golden yararlanan takıma yazılır. Dikey ölçek ligin en yüklü dilimine göre (0–{scale}).", { scale: chart.scale }));
   }
 
   if (!teamAnalysisExtras.pressure) {
     teamAnalysisBlock("ta-momentum", "", teamAnalysisExtras.state === "ready"
-      ? "fixture_pressure.csv okunamadı; src/web/serve.py'yi yeniden başlatın." : "Baskı verisi yükleniyor…");
+      ? t("fixture_pressure.csv okunamadı; src/web/serve.py'yi yeniden başlatın.") : t("Baskı verisi yükleniyor…"));
   } else {
     const balance = TeamAnalysis.momentum(teamAnalysisExtras.pressure, teamAnalysisExtras.periods || [], played);
     const chart = TeamAnalysis.momentumGrid(balance, order, names, selected, plain);
@@ -98,10 +99,12 @@ function renderTeamProfileCharts(played, selected, names, statsMissing) {
     const measured = new Set(teamAnalysisExtras.pressure.map((row) => `${row.fixture_id}|${row.participant_id}`));
     const unmeasured = played.filter((match) => match.teamId === selected
       && !(measured.has(`${match.fixtureId}|${match.teamId}`) && measured.has(`${match.fixtureId}|${match.opponentId}`))).length;
-    teamAnalysisBlock("ta-momentum", chart.html, missing || ((unmeasured ? `${unmeasured} maçta baskı verisi yok; ortalama kalan maçlardan. ` : "")
-      + "Sportmonks baskı endeksinde takımın rakibine göre farkı, dilimlere göre ortalama. "
-      + "Sıfırın üstünde takım o dakikalarda üstündü. Uzatma dakikaları devre uzunluğuna göre ilgili devrenin son dilimine eklenir. "
-      + `Dikey ölçek ligin en büyük farkına göre (±${displayNumber(chart.scale)}).`));
+    teamAnalysisBlock("ta-momentum", chart.html, missing || [
+      unmeasured ? t("{count} maçta baskı verisi yok; ortalama kalan maçlardan.", { count: unmeasured }, unmeasured) : "",
+      t("Sportmonks baskı endeksinde takımın rakibine göre farkı, dilimlere göre ortalama."),
+      t("Sıfırın üstünde takım o dakikalarda üstündü. Uzatma dakikaları devre uzunluğuna göre ilgili devrenin son dilimine eklenir."),
+      t("Dikey ölçek ligin en büyük farkına göre (±{scale}).", { scale: displayNumber(chart.scale) }),
+    ].filter(Boolean).join(" "));
   }
 }
 
@@ -113,11 +116,11 @@ function renderTeamAnalysis(list, names) {
   const order = [...list].sort((a, b) => (a.position ?? 99) - (b.position ?? 99)).map((team) => team.id);
   const selected = teamStatisticsState.selected;
   const when = TeamAnalysis.asOf(fixtures, played);
-  $("team-analysis-asof").textContent = when.round === null ? "Maç yok" : `${when.round}. hafta sonrası`;
+  $("team-analysis-asof").textContent = when.round === null ? t("Maç yok") : t("{round}. hafta sonrası", { round: when.round });
+  const waiting = when.scheduled - when.finished;
   const pending = when.round !== null && when.finished < when.scheduled
-    ? ` ${when.round}. haftanın ${when.scheduled - when.finished} maçı henüz bitmiş olarak kaydedilmedi; bir sonraki indirmeden sonra eklenir.` : "";
-  $("team-analysis-note").textContent = `Bu sezon, ${when.matches} bitmiş maç. Grafikler her indirmeden sonra `
-    + "sayfa yenilenince güncellenir. Bir takım adına veya noktaya tıklayarak profili açın." + pending;
+    ? ` ${t("{round}. haftanın {count} maçı henüz bitmiş olarak kaydedilmedi; bir sonraki indirmeden sonra eklenir.", { round: when.round, count: waiting }, waiting)}` : "";
+  $("team-analysis-note").textContent = t("Bu sezon, {count} bitmiş maç. Grafikler her indirmeden sonra sayfa yenilenince güncellenir. Bir takım adına veya noktaya tıklayarak profili açın.", { count: when.matches }) + pending;
   const statsMissing = teamMetricsState.state === "unavailable" ? `${teamMetricsState.message} ` : "";
 
   renderTeamProfileCharts(played, selected, names, statsMissing);
@@ -129,15 +132,17 @@ function renderTeamAnalysis(list, names) {
   // older than the match data, or absent - and what to do about it.
   teamAnalysisBlock("ta-fantasy", roles.length ? TeamAnalysis.fantasyChart(roles, names, selected) : "",
     !fantasyReady ? fantasyState.note
-      : !roles.length ? "Bu sezon için fantezi puanı bulunamadı."
-        : "Yayımlanan fantezi puanı kayıtlarındaki bu sezonun puanları, oyunun mevkilerine göre toplandı. Hangi takımın defansı veya hücumu fantezi puanı getiriyor, doğrudan görünür.");
+      : !roles.length ? t("Bu sezon için fantezi puanı bulunamadı.")
+        : t("Yayımlanan fantezi puanı kayıtlarındaki bu sezonun puanları, oyunun mevkilerine göre toplandı. Hangi takımın defansı veya hücumu fantezi puanı getiriyor, doğrudan görünür."));
 
   const luck = TeamAnalysis.luck(played, order);
   const luckKnown = luck.filter((entry) => entry.matches);
   teamAnalysisBlock("ta-luck", luckKnown.length ? TeamAnalysis.luckChart(luck, names, selected) : "",
-    statsMissing + (luckKnown.length ? "Sağa uzanan çubuk: sonuçlar pozisyonlardan iyi — xG’den fazla gol ya da xGA’dan az yenilen gol. "
-      + "Bu genelde sürmez; solda kalan takımların sonuçları düzelmeye adaydır. "
-      + `En az maç: ${Math.min(...luckKnown.map((entry) => entry.matches))}; erken sezonda farklar büyük oynar.` : "xG verisi yok."));
+    statsMissing + (luckKnown.length ? [
+      t("Sağa uzanan çubuk: sonuçlar pozisyonlardan iyi — xG’den fazla gol ya da xGA’dan az yenilen gol."),
+      t("Bu genelde sürmez; solda kalan takımların sonuçları düzelmeye adaydır."),
+      t("En az maç: {count}; erken sezonda farklar büyük oynar.", { count: Math.min(...luckKnown.map((entry) => entry.matches)) }),
+    ].join(" ") : t("xG verisi yok.")));
 
   // One point per team for each pair of season figures. Each card says how
   // many teams and matches it rests on, or what it is missing.
@@ -145,16 +150,15 @@ function renderTeamAnalysis(list, names) {
   const withPoints = TeamAnalysis.withFantasy(played, ledger.filter((row) => finished.has(String(row.fixture_id))));
   const cards = TeamAnalysis.comparisons.map((spec) => {
     const rows = TeamAnalysis.comparisonRows(spec, withPoints, order);
-    const basis = rows.length ? `${rows.length} takım, takım başına en az ${Math.min(...rows.map((row) => row.matches))} maç.`
+    const basis = rows.length ? t("{teams} takım, takım başına en az {matches} maç.", { teams: rows.length, matches: Math.min(...rows.map((row) => row.matches)) })
       : spec.id === "fantasy" && !fantasyReady ? fantasyState.note
-        : "Bu karşılaştırma için veri yok.";
+        : t("Bu karşılaştırma için veri yok.");
     return `<figure id="team-analysis-panel-compare-${spec.id}" class="ta-compare-card" role="tabpanel" aria-labelledby="team-analysis-tab-compare-${spec.id}" data-analysis-panel="compare-${spec.id}" tabindex="0"><figcaption>${escapeTeamAnalysis(spec.title)}</figcaption>`
       + `${rows.length ? `<div class="ta-chart">${TeamAnalysis.scatter(rows, spec, names, selected, teamColor)}</div>` : ""}`
       + `<p class="builder-rating-note">${escapeTeamAnalysis(`${spec.note} ${basis}`)}</p></figure>`;
   });
   $("ta-compare-chart").innerHTML = cards.join("");
-  $("ta-compare-note").textContent = statsMissing + "Her nokta bir takım, kulübün kendi renginde, bu sezonun bitmiş maçlarından. Eşit ölçekli çiftlerde (puan–xPts, gol–xG, "
-    + "yenilen–xGA) kesikli çizgi iki değerin eşit olduğu yer; diğerlerinde lig ortalamaları. Köşe yazıları o bölgenin ne anlama geldiğini söyler.";
+  $("ta-compare-note").textContent = statsMissing + t("Her nokta bir takım, kulübün kendi renginde, bu sezonun bitmiş maçlarından. Eşit ölçekli çiftlerde (puan–xPts, gol–xG, yenilen–xGA) kesikli çizgi iki değerin eşit olduğu yer; diğerlerinde lig ortalamaları. Köşe yazıları o bölgenin ne anlama geldiğini söyler.");
   showTeamAnalysisTab(teamAnalysisSelectedTab);
 }
 
@@ -163,8 +167,8 @@ const escapeTeamAnalysis = (value) => String(value ?? "").replace(/[&<>"']/g,
 
 function setupTeamAnalysis() {
   const tabs = [
-    { id: "fantasy", title: "Fantezi Puanı · Mevkiye Göre", panel: "ta-fantasy-panel" },
-    { id: "luck", title: "Şans Göstergesi · Sonuç ve Pozisyon Farkı", panel: "ta-luck-panel" },
+    { id: "fantasy", title: t("Fantezi Puanı · Mevkiye Göre"), panel: "ta-fantasy-panel" },
+    { id: "luck", title: t("Şans Göstergesi · Sonuç ve Pozisyon Farkı"), panel: "ta-luck-panel" },
     ...TeamAnalysis.comparisons.map((spec) => ({ id: `compare-${spec.id}`, title: spec.title,
       panel: `team-analysis-panel-compare-${spec.id}` })),
   ];

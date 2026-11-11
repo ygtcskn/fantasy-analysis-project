@@ -5,12 +5,12 @@
 // without a current projection, or whose forecast is suppressed for an
 // uncertain absence, is left out and the total is marked partial, never zero-filled.
 const BUILDER_SUMMARY_METRICS = [
-  ["expected_points", "Beklenen FP"],
-  ["expected_player_goals", "Beklenen gol"],
-  ["expected_player_assists", "Beklenen asist"],
-  ["expected_yellow_cards", "Beklenen sarı kart"],
-  ["expected_red_cards", "Beklenen kırmızı kart"],
-  ["expected_minutes", "Beklenen dakika"],
+  ["expected_points", t("Beklenen FP")],
+  ["expected_player_goals", t("Beklenen gol")],
+  ["expected_player_assists", t("Beklenen asist")],
+  ["expected_yellow_cards", t("Beklenen sarı kart")],
+  ["expected_red_cards", t("Beklenen kırmızı kart")],
+  ["expected_minutes", t("Beklenen dakika")],
 ];
 
 function builderSummaryTotal(projections, field) {
@@ -40,16 +40,17 @@ function renderBuilderSummaryClubs(playersById, teams) {
     if (club) counts.set(club, (counts.get(club) || 0) + 1);
   }
   const list = $("builder-summary-clubs");
-  const items = [...counts].sort((a, b) => b[1] - a[1] || teamName(a[0], teams).localeCompare(teamName(b[0], teams), "tr"));
+  const items = [...counts].sort((a, b) => b[1] - a[1] || teamName(a[0], teams).localeCompare(teamName(b[0], teams), LOCALE));
   list.replaceChildren(...items.map(([id, count]) => {
     const item = element("li", "builder-summary-club");
     item.style.setProperty("--club-color", teamColor(id));
-    item.title = count >= 3 ? `${teamName(id, teams)}: sınıra ulaşıldı` : `${teamName(id, teams)}: ${3 - count} oyuncu daha seçilebilir`;
+    item.title = count >= 3 ? t("{team}: sınıra ulaşıldı", { team: teamName(id, teams) })
+      : t("{team}: {count} oyuncu daha seçilebilir", { team: teamName(id, teams), count: 3 - count }, 3 - count);
     item.append(element("span", "builder-summary-club-name", teamName(id, teams)), createTeamLogo(id, teams, false),
       element("span", "builder-summary-club-count", `– ${count}`));
     return item;
   }));
-  if (!items.length) list.append(element("li", "builder-summary-empty", "Henüz oyuncu seçilmedi."));
+  if (!items.length) list.append(element("li", "builder-summary-empty", t("Henüz oyuncu seçilmedi.")));
 }
 
 function renderBuilderSummary(playersById, teams) {
@@ -59,18 +60,18 @@ function renderBuilderSummary(playersById, teams) {
     if (player) (slot.startsWith("BENCH-") ? bench : starters).push(builderFantasyData(player).projection);
   }
   const covered = starters.filter(Boolean).length;
-  $("builder-summary-coverage").textContent = starters.length ? `${covered} / ${starters.length} oyuncu tahminli` : "İlk 11 boş";
+  $("builder-summary-coverage").textContent = starters.length ? t("{covered} / {count} oyuncu tahminli", { covered, count: starters.length }) : t("İlk 11 boş");
 
   const metrics = BUILDER_SUMMARY_METRICS.map(([field, label]) => {
     const { total, count } = builderSummaryTotal(starters, field);
     const partial = total !== null && count < starters.length;
     const value = total === null ? "—" : `${displayNumber(field === "expected_minutes" ? Math.round(total) : total.toFixed(2))}${partial ? "*" : ""}`;
-    const detail = partial ? `${count} / ${starters.length} oyuncu` : field === "expected_minutes" && total !== null ? `/ ${starters.length * 90}` : "";
+    const detail = partial ? t("{count} / {total} oyuncu", { count, total: starters.length }) : field === "expected_minutes" && total !== null ? `/ ${starters.length * 90}` : "";
     return builderSummaryMetric(label, value, detail);
   });
   const benchPoints = builderSummaryTotal(bench, "expected_points");
-  metrics.push(builderSummaryMetric("Yedekler · beklenen FP", benchPoints.total === null ? "—" : `${displayNumber(benchPoints.total.toFixed(2))}${benchPoints.count < bench.length ? "*" : ""}`,
-    bench.length ? `${bench.length} yedek` : "Yedek yok"));
+  metrics.push(builderSummaryMetric(t("Yedekler · beklenen FP"), benchPoints.total === null ? "—" : `${displayNumber(benchPoints.total.toFixed(2))}${benchPoints.count < bench.length ? "*" : ""}`,
+    bench.length ? t("{count} yedek", { count: bench.length }, bench.length) : t("Yedek yok")));
   $("builder-summary-metrics").replaceChildren(...metrics);
 
   const missing = starters.length - covered;
@@ -79,11 +80,11 @@ function renderBuilderSummary(playersById, teams) {
   const expired = starters.length && !covered && fantasyState.generatedAt;
   $("builder-summary-note").classList.toggle("error", Boolean(expired));
   $("builder-summary-note").textContent = !starters.length
-    ? "İlk 11'e oyuncu ekledikçe toplamlar burada görünür. Yalnızca ilk 11 sayılır; yedekler ayrı gösterilir."
+    ? t("İlk 11'e oyuncu ekledikçe toplamlar burada görünür. Yalnızca ilk 11 sayılır; yedekler ayrı gösterilir.")
     : expired
-      ? `Seçtiğin oyuncuların hiçbirinin güncel tahmini yok. Kaydedilen tahminler ${fantasyDate(fantasyState.generatedAt, true)} tarihli; maçları başlamış ya da tur son tarihi geçmiş. Yeni Sportmonks verisini indirip fantezi pipeline'ını çalıştır, sonra sayfayı yenile.`
-      : (missing ? `${missing} oyuncunun güncel tahmini yok; * işaretli toplamlar eksiktir. ` : "")
-        + "Toplamlar sonraki maç tahminlerinin toplamıdır; oynaması belirsiz oyuncuların tahmini gösterilmez, oynamayacak oyuncular 0 sayılır. Kırmızı kart ikinci sarıyı da içerir.";
+      ? t("Seçtiğin oyuncuların hiçbirinin güncel tahmini yok. Kaydedilen tahminler {date} tarihli; maçları başlamış ya da tur son tarihi geçmiş. Yeni Sportmonks verisini indirip fantezi pipeline'ını çalıştır, sonra sayfayı yenile.", { date: fantasyDate(fantasyState.generatedAt, true) })
+      : (missing ? `${t("{count} oyuncunun güncel tahmini yok; * işaretli toplamlar eksiktir.", { count: missing }, missing)} ` : "")
+        + t("Toplamlar sonraki maç tahminlerinin toplamıdır; oynaması belirsiz oyuncuların tahmini gösterilmez, oynamayacak oyuncular 0 sayılır. Kırmızı kart ikinci sarıyı da içerir.");
   renderBuilderSummaryClubs(playersById, teams);
 }
 

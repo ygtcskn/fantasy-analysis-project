@@ -99,13 +99,13 @@ function profileAvatar(person, size) {
 // afresh keeps only the pixels, so anything the camera stored, such as the
 // place it was taken, never leaves the visitor's device.
 async function avatarImage(file) {
-  if (!file.type.startsWith("image/")) throw new Error("Bir resim dosyası seç: JPG, PNG ya da WebP.");
-  if (file.size > AVATAR_MAX_INPUT) throw new Error("Bu dosya çok büyük; 15 MB'tan küçük bir resim seç.");
+  if (!file.type.startsWith("image/")) throw new Error(t("Bir resim dosyası seç: JPG, PNG ya da WebP."));
+  if (file.size > AVATAR_MAX_INPUT) throw new Error(t("Bu dosya çok büyük; 15 MB'tan küçük bir resim seç."));
   let bitmap;
   try {
     bitmap = await createImageBitmap(file);
   } catch {
-    throw new Error("Bu resim açılamadı. JPG ya da PNG dene.");
+    throw new Error(t("Bu resim açılamadı. JPG ya da PNG dene."));
   }
   const side = Math.min(bitmap.width, bitmap.height);
   const canvas = document.createElement("canvas");
@@ -122,7 +122,7 @@ async function avatarImage(file) {
   // A browser that cannot write WebP hands back a PNG; JPEG is far smaller then.
   let blob = await encode("image/webp");
   if (!blob || blob.type !== "image/webp") blob = await encode("image/jpeg");
-  if (!blob) throw new Error("Resim hazırlanamadı. Başka bir resim dene.");
+  if (!blob) throw new Error(t("Resim hazırlanamadı. Başka bir resim dene."));
   return blob;
 }
 
@@ -130,18 +130,18 @@ function avatarErrorText(error) {
   const message = error?.message || "";
   if (/bucket not found/i.test(message)) {
     return siteMode === "local"
-      ? "avatars deposu yok: supabase/avatars.sql dosyasını Supabase → SQL Editor'da çalıştır."
-      : "Fotoğraf şu anda yüklenemiyor. Daha sonra tekrar dene.";
+      ? t("avatars deposu yok: supabase/avatars.sql dosyasını Supabase → SQL Editor'da çalıştır.")
+      : t("Fotoğraf şu anda yüklenemiyor. Daha sonra tekrar dene.");
   }
-  if (/maximum allowed size|payload too large/i.test(message)) return "Fotoğraf çok büyük. Başka bir resim dene.";
-  if (/row-level security|unauthorized/i.test(message)) return "Fotoğraf yüklenemedi. Biraz sonra tekrar dene.";
+  if (/maximum allowed size|payload too large/i.test(message)) return t("Fotoğraf çok büyük. Başka bir resim dene.");
+  if (/row-level security|unauthorized/i.test(message)) return t("Fotoğraf yüklenemedi. Biraz sonra tekrar dene.");
   // The avatar_path column is missing until profiles.sql is run again.
   if (error?.code === "PGRST204" || error?.code === "42703") {
     return siteMode === "local"
-      ? "Fotoğraf sütunu yok: supabase/profiles.sql, match_discussions.sql ve avatars.sql'i yeniden çalıştır."
-      : "Fotoğraf şu anda kaydedilemiyor. Daha sonra tekrar dene.";
+      ? t("Fotoğraf sütunu yok: supabase/profiles.sql, match_discussions.sql ve avatars.sql'i yeniden çalıştır.")
+      : t("Fotoğraf şu anda kaydedilemiyor. Daha sonra tekrar dene.");
   }
-  return error?.code ? profileErrorText(error) : message || "Bir sorun çıktı. Tekrar dene.";
+  return error?.code ? profileErrorText(error) : message || t("Bir sorun çıktı. Tekrar dene.");
 }
 
 // Every file in the visitor's folder except keep. The bucket allows three per
@@ -167,14 +167,14 @@ async function uploadAvatar(file) {
   const user = siteAuth.user;
   if (!user || !file) return;
   setAvatarBusy(true);
-  setProfileMessage("Fotoğraf hazırlanıyor…");
+  setProfileMessage(t("Fotoğraf hazırlanıyor…"));
   try {
     const blob = await avatarImage(file);
     const client = await loadAuth(), storage = client.storage.from(AVATAR_BUCKET);
     const previous = siteProfile.data?.avatar_path || null;
     await removeAvatarFiles(storage, user.id, previous);
     const path = `${user.id}/${Date.now().toString(36)}.${blob.type === "image/webp" ? "webp" : "jpg"}`;
-    setProfileMessage("Fotoğraf yükleniyor…");
+    setProfileMessage(t("Fotoğraf yükleniyor…"));
     const upload = await storage.upload(path, blob, { contentType: blob.type, cacheControl: "31536000", upsert: false });
     if (upload.error) throw upload.error;
     const saved = await client.from("profiles").upsert({ id: user.id, avatar_path: path }).select("*").single();
@@ -186,7 +186,7 @@ async function uploadAvatar(file) {
     if (previous) await storage.remove([previous]);
     renderAuthAccount();
     showProfileAvatar();
-    setProfileMessage("Fotoğrafın güncellendi.");
+    setProfileMessage(t("Fotoğrafın güncellendi."));
   } catch (error) {
     setProfileMessage(avatarErrorText(error), true);
   } finally {
@@ -196,9 +196,9 @@ async function uploadAvatar(file) {
 
 async function removeAvatar() {
   const user = siteAuth.user;
-  if (!user || !siteProfile.data?.avatar_path || !confirm("Profil fotoğrafın kaldırılsın mı?")) return;
+  if (!user || !siteProfile.data?.avatar_path || !confirm(t("Profil fotoğrafın kaldırılsın mı?"))) return;
   setAvatarBusy(true);
-  setProfileMessage("Fotoğraf kaldırılıyor…");
+  setProfileMessage(t("Fotoğraf kaldırılıyor…"));
   try {
     const client = await loadAuth();
     const saved = await client.from("profiles").update({ avatar_path: null }).eq("id", user.id).select("*").single();
@@ -207,7 +207,7 @@ async function removeAvatar() {
     await removeAvatarFiles(client.storage.from(AVATAR_BUCKET), user.id);
     renderAuthAccount();
     showProfileAvatar();
-    setProfileMessage("Fotoğrafın kaldırıldı.");
+    setProfileMessage(t("Fotoğrafın kaldırıldı."));
   } catch (error) {
     setProfileMessage(avatarErrorText(error), true);
   } finally {
@@ -248,10 +248,10 @@ function profileErrorText(error) {
   // PostgREST reports a table it cannot find as PGRST205; Postgres as 42P01.
   if (["PGRST205", "42P01"].includes(error?.code)) {
     return siteMode === "local"
-      ? "profiles tablosu yok: supabase/profiles.sql dosyasını Supabase → SQL Editor'da çalıştır."
-      : "Profil şu anda kaydedilemiyor. Daha sonra tekrar dene.";
+      ? t("profiles tablosu yok: supabase/profiles.sql dosyasını Supabase → SQL Editor'da çalıştır.")
+      : t("Profil şu anda kaydedilemiyor. Daha sonra tekrar dene.");
   }
-  return error?.message ? `Bir sorun çıktı: ${error.message}` : "Bir sorun çıktı. Tekrar dene.";
+  return error?.message ? t("Bir sorun çıktı: {reason}", { reason: error.message }) : t("Bir sorun çıktı. Tekrar dene.");
 }
 
 function setProfileMessage(text, error = false) {
@@ -275,17 +275,17 @@ async function fillProfileTeams(select) {
   try {
     siteProfile.teams ??= readSeasonTeams().then((rows) => rows
       .filter((row) => row.id && row.name)
-      .sort((a, b) => a.name.localeCompare(b.name, "tr")));
+      .sort((a, b) => a.name.localeCompare(b.name, LOCALE)));
     const teams = await siteProfile.teams;
     const chosen = select.value || String(siteProfile.data?.favorite_team_id ?? "");
-    select.replaceChildren(new Option("Seçilmedi", ""), ...teams.map((team) => new Option(team.name, team.id)));
+    select.replaceChildren(new Option(t("Seçilmedi"), ""), ...teams.map((team) => new Option(team.name, team.id)));
     // A club that has left the league stays chosen until the visitor changes it.
-    if (chosen && !teams.some((team) => team.id === chosen)) select.add(new Option(`Takım ${chosen}`, chosen));
+    if (chosen && !teams.some((team) => team.id === chosen)) select.add(new Option(t("Takım {id}", { id: chosen }), chosen));
     select.value = chosen;
     select.disabled = false;
   } catch {
     siteProfile.teams = null;
-    select.replaceChildren(new Option("Takımlar yüklenemedi", ""));
+    select.replaceChildren(new Option(t("Takımlar yüklenemedi"), ""));
     select.disabled = true;
   }
 }
@@ -294,12 +294,12 @@ async function saveProfile(form) {
   const input = form.querySelector("#profile-nickname"), select = form.querySelector("#profile-team");
   const button = form.querySelector("button[type=submit]"), nickname = input.value.trim();
   if (nickname && !PROFILE_NICKNAME.test(nickname)) {
-    setNicknameError("Takma ad 3–24 karakter olmalı; harf, rakam, _ . - kullanabilirsin.");
+    setNicknameError(t("Takma ad 3–24 karakter olmalı; harf, rakam, _ . - kullanabilirsin."));
     input.focus();
     return;
   }
   button.disabled = true;
-  setProfileMessage("Kaydediliyor…");
+  setProfileMessage(t("Kaydediliyor…"));
   try {
     const client = await loadAuth();
     const row = { id: siteAuth.user.id, nickname: nickname || null, favorite_team_id: select.value ? Number(select.value) : null };
@@ -307,14 +307,14 @@ async function saveProfile(form) {
     if (error) throw error;
     siteProfile.data = data;
     renderAuthAccount();
-    setProfileMessage("Kaydedildi.");
+    setProfileMessage(t("Kaydedildi."));
   } catch (error) {
     if (error?.code === "23505") {
-      setNicknameError("Bu takma ad alınmış; başka bir tane dene.");
+      setNicknameError(t("Bu takma ad alınmış; başka bir tane dene."));
       setProfileMessage("");
       input.focus();
     } else if (error?.code === "23514") {
-      setNicknameError("Takma ad 3–24 karakter olmalı; harf, rakam, _ . - kullanabilirsin.");
+      setNicknameError(t("Takma ad 3–24 karakter olmalı; harf, rakam, _ . - kullanabilirsin."));
       setProfileMessage("");
     } else {
       setProfileMessage(profileErrorText(error), true);
@@ -354,6 +354,7 @@ function profileDialog() {
       <button type="submit" class="primary">Kaydet</button>
     </form>
     <p class="auth-message" role="status" aria-live="polite"></p>`;
+  translateElement(dialog);
   const form = dialog.querySelector("form"), select = dialog.querySelector("#profile-team");
   dialog.querySelector("#profile-nickname").addEventListener("input", () => setNicknameError(""));
   select.addEventListener("change", () => showProfileCrest(select.value));
@@ -376,12 +377,12 @@ function openProfileDialog(welcome = false) {
   // Offered once per sign-in, never again on the same page.
   siteAuth.justSignedIn = false;
   const dialog = profileDialog(), profile = siteProfile.data;
-  dialog.querySelector("#profile-title").textContent = welcome ? "Hoş geldin" : "Profil";
+  dialog.querySelector("#profile-title").textContent = welcome ? t("Hoş geldin") : t("Profil");
   dialog.querySelector("#profile-help").textContent = welcome
-    ? "Bir takma ad, tuttuğun takım ve istersen bir fotoğraf seç. İstediğin zaman sol menüdeki Profil'den değiştirebilirsin."
-    : "Maç Tribünü'nde ve paylaştığın kadrolarda takma adın ve profil fotoğrafın görünür; e-postan görünmez.";
+    ? t("Bir takma ad, tuttuğun takım ve istersen bir fotoğraf seç. İstediğin zaman sol menüdeki Profil'den değiştirebilirsin.")
+    : t("Maç Tribünü'nde ve paylaştığın kadrolarda takma adın ve profil fotoğrafın görünür; e-postan görünmez.");
   dialog.querySelector("#profile-nickname").value = profile?.nickname || "";
-  dialog.querySelector("#profile-email").textContent = `Giriş e-postası: ${siteAuth.user.email || "—"}`;
+  dialog.querySelector("#profile-email").textContent = t("Giriş e-postası: {email}", { email: siteAuth.user.email || "—" });
   const select = dialog.querySelector("#profile-team");
   select.value = String(profile?.favorite_team_id ?? "");
   showProfileCrest(profile?.favorite_team_id);

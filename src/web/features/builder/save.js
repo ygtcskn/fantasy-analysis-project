@@ -24,7 +24,7 @@ function builderOpenRound(now = Date.now()) {
   for (const fixture of state.tables["fixtures.csv"] || []) {
     const id = String(fixture.round_id || fixture["round.id"] || "");
     if (!id) continue;
-    if (!rounds.has(id)) rounds.set(id, { id, name: fixture["round.name"] ? `Maç Haftası ${fixture["round.name"]}` : `Tur ${id}`, fixtures: [] });
+    if (!rounds.has(id)) rounds.set(id, { id, name: fixture["round.name"] ? t("Maç Haftası {round}", { round: fixture["round.name"] }) : t("Tur {id}", { id }), fixtures: [] });
     rounds.get(id).fixtures.push(fixture);
   }
   return [...rounds.values()].map((round) => ({ ...round, deadline: fantasyDeadline(round.fixtures) }))
@@ -89,21 +89,21 @@ function restoreBuilderDraft(playersById) {
   builderState.selected = new Map(String(params.get("slots") || "").split(",").map((pair) => pair.split(":"))
     .filter(([slot, id]) => slots.has(slot) && playersById.has(id)));
   if (builderState.selected.size) {
-    builderSaveStatus(siteAuth.user ? "Kadron geri geldi. Kaydetmek için Kadroyu kaydet'e bas." : "Kadron geri geldi.");
+    builderSaveStatus(siteAuth.user ? t("Kadron geri geldi. Kaydetmek için Kadroyu kaydet'e bas.") : t("Kadron geri geldi."));
   }
 }
 
 function saveErrorText(error) {
   const message = error?.message || "";
-  if (message.includes("nickname_required")) return "Kaydetmeden önce profilinden bir takma ad seç.";
-  if (message.includes("sign_in_required")) return "Kaydetmek için giriş yap.";
-  if (error?.code === "23514") return "Kadro kaydedilemedi: ilk 11 tam olmalı, en fazla 4 yedek olabilir.";
+  if (message.includes("nickname_required")) return t("Kaydetmeden önce profilinden bir takma ad seç.");
+  if (message.includes("sign_in_required")) return t("Kaydetmek için giriş yap.");
+  if (error?.code === "23514") return t("Kadro kaydedilemedi: ilk 11 tam olmalı, en fazla 4 yedek olabilir.");
   if (["PGRST205", "42P01", "PGRST204", "42703"].includes(error?.code)) {
     return siteMode === "local"
-      ? "Kadro tablosu eksik: supabase/shared_squads.sql dosyasını Supabase → SQL Editor'da çalıştır."
-      : "Kadrolar şu anda kaydedilemiyor. Daha sonra tekrar dene.";
+      ? t("Kadro tablosu eksik: supabase/shared_squads.sql dosyasını Supabase → SQL Editor'da çalıştır.")
+      : t("Kadrolar şu anda kaydedilemiyor. Daha sonra tekrar dene.");
   }
-  return message ? `Bir sorun çıktı: ${message}` : "Bir sorun çıktı. Tekrar dene.";
+  return message ? t("Bir sorun çıktı: {reason}", { reason: message }) : t("Bir sorun çıktı. Tekrar dene.");
 }
 
 // A click always ends in a dialog or a line under the button, even when
@@ -119,21 +119,21 @@ async function saveBuilderSquad() {
 async function saveBuilderSquadSteps() {
   if (builderSaveState.busy) return;
   if (!siteAuth.user) stashBuilderDraft();
-  if (!await profileReady("Kadronu kaydetmek için giriş yap. Sahadaki kadron bu sekmede seni bekler.",
-    "Kaydetmeden önce bir takma ad seç; Kadrolar sayfasında kadronun yanında o görünür.")) return;
+  if (!await profileReady(t("Kadronu kaydetmek için giriş yap. Sahadaki kadron bu sekmede seni bekler."),
+    t("Kaydetmeden önce bir takma ad seç; Kadrolar sayfasında kadronun yanında o görünür."))) return;
   const { missing, row } = builderSavedSquad();
   if (missing) {
-    builderSaveStatus(`Kaydetmek için ilk 11'i tamamla: ${missing} mevki boş.`, true);
+    builderSaveStatus(t("Kaydetmek için ilk 11'i tamamla: {count} mevki boş.", { count: missing }, missing), true);
     return;
   }
   const round = builderOpenRound();
   if (!round) {
-    builderSaveStatus("Kaydedilecek açık maç haftası yok: sezonun son haftasının son tarihi geçti.", true);
+    builderSaveStatus(t("Kaydedilecek açık maç haftası yok: sezonun son haftasının son tarihi geçti."), true);
     return;
   }
   builderSaveState.busy = true;
   $("builder-save").disabled = true;
-  builderSaveStatus("Kaydediliyor…");
+  builderSaveStatus(t("Kaydediliyor…"));
   try {
     const client = await loadAuth();
     let updated = false;
@@ -143,11 +143,12 @@ async function saveBuilderSquadSteps() {
       const changed = await client.from("shared_squads").update(row)
         .eq("season", state.seasonSlug).eq("round_id", Number(round.id)).eq("user_id", siteAuth.user.id).select("id");
       if (changed.error) throw changed.error;
-      if (!changed.data.length) throw new Error("Kaydedilen kadron bulunamadı.");
+      if (!changed.data.length) throw new Error(t("Kaydedilen kadron bulunamadı."));
       updated = true;
     } else if (inserted.error) throw inserted.error;
     try { sessionStorage.removeItem(BUILDER_DRAFT_KEY); } catch { /* storage unavailable */ }
-    builderSaveStatus(`Kadron ${round.name} için ${updated ? "güncellendi" : "kaydedildi"}. Kadrolar sayfasında herkes görebilir.`);
+    builderSaveStatus(updated ? t("Kadron {round} için güncellendi. Kadrolar sayfasında herkes görebilir.", { round: round.name })
+      : t("Kadron {round} için kaydedildi. Kadrolar sayfasında herkes görebilir.", { round: round.name }));
     document.dispatchEvent(new CustomEvent("shared-squad-saved"));
   } catch (error) {
     builderSaveStatus(saveErrorText(error), true);
@@ -163,12 +164,15 @@ function renderBuilderSave() {
   $("builder-save-area").hidden = !authEnabled();
   const round = builderOpenRound();
   $("builder-save-hint").textContent = !round
-    ? "Sezonun açık maç haftası kalmadı."
-    : `${round.name} için kaydedilir · son tarih ${builderDeadlineText(round.deadline)}.${siteAuth.user ? "" : " Kaydetmek için giriş yapman gerekir."}`;
+    ? t("Sezonun açık maç haftası kalmadı.")
+    : `${t("{round} için kaydedilir · son tarih {deadline}.", { round: round.name, deadline: builderDeadlineText(round.deadline) })}${siteAuth.user ? "" : ` ${t("Kaydetmek için giriş yapman gerekir.")}`}`;
 }
 
 function setupBuilderSave() {
   $("builder-save").addEventListener("click", saveBuilderSquad);
   // Signing in or out changes the hint.
   document.addEventListener("site-auth-change", () => { if (state.view === "builder") renderBuilderSave(); });
+  // The TR / EN switch reloads the page (core/language.js); the squad on the
+  // pitch is kept for this tab and comes back as it does after a sign-in.
+  document.addEventListener("site-language-change", () => { if (builderState.selected.size) stashBuilderDraft(); });
 }
