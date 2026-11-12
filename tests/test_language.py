@@ -14,8 +14,6 @@ PAGES = ("index.html", "team.html", "404.html")
 STRING = r'"(?:[^"\\\n]|\\.)*"'
 PLACEHOLDER = re.compile(r"\{(\w+)\}")
 TURKISH_LETTER = re.compile("[çğıöşüÇĞİÖŞÜâ]")
-# Written the same in both languages.
-SAME_IN_BOTH = {"CSV", "Claude", "ChatGPT"}
 
 
 def read(path):
@@ -106,7 +104,8 @@ class EnglishTests(unittest.TestCase):
             page.feed(read(WEB / name))
             self.assertGreater(len(page.found), 5, name)
             for text in page.found:
-                if not re.search(r"[^\W\d_]{2}", text) or text in SAME_IN_BOTH or text in self.english:
+                # A name written the same in both languages (CSV, Claude) is entered as itself.
+                if not re.search(r"[^\W\d_]{2}", text) or text in self.english:
                     continue
                 if not any(text in key for key in with_markup):
                     missing.add(f"{name}: {text}")

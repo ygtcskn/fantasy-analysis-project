@@ -86,6 +86,8 @@ function translateElement(root) {
     return typeof found === "string" ? found : null;
   };
   const visit = (element) => {
+    // A command or a file name is written the same in both languages.
+    if (element.tagName === "CODE") return;
     for (const name of LANGUAGE_ATTRIBUTES) {
       const value = element.getAttribute(name);
       const found = value && (element.getAttribute(`data-en-${name}`) ?? english(value));

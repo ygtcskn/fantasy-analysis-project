@@ -12,12 +12,20 @@
 // count decides the wording, the English is a pair: ["one …", "any other …"].
 // A sentence with markup inside it is entered with its HTML, as the page's
 // source has it.
+//
+// Keep one entry per line, in double quotes: tests/test_language.py reads this
+// file line by line to check that every text the site shows has its English.
 const ENGLISH = {
   // ---- Words used on many pages ----
   "SÜPER LİG": "SÜPER LIG",
   "FANTEZİ": "FANTASY",
   "SOSYAL": "SOCIAL",
+  // Names written the same in both languages, entered so that they do not
+  // count as text without English.
   "FANTEZİ ANALİZ": "FANTEZİ ANALİZ",
+  "Claude": "Claude",
+  "ChatGPT": "ChatGPT",
+  "CSV": "CSV",
   "Ana Sayfa": "Home",
   "Puan Durumu": "Standings",
   "Fikstür": "Fixtures",

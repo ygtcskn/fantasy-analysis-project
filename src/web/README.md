@@ -530,9 +530,60 @@ Every page follows one set of rules, so a number reads the same wherever it appe
 - **Players who left the league** - anyone missing from `current_squads.csv` is left out of every player list, leader card, best-player list and the team page's season leaders, which say how many were left out.
 - **Cards** - team card totals come from the team statistics (`team_metrics.csv`) everywhere: the match result table, the live centre and Maç Haftası's season ranks. Sportmonks counts a second yellow as a yellow card there, and any dismissal as a red card. Fantasy points still score each player's own card columns.
 - **Times** - kickoffs and dates are shown in Turkish time (`Europe/Istanbul`), from `starting_at_timestamp` or the UTC kickoff (`core/locale.js`). Every time the pipeline saves is UTC, written as `2026-10-25T18:30:00Z` (`utc_stamp` in `src/shared.py`).
-- **Words** - *Reyting* is Sportmonks' match rating, *Puan* is league points, *Fantezi puanı (FP)* is TFF fantasy points; *İ/D* is home/away; positions are always Turkish (Kaleci, Defans, Orta saha, Forvet); shares are written %55.
+- **Words** - one word per thing, in each language: *Reyting* / Rating is Sportmonks' match rating, *Puan* / Points is league points, *Fantezi puanı (FP)* / Fantasy points (FP) is TFF fantasy points; *İ/D* / H/A is home/away; positions are Kaleci, Defans, Orta saha, Forvet / Goalkeeper, Defender, Midfielder, Forward, and the fantasy game's own KL, DEF, OS, FOR are written GK, DEF, MID, FWD in English; shares are written %55 in Turkish and 55% in English. See Languages below.
 - **Pitch** - Kadro Kur, Maç Haftası's elevens and the team page draw one pitch (`styles/pitch.css`): Kadro Kur's grass and lines, club shirts from `core/kits.js` and the same rating badge.
 - **Colours** - win, draw and loss use one palette (`--result-win/draw/loss`) for chips, charts and the live table; anything that compares clubs uses each club's colour from `core/team-colors.js`.
+
+## Languages
+
+The site is in English and Turkish. A new visitor sees English. The **TR / EN**
+switch under the logo in the sidebar changes it; the choice is kept in the
+browser (`fantezi-analiz-language`) and the page reloads in the other language.
+A link can ask for one with `?lang=tr` or `?lang=en`, which is then kept too.
+The headings in these notes use the Turkish names (Ana Sayfa, Kadro Kur, Maç
+Haftası); the English page calls them Home, Squad Builder and Matchweek.
+
+There is one copy of every page and every script. Each text is written once,
+in Turkish, where it is used, and `core/english.js` holds its English:
+
+- **In a script** - `t("Puan Durumu")` gives the text in the visitor's
+  language. Values go in by name, `t("{name} kadroya eklendi.", { name })`.
+  Where a count decides the wording, the English entry is a pair and the count
+  is the third argument: `t("{count} maç", { count }, count)` with
+  `["{count} match", "{count} matches"]`.
+- **In a page's HTML** - nothing to add: `core/language.js` translates the
+  text and the `title`, `aria-label`, `placeholder` and `alt` of everything in
+  the page before it is shown. A sentence with markup inside it is one entry,
+  keyed by its HTML as the source has it.
+- **A word that means two things** - Turkish "Ara" is both Search and Break,
+  so the dictionary cannot hold it. Give the English where the word is used:
+  `t({ tr: "Ara", en: "Break" })` in a script, `data-en="…"` on an element
+  (`data-en-title="…"` for a label).
+- **Numbers and dates** - `LOCALE` is `tr-TR` or `en-GB` and every number, date
+  and sort uses it. `percentText` writes %55 or 55%, `ordinalText` 2. or 2nd,
+  `fantasyPositionCode` KL or GK (`core/locale.js`). Times stay Turkish time in
+  both languages.
+- **What a server says** - the chat and live-score servers word their messages
+  in Turkish. The page shows the English kept for them (`knownText`), so those
+  messages have entries too. The Asistan itself answers in the language of the
+  question.
+- **Not translated** - what the data files say in their own words (player,
+  club and stadium names; the reason a player is doubtful, which the fantasy
+  analysis writes in English) and the site's own name, FANTEZİ ANALİZ.
+
+A text with no entry is shown in Turkish on the English page. On a page opened
+in English, `[...untranslated]` in the browser console lists the texts that had
+none. `tests/test_language.py` reads the pages and scripts as text and checks
+that every text has its English, that the English keeps the values the Turkish
+names, and that no script writes `"tr-TR"` itself; run it yourself with
+`python -m unittest tests.test_language -v`. It needs every entry of
+`core/english.js` on one line.
+
+Until the language is set the page's content is hidden
+(`html:not([data-language]) main` in `styles/styles.css`), so nobody sees
+Turkish flash before the English. The page's title and description in
+`<head>` are written in English, because link previews read them without
+running scripts; their Turkish is in `data-tr`.
 
 ## How the folder is laid out
 
@@ -549,8 +600,9 @@ src/web/
   core/                       The shell every page shares
     site.js                     siteMode: local server, public site or opened from disk
     auth.js / auth-config.js    Optional visitor sign-in (Supabase) and its project settings
+    english.js / language.js    The site's English, and the code that shows a text in the chosen language
     app.js                      Loading, navigation, shared helpers
-    locale.js                   Turkish words, Turkish-time dates, positions, percentages
+    locale.js                   Shared words, Turkish-time dates, positions, percentages
     match-rules.js              Finished match, appearance, blank and rating rules
     sidebar.js                  Sidebar navigation
     kits.js                     Club shirts
