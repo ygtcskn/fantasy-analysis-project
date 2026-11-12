@@ -451,8 +451,9 @@
    button sits there, so the heading stops below it. */
 @media (max-width: 760px) { #team-statistics-profile { scroll-margin-top: 72px; } }
 
-/* Live standings on Maç Haftası: points as if the match ended now, in the
-   site's win/draw/loss colours (styles.css). */
+/* Points as if the match ended now, in the site's win/draw/loss colours. */
+.standing-team-label { display: grid; gap: 2px; line-height: 1.2; }
+.standing-match { color: var(--muted); font-size: 10px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .standing-live { font-weight: 800; }
 .standing-live-win { color: var(--result-win); }
 .standing-live-draw { color: var(--result-draw); }

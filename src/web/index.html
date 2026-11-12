@@ -37,6 +37,10 @@
   <script src="core/profile.js" defer></script>
   <script src="features/tier-list/tier-list.js" defer></script>
   <script src="features/home/home.js" defer></script>
+  <script src="features/home/home-simulation.js" defer></script>
+  <script src="features/home/home-replay-capture.js" defer></script>
+  <script src="features/home/home-replay-history.js" defer></script>
+  <script src="features/home/home-replay-standings.js" defer></script>
   <script src="features/home/home-chat.js" defer></script>
   <script src="features/standings/standings.js" defer></script>
   <script src="core/kits.js" defer></script>
@@ -96,13 +100,14 @@
       <div class="home-layout">
         <div class="home-side">
           <section class="home-panel home-games-panel" aria-labelledby="home-games-title">
-            <div class="home-panel-heading"><h2 id="home-games-title">Maçlar</h2></div>
+            <div class="home-panel-heading"><h2 id="home-games-title">Maçlar</h2><button id="home-simulation" class="secondary home-simulation-button" type="button" aria-describedby="home-simulation-status" hidden></button></div>
+            <p id="home-simulation-status" class="sr-only" role="status"></p>
             <div class="home-week-control"><button id="home-week-prev" type="button" class="secondary" aria-label="Önceki hafta">←</button><label><span class="sr-only">Maç haftası</span><select id="home-games-week"></select></label><button id="home-week-next" type="button" class="secondary" aria-label="Sonraki hafta">→</button></div>
             <p id="home-games-note" class="home-panel-note" role="status"></p>
-            <div id="home-games-list" class="home-games-list" tabindex="-1" aria-label="Seçilen haftanın maçları. Ayrıntılarını görmek için oynanmış bir maç seçin."></div>
+            <div id="home-games-list" class="home-games-list" tabindex="-1" aria-label="Seçilen haftanın maçları. Ayrıntılarını görmek için canlı veya tamamlanmış bir maç seçin."></div>
           </section>
           <section class="home-panel standings-panel" aria-labelledby="standings-title">
-            <div class="home-panel-heading"><div><p class="eyebrow">SÜPER LİG</p><h2 id="standings-title">Puan Durumu</h2></div></div>
+            <div class="home-panel-heading"><div><p class="eyebrow" id="home-standings-eyebrow">SÜPER LİG</p><h2 id="standings-title">Puan Durumu</h2></div></div>
             <label id="standings-group-control" class="standings-group-control" hidden>Grup<select id="standings-group"></select></label>
             <p id="standings-note" class="home-panel-note" role="status"></p>
             <div class="standings-scroll" tabindex="0" aria-label="Kaydırılabilir puan tablosu"><table id="home-standings" class="standings-table home-standings-table"><colgroup><col class="home-standing-rank"><col><col class="home-standing-figure"><col class="home-standing-figure"><col class="home-standing-total"></colgroup><thead><tr><th scope="col" colspan="2">Takım</th><th scope="col" class="numeric" title="Oynanan maç">O</th><th scope="col" class="numeric" title="Galibiyet">G</th><th scope="col" class="numeric">Puan</th></tr></thead><tbody id="standings-body"></tbody></table></div>
@@ -110,6 +115,7 @@
         </div>
         <div id="home-detail" class="home-detail" aria-label="Seçilen maç" tabindex="-1"></div>
         <section id="home-events" class="home-panel home-reserved home-reserved-top home-events live-events" aria-label="Maç olayları">
+          <h2 class="home-live-events-title">Maç Olayları</h2>
           <ol id="home-events-list" tabindex="0" aria-label="Seçilen maçın olayları, en yeni önce"></ol>
         </section>
         <section id="home-chat" class="home-panel home-reserved home-reserved-bottom home-chat" aria-labelledby="home-chat-title">
@@ -127,7 +133,7 @@
     </section>
     <section id="empty-state" class="empty-state"><div class="file-symbol" aria-hidden="true">CSV <span>↗</span></div><p class="eyebrow">KENDİ VERİNLE BAŞLA</p><h2>Sezonunu görünür kıl.</h2><p>Siteyi <code>python src/web/serve.py --season 2026/2027</code> ile başlatın; sezon klasöründeki şu dosyalar otomatik yüklenir:</p><div class="file-list"><code>player_match_stats.csv</code><code>fixtures.csv</code><code>teams.csv</code><code>players.csv</code><code>squads.csv</code></div><p class="muted">Son iki dosya, maç kaydı olmayan oyuncuları da içerir.<br>Dosyalar bu bilgisayarda okunur; yükleme, API çağrısı veya hesap gerekmez.</p></section>
     <section id="standings-workspace" class="detailed-standings" hidden aria-label="Detaylı puan durumu">
-      <div class="panel-heading"><h2>Süper Lig puan durumu</h2></div>
+      <div class="panel-heading"><h2>Süper Lig puan durumu</h2><p id="detailed-standings-live" role="status" hidden></p></div>
       <div class="table-container detailed-standings-scroll" tabindex="0" aria-label="Kaydırılabilir puan tablosu"><table><thead><tr><th scope="col">Sıra</th><th scope="col">Takım</th><th scope="col" class="numeric" title="Oynanan maç">O</th><th scope="col" class="numeric" title="Galibiyet">G</th><th scope="col" class="numeric" title="Beraberlik">B</th><th scope="col" class="numeric" title="Mağlubiyet">M</th><th scope="col" class="numeric" title="Atılan gol">A</th><th scope="col" class="numeric" title="Yenilen gol">Y</th><th scope="col" class="numeric" title="Gol farkı">AV</th><th scope="col" class="numeric">Puan</th><th scope="col">Son 5 maç</th></tr></thead><tbody id="detailed-standings-body"></tbody></table></div>
       <p class="standings-legend">O: Oynanan · G: Galibiyet · B: Beraberlik · M: Mağlubiyet · A: Atılan gol · Y: Yenilen gol · AV: Gol farkı.<br>Son 5 maç soldan sağa eskiden yeniye gösterilir. — eksik veri anlamına gelir.</p>
     </section>

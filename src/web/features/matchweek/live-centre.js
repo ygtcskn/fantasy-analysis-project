@@ -1,7 +1,7 @@
 "use strict";
 
 // A separate live snapshot: never overwrite saved fixtures, odds or analysis.
-const liveCentre = { rows: [], selected: "", controller: null, timer: null, nextFetch: 0, season: "" };
+const liveCentre = { rows: [], meta: null, selected: "", controller: null, timer: null, nextFetch: 0, season: "", view: "" };
 const liveStateLabels = {
   INPLAY_1ST_HALF: t("İlk yarı"), HT: t("Devre arası"), INPLAY_2ND_HALF: t("İkinci yarı"),
   BREAK: t("Uzatma bekleniyor"), INPLAY_ET: t("Uzatma"), EXTRA_TIME_BREAK: t("Uzatma arası"),
@@ -29,37 +29,42 @@ const liveEventLabels = {
   CORNER: t({ tr: "Korner", en: "Corner" }),
 };
 
-function liveCentreActive() {
-  return state.view === "matchweek" && !document.hidden && Boolean(state.seasonSlug)
-    && siteMode === "local";
+function livePollingActive() {
+  return siteMode === "local" && !document.hidden && Boolean(state.seasonSlug);
 }
 
 function stopLiveMatchCentre() {
+  const hadSnapshot = Boolean(liveCentre.meta);
   clearTimeout(liveCentre.timer);
   liveCentre.timer = null;
   liveCentre.controller?.abort();
   liveCentre.controller = null;
   liveCentre.nextFetch = 0;
   liveCentre.rows = [];
+  liveCentre.meta = null;
   $("live-centre").hidden = true;
+  if (hadSnapshot) renderLiveFeed();
 }
 
 function syncLiveMatchCentre() {
-  if (!liveCentreActive()) { stopLiveMatchCentre(); return; }
+  if (!livePollingActive()) { stopLiveMatchCentre(); return; }
   if (liveCentre.season !== state.seasonSlug) {
     stopLiveMatchCentre();
     liveCentre.selected = "";
     liveCentre.season = state.seasonSlug;
   }
+  if (state.view === "matchweek" && liveCentre.view !== state.view) renderLiveMatchCentre();
+  liveCentre.view = state.view;
   if (!liveCentre.controller && Date.now() >= liveCentre.nextFetch) fetchLiveMatchCentre();
 }
 
 async function fetchLiveMatchCentre() {
   clearTimeout(liveCentre.timer);
+  liveCentre.timer = null;
   const controller = new AbortController(), season = state.seasonSlug;
   liveCentre.controller = controller;
-  const timeout = setTimeout(() => controller.abort(), 25000);
-  let delay = 120000;
+  const timeout = setTimeout(() => controller.abort(), 35000);
+  let delay = 120000, meta, rows = [];
   try {
     const response = await fetch("/local-live.csv", { cache: "no-store", signal: controller.signal });
     if (!response.ok || response.headers.get("X-Superlig-Local") !== "1"
@@ -67,40 +72,45 @@ async function fetchLiveMatchCentre() {
     const { records } = parseCSV(await response.text());
     const metas = records.filter((row) => row.record_type === "meta");
     if (metas.length !== 1 || metas[0].season !== season) throw new Error("Invalid live snapshot");
-    const meta = metas[0];
+    meta = metas[0];
     if (!["ok", "unavailable", "disabled"].includes(meta.status)) throw new Error("Invalid live status");
     const seconds = number(meta.poll_seconds);
     if (seconds !== null) delay = Math.min(2147483000, Math.max(30, seconds) * 1000);
-    // Discard a request that completed after navigation, a season change or suspension.
-    if (liveCentre.controller !== controller || !liveCentreActive() || season !== state.seasonSlug) return;
-    liveCentre.rows = meta.status === "ok" ? records : [];
     if (meta.status === "ok") {
       const fetched = Date.parse(meta.fetched_at);
       if (!Number.isFinite(fetched) || Date.now() - fetched > 120000 || fetched - Date.now() > 60000) {
         throw new Error("Stale live snapshot");
       }
+      rows = records;
     }
-    if (meta.status === "ok") ingestMatchweekResults(records);
-    renderLiveMatchCentre(meta);
   } catch {
-    if (liveCentre.controller !== controller || !liveCentreActive() || season !== state.seasonSlug) return;
     delay = Math.max(delay, 120000);
-    liveCentre.rows = [];
-    renderLiveMatchCentre({ status: "unavailable", message: t("Canlı bağlantı kesildi. Veriler yeniden alındığında maç merkezi güncellenecek.") });
+    meta = { status: "unavailable", message: t("Canlı bağlantı kesildi. Veriler yeniden alındığında maç merkezi güncellenecek.") };
   } finally {
     clearTimeout(timeout);
-    if (liveCentre.controller === controller) {
-      liveCentre.controller = null;
-      liveCentre.nextFetch = Date.now() + delay;
-      if (liveCentreActive()) liveCentre.timer = setTimeout(syncLiveMatchCentre, delay);
-    }
   }
+  // A hidden tab or a changed season may have replaced this request.
+  if (liveCentre.controller !== controller) return;
+  liveCentre.controller = null;
+  if (!livePollingActive() || season !== state.seasonSlug) return;
+  liveCentre.rows = rows;
+  liveCentre.meta = meta;
+  liveCentre.nextFetch = Date.now() + delay;
+  liveCentre.timer = setTimeout(syncLiveMatchCentre, delay);
+  if (meta.status === "ok") {
+    if (typeof rememberHomeReplay === "function") rememberHomeReplay(rows, season);
+    ingestMatchweekResults(rows);
+  }
+  renderLiveFeed();
 }
 
-// The CANLI pill beside Maç Haftası in the sidebar. On other pages a light
-// poll keeps it current; the server caches one live snapshot for every tab,
-// so this adds no requests to Sportmonks beyond what the live centre makes.
-const navLive = { timer: null, controller: null };
+// The live views and sidebar all read the same snapshot.
+function renderLiveFeed() {
+  setNavLive(liveCentre.rows.filter((row) => row.record_type === "fixture" && !matchweekFinished(row)).length);
+  if (state.view === "matchweek") renderLiveMatchCentre();
+  if (state.view === "home" && typeof renderHomeLive === "function") renderHomeLive();
+  if (state.view === "standings") renderDetailedStandings();
+}
 
 function setNavLive(count) {
   const pill = document.querySelector(".nav-live");
@@ -108,39 +118,6 @@ function setNavLive(count) {
   pill.hidden = !(count > 0);
   pill.title = count > 0 ? t("{count} canlı maç", { count }, count) : "";
 }
-
-async function pollNavLive() {
-  clearTimeout(navLive.timer);
-  let delay = 60000;
-  // A visibility change can arrive before core/app.js has defined the page state.
-  if (typeof state === "undefined") { navLive.timer = setTimeout(pollNavLive, 3000); return; }
-  // Maç Haftası polls for itself; a hidden tab or a page without a season waits.
-  if (siteMode === "local" && !document.hidden && state.seasonSlug && !liveCentreActive()) {
-    navLive.controller?.abort();
-    const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), 25000);
-    navLive.controller = controller;
-    try {
-      const response = await fetch("/local-live.csv", { cache: "no-store", signal: controller.signal });
-      if (!response.ok || response.headers.get("X-Superlig-Season") !== state.seasonSlug) throw new Error("unavailable");
-      const { records } = parseCSV(await response.text());
-      const meta = records.find((row) => row.record_type === "meta");
-      const seconds = number(meta?.poll_seconds);
-      if (seconds !== null) delay = Math.max(30, seconds) * 1000;
-      setNavLive(meta?.status === "ok"
-        ? records.filter((row) => row.record_type === "fixture" && !matchweekFinished(row)).length : 0);
-    } catch {
-      setNavLive(0);
-      delay = 120000;
-    } finally {
-      clearTimeout(timeout);
-      if (navLive.controller === controller) navLive.controller = null;
-    }
-  }
-  navLive.timer = setTimeout(pollNavLive, delay);
-}
-
-document.addEventListener("visibilitychange", () => { if (!document.hidden) pollNavLive(); });
-setTimeout(pollNavLive, 3000);
 
 function liveMinute(row) {
   const minute = number(row.minute), extra = number(row.extra_minute);
@@ -156,18 +133,35 @@ function liveScore(row) {
 // score. A match counts while it is in play, and after its final whistle until
 // the saved fixtures record it as finished - from then on the saved standings
 // already include it, and counting it again would add its points twice.
-function matchweekLiveStandings(rows) {
+function matchweekLiveStandings(rows, snapshot = liveCentre.rows) {
   const saved = new Map((state.tables["fixtures.csv"] || []).map((fixture) => [String(fixture.fixture_id), fixture]));
-  const teams = new Map();
-  for (const game of liveCentre.rows) {
+  const standings = new Map(rows.map((row) => [String(row.participant_id), row]));
+  const teams = new Map(), counted = new Set();
+  for (const game of snapshot) {
     if (game.record_type !== "fixture") continue;
     const home = number(game.home_score), away = number(game.away_score);
-    if (home === null || away === null) continue;
-    const stored = saved.get(String(game.fixture_id));
-    if (stored && matchweekFinished(stored)) continue;
-    for (const [id, own, other, opponent] of [[game.home_team_id, home, away, game.away_name], [game.away_team_id, away, home, game.home_name]]) {
+    if (![home, away].every((score) => Number.isInteger(score) && score >= 0)) continue;
+    const fixtureId = String(game.fixture_id), stored = saved.get(fixtureId);
+    if (!stored || counted.has(fixtureId) || fixtureFinished(stored) || matchweekFinished(stored)) continue;
+    if (["league_id", "season_id", "home_team_id", "away_team_id"].some((key) => String(stored[key]) !== String(game[key]))) continue;
+    const groupIncludes = (id) => {
+      const row = standings.get(String(id));
+      return row && ["season_id", "league_id", "stage_id", "group_id"].every((key) => !row[key] || String(row[key]) === String(stored[key]));
+    };
+    if (!groupIncludes(game.home_team_id) || !groupIncludes(game.away_team_id)) continue;
+    counted.add(fixtureId);
+    const live = !matchweekFinished(game);
+    for (const [id, opponentId, own, other, opponent] of [[game.home_team_id, game.away_team_id, home, away, game.away_name],
+      [game.away_team_id, game.home_team_id, away, home, game.home_name]]) {
       const status = own > other ? "win" : own < other ? "loss" : "draw";
-      teams.set(String(id), { status, gained: { win: 3, draw: 1, loss: 0 }[status], own, other, opponent, live: !matchweekFinished(game) });
+      const prior = teams.get(String(id));
+      const displayedGame = prior?.live && !live ? prior : { status, own, other, opponent, opponentId, game, live };
+      teams.set(String(id), { ...displayedGame,
+        gained: (prior?.gained ?? 0) + { win: 3, draw: 1, loss: 0 }[status],
+        played: (prior?.played ?? 0) + 1, won: (prior?.won ?? 0) + Number(status === "win"),
+        draws: (prior?.draws ?? 0) + Number(status === "draw"), losses: (prior?.losses ?? 0) + Number(status === "loss"),
+        goalDifference: (prior?.goalDifference ?? 0) + own - other,
+        goalsFor: (prior?.goalsFor ?? 0) + own, goalsAgainst: (prior?.goalsAgainst ?? 0) + other });
     }
   }
   if (!teams.size) return null;
@@ -176,20 +170,20 @@ function matchweekLiveStandings(rows) {
     const scored = number(row["details.overall_scored"]) ?? 0, conceded = number(row["details.overall_conceded"]) ?? 0;
     const difference = number(row["details.overall_goal_difference"]) ?? scored - conceded;
     return { row, entry: entry && { ...entry, base, points: base + entry.gained },
-      points: base + (entry?.gained ?? 0), difference: difference + (entry ? entry.own - entry.other : 0),
-      scored: scored + (entry?.own ?? 0), position: number(row.position) ?? 99 };
+      points: base + (entry?.gained ?? 0), difference: difference + (entry?.goalDifference ?? 0),
+      scored: scored + (entry?.goalsFor ?? 0), position: number(row.position) ?? 99 };
   });
   view.sort((a, b) => b.points - a.points || b.difference - a.difference || b.scored - a.scored || a.position - b.position);
   return { order: view.map((item) => item.row), teams: new Map(view.filter((item) => item.entry).map((item) => [String(item.row.participant_id), item.entry])) };
 }
 
-function renderLiveMatchCentre(meta = liveCentre.rows.find((row) => row.record_type === "meta")) {
+function renderLiveMatchCentre() {
   // Every live update redraws Maç Haftası's standings too.
   if (state.view === "matchweek" && $("matchweek-standings-body")) renderStandings(homeTeams(), "matchweek-standings");
   const fixtures = liveCentre.rows.filter((row) => row.record_type === "fixture" && !matchweekFinished(row));
-  setNavLive(meta?.status === "ok" ? fixtures.length : 0);
+  const meta = liveCentre.meta;
   const panel = $("live-centre"), unavailable = meta?.status === "unavailable";
-  panel.hidden = !liveCentreActive() || (!unavailable && !fixtures.length);
+  panel.hidden = state.view !== "matchweek" || !livePollingActive() || (!unavailable && !fixtures.length);
   $("live-centre-badge").hidden = unavailable || !fixtures.length;
   $("live-match-content").hidden = unavailable || !fixtures.length;
   $("live-fixture-control").hidden = unavailable || !fixtures.length;

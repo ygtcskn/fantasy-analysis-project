@@ -29,7 +29,7 @@ CSV_NAMES = {
 # lack them, so they are optional.
 OPTIONAL_CSV_NAMES = {"fixture_formations.csv", "download_status.csv", "team_metrics.csv",
                       "events.csv", "fixture_pressure.csv", "fixture_periods.csv",
-                      "current_squads.csv", "fixture_referees.csv"}
+                      "current_squads.csv", "fixture_referees.csv", "fixture_trends.csv"}
 # Earlier seasons are read only to widen the radar's reference population; the
 # player's own plotted values always come from the served season.
 HISTORY_NAMES = {"fixtures.csv", "player_match_stats.csv", "squads.csv", "team_metrics.csv", "spider_stats.csv"}
@@ -290,7 +290,7 @@ def main():
     print(f"Reading saved CSVs from: {csv_root}")
     print("After a download finishes, refresh the page or click Refresh saved data.")
     print("Live Sportmonks requests disabled." if args.no_live else
-          "Live Sportmonks data is requested only while the Matchweek page is visible.")
+          "Live Sportmonks data is requested while a local site tab is visible.")
     print("The Ana Sayfa chat answers with Claude or ChatGPT, using the API keys in .env; each answer costs a little.")
     print("Keep this terminal open. Press Ctrl+C to stop.")
     try:

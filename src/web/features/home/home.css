@@ -1,5 +1,5 @@
-/* Ana Sayfa: played matches and standings on the left, the chosen match in
-   the middle, and a right-hand column kept empty for a future panel. Panels
+/* Ana Sayfa: matches and standings on the left, the chosen match in the
+   middle, and events and chat on the right. Panels
    are the site's .home-panel; club colours arrive as --matchweek-home and
    --matchweek-away (set by home.js from teamColorPair), as on Maç Haftası.
 
@@ -33,9 +33,8 @@
 /* The page is as wide as every other page (styles.css). The two outer columns
    share one width, so they are always equal. The match's four parts - score,
    pressure strip, statistics with İlk 11'ler, the six cards - each take one
-   row of the layout (a subgrid), so the right column's two empty panels, which
-   hold the place of future ones, line up with them: the top one beside the
-   score and the pressure strip, the bottom one beside statistics and İlk
+   row of the layout (a subgrid), so the right column's panels line up with
+   them: the top one beside the score and pressure strip, the bottom one beside statistics and İlk
    11'ler. The left column runs down every row at its own height. A subgrid
    cannot also be a size container, so each part's row (.home-row) is the
    container its cards size themselves against; it is as wide as the match
@@ -68,6 +67,7 @@
    beside it - contain: size keeps a long list from stretching them - and the
    list scrolls inside it. */
 .home-events { contain: size; display: flex; flex-direction: column; overflow: hidden; }
+.home-live-events-title { display: none; }
 /* The list scrolls (wheel, touch, keyboard) with no scrollbar drawn. */
 .home-events ol { flex: 1 1 auto; min-height: 0; max-height: none; margin: 10px; padding: 0; scrollbar-width: none; }
 .home-events ol::-webkit-scrollbar { display: none; }
@@ -143,12 +143,16 @@
 @container (max-width: 1100px) {
   .home-layout { grid-template-columns: var(--home-side-width) minmax(0, 1fr); }
   .home-reserved { display: none; }
+  .home-events.has-match { display: flex; grid-column: 2; grid-row: 5; block-size: 18rem; }
+  .home-live-events-title { display: block; margin: 14px 16px 0; font-size: 16px; }
 }
 @container (max-width: 700px) {
   /* One column: the chosen match first, then the list to choose from. */
   .home-layout { grid-template-columns: minmax(0, 1fr); }
   .home-detail { grid-column: 1; }
   .home-side { grid-column: 1; grid-row: 5; }
+  .home-events.has-match { grid-column: 1; }
+  .home-layout:has(.home-events.has-match) .home-side { grid-row: 6; }
 }
 @container home-detail (max-width: 600px) {
   .home-pair { grid-template-columns: minmax(0, 1fr); }
@@ -168,18 +172,28 @@
 /* Played matches */
 /* The week: arrows either side of the picker, as on the team page's match
    picker. The note only speaks when there is nothing to list. */
+.home-games-panel .home-panel-heading { gap: 8px; }
+.home-simulation-button { min-height: 32px; padding: 5px 8px; line-height: 1.25; font-size: 11px; background: var(--surface-raised); }
+.home-simulation-button:hover { background: var(--surface-hover); }
+.home-simulation-button[data-active="true"] { border-color: var(--accent); }
 .home-week-control { display: flex; align-items: center; gap: 8px; margin: 0 22px 14px; }
 .home-week-control label { flex: 1; min-width: 0; }
 .home-week-control select { width: 100%; }
 .home-week-control .secondary { min-height: 38px; padding: 8px 12px; }
 .home-games-panel .home-panel-note:empty { display: none; }
-/* One week at a time, so the list needs no scroll of its own. */
-.home-games-list { padding: 0 12px 14px; }
+/* Extra live games can scroll within the height of the selected week's list. */
+.home-games-list { padding: 0 12px 14px; --home-game-height: 60px; --home-game-gap: 6px; }
+.home-games-list.has-other-week {
+  max-block-size: calc(14px + var(--home-week-games) * (var(--home-game-height) + var(--home-game-gap)));
+  overflow-y: auto;
+  scrollbar-width: none;
+}
 .home-game {
   display: grid;
   gap: 5px;
   width: 100%;
-  margin: 0 0 6px;
+  min-block-size: var(--home-game-height);
+  margin: 0 0 var(--home-game-gap);
   padding: 8px 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -193,7 +207,8 @@
 .home-game-upcoming:hover { background: transparent; }
 .home-game-upcoming .club-logo { opacity: .6; }
 .home-game[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 3px 0 var(--accent); }
-.home-game-meta { color: var(--muted); font-size: 10px; }
+.home-game-meta { min-width: 0; overflow: hidden; color: var(--muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.home-game-live .home-game-meta { color: var(--ink); font-weight: 700; }
 .home-game-line { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 6px; }
 .home-game-team { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 12px; font-weight: 600; }
 .home-game-team > span:not(.club-logo) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -224,28 +239,34 @@
 .home-standings-table .standing-position { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
 .home-standings-table .standing-club { gap: 7px; font-size: 12px; font-weight: 600; }
 .home-standings-table .standing-club > span:last-child { min-width: 0; overflow-wrap: normal; }
+.home-standings-live-label { color: var(--result-win); }
+.home-standings-table .standing-team-label > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .home-standings-table .standing-club .club-logo { width: 24px; height: 24px; flex-basis: 24px; }
 .home-standings-table .standing-club .club-logo img { width: 22px; height: 22px; }
 .home-standings-table td.numeric { color: var(--muted); font-variant-numeric: tabular-nums; }
 .home-standings-table .standing-points { font-size: inherit; font-weight: 500; }
+.home-standings-table td.standing-live { font-weight: 800; }
+.home-standings-table td.standing-live-win { color: var(--result-win); }
+.home-standings-table td.standing-live-draw { color: var(--result-draw); }
+.home-standings-table td.standing-live-loss { color: var(--result-loss); }
 :is(:root, :root[data-theme]) .home-side #home-standings tbody > tr:nth-child(odd) > td { background: var(--zebra-purple); }
 :is(:root, :root[data-theme]) .home-side #home-standings tbody > tr:nth-child(even) > td { background: var(--zebra-light); }
 :is(:root, :root[data-theme]) .home-side #home-standings tbody > tr:hover > td { background: var(--zebra-hover); }
 
 /* Result */
 .home-scoreboard { padding: 32px 18px 24px; }
-.home-score-grid { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 16px; }
+.home-score-grid { display: grid; grid-template-columns: minmax(0, 1fr) clamp(7.25rem, 24%, 9rem) minmax(0, 1fr); align-items: center; gap: 16px; }
 .home-score-team { display: grid; justify-items: center; gap: 8px; min-width: 0; text-align: center; }
 .home-score-team .club-logo { width: 84px; height: 84px; flex-basis: 84px; }
 .home-score-team .club-logo img { width: 76px; height: 76px; }
-.home-score-name { max-width: 100%; font-size: 17px; font-weight: 600; overflow-wrap: anywhere; }
-.home-score-role { color: var(--muted); font-size: 11px; }
-.home-score-middle { display: grid; justify-items: center; gap: 4px; }
+.home-score-name { max-width: 100%; overflow: hidden; font-size: 17px; font-weight: 600; line-height: 1.4; text-overflow: ellipsis; white-space: nowrap; }
+.home-score-role { max-width: 100%; overflow: hidden; color: var(--muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.home-score-middle { display: grid; justify-items: center; gap: 4px; min-width: 0; }
 .home-score-value { font-size: 52px; font-weight: 650; line-height: 1; letter-spacing: -1px; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.home-score-state { color: var(--muted); font-size: 12px; white-space: nowrap; }
-.home-score-venue { margin: 22px 0 0; color: var(--ink); font-size: 13px; font-weight: 600; text-align: center; }
-.home-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 12px; }
-.home-chip { padding: 4px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-raised); color: var(--muted); font-size: 11px; }
+.home-score-state { color: var(--muted); font-size: 12px; line-height: 1.4; text-align: center; text-wrap: balance; }
+.home-score-venue { min-block-size: 1lh; margin: 22px 0 0; overflow: hidden; color: var(--ink); font-size: 13px; font-weight: 600; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+.home-chips { display: flex; justify-content: safe center; gap: 8px; min-block-size: 27px; margin-top: 12px; overflow-x: auto; scrollbar-width: none; }
+.home-chip { flex: none; padding: 4px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-raised); color: var(--muted); font-size: 11px; white-space: nowrap; }
 /* The ground's photo behind the result, under a dark tint. Like the pitch, it
    is a picture with its own white ink, the same in both themes. */
 .home-scoreboard-photo { position: relative; isolation: isolate; }
@@ -265,24 +286,31 @@
   .home-score-grid { gap: 8px; }
   .home-score-team .club-logo { width: 48px; height: 48px; flex-basis: 48px; }
   .home-score-team .club-logo img { width: 44px; height: 44px; }
-  .home-score-name { font-size: 13px; }
+  .home-score-name { display: -webkit-box; block-size: 2lh; font-size: 13px; overflow-wrap: anywhere; white-space: normal; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
   .home-score-value { font-size: 36px; }
 }
 
 /* Pressure balance: a low strip that is all chart, with no title row or
    legend; how to read it is the chart's hover text. The chart's sizes are in
    its own units, about one pixel each at desktop width. */
-.home-card.home-momentum { padding: 10px 0 8px; }
-.home-momentum .home-card-note { margin-top: 0; }
-.home-momentum-scroll { overflow-x: auto; padding: 0 18px; }
-.home-momentum-track { min-width: 480px; }
+.home-card.home-momentum { position: relative; padding: 10px 0 8px; }
+.home-momentum-status { position: absolute; inset: 0; display: grid; place-content: center; color: var(--muted); font-size: 11px; text-align: center; pointer-events: none; }
+.home-momentum-scroll { overflow-x: auto; padding: 0 18px; scrollbar-width: none; }
+.home-momentum-track { position: relative; min-width: 480px; }
 .home-momentum-chart { display: block; width: 100%; height: auto; }
 /* The slider spans the chart's minutes only: --plot-left and --plot-right are
    the chart's label margin and right edge as shares of its width (home.js).
    The 8px either side lets the thumb's centre, not its edge, reach each end. */
 .home-momentum-slider { display: block; box-sizing: border-box; width: calc(100% - var(--plot-left) - var(--plot-right) + 16px);
   height: 16px; margin: 4px 0 0 calc(var(--plot-left) - 8px); padding: 0; accent-color: var(--home-event-marker); cursor: pointer; }
+.home-momentum-live { position: absolute; inset: auto 0 0; height: 16px; color: var(--result-win); pointer-events: none; }
+.home-momentum-live::before { content: ""; position: absolute; left: var(--live-position); bottom: 2px; width: 3px; height: 12px;
+  border-radius: 2px; background: currentColor; transform: translateX(-50%); }
+.home-momentum-live-label { position: absolute; left: clamp(3rem, var(--live-position), calc(100% - 3rem)); bottom: 100%;
+  padding: 1px 5px; border-radius: 4px; background: var(--surface-raised); font-size: 10px; font-weight: 700;
+  line-height: 1.4; white-space: nowrap; transform: translateX(-50%); }
 .home-momentum-cursor { stroke: var(--home-event-marker); stroke-width: 1.5; pointer-events: none; }
+.home-replay-future { visibility: hidden; }
 .home-momentum-chart text { font-family: inherit; }
 .home-momentum-tick { fill: var(--muted); font-size: 9px; }
 .home-momentum-team { fill: var(--ink); font-size: 10px; font-weight: 700; }
@@ -299,6 +327,7 @@
 /* Match statistics: Maç Haftası's versus rows. */
 .home-statistics .matchweek-versus-head .club-logo { width: 20px; height: 20px; flex: 0 0 20px; }
 .home-statistics .matchweek-versus-head .club-logo img { width: 18px; height: 18px; }
+.home-statistics > .home-card-note { block-size: 2lh; overflow-y: auto; }
 
 /* Fiziksel Mücadele and Duran Top ve Akan Oyun: Maç Haftası's versus header,
    then bars growing out from the label in the middle towards each club, the
@@ -399,7 +428,7 @@
    set, so this card ends level with the statistics beside it. It is never
    shorter than 370px, where five lines a side of small shirts still fit. */
 .home-lineups { display: flex; flex-direction: column; }
-.home-pitch { display: grid; grid-template-rows: 1fr 1fr; flex: 1 0 auto; min-height: 370px; padding: 8px 4px; }
+.home-pitch { display: grid; grid-template-rows: 1fr 1fr; flex: 1 1 0; min-height: 370px; padding: 8px 4px; }
 .home-pitch .pitch-markings { inset: 8px; }
 .home-pitch .pitch-circle { width: 24%; height: auto; aspect-ratio: 1; }
 .home-pitch .pitch-box { height: 14%; }
@@ -411,6 +440,7 @@
 .home-pitch-player .pitch-player-name { max-width: 100%; overflow: hidden; font-size: 9px; line-height: 1.15; text-overflow: ellipsis; white-space: nowrap; overflow-wrap: normal; }
 .home-pitch-missing { margin: auto; padding: 6px 10px; border-radius: 6px; background: #0006; font-size: 11px; text-align: center; }
 .home-subs { margin-top: 12px; font-size: 12px; }
+.home-subs-empty { margin-bottom: 0; padding-inline-start: 1em; color: var(--muted); }
 .home-subs summary { color: var(--ink); font-weight: 600; cursor: pointer; }
 .home-subs h3 { margin: 10px 0 4px; color: var(--muted); font-size: 11px; font-weight: 600; }
 .home-subs ul { display: grid; gap: 3px; margin: 0; padding: 0; list-style: none; }

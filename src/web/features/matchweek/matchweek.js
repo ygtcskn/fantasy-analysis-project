@@ -304,7 +304,8 @@ function matchweekVersusRow(label, cells, values = null) {
     const bar = element("span", "matchweek-versus-bar"), total = values[0] + values[1];
     values.forEach((value, index) => {
       const part = element("span", index ? "matchweek-versus-bar-away" : "matchweek-versus-bar-home");
-      part.style.flexGrow = String(total > 0 ? value : 1);
+      // Shares fill the track even when the raw values add up to less than one.
+      part.style.flexGrow = String(total > 0 ? value / total : 0.5);
       bar.append(part);
     });
     bar.setAttribute("aria-hidden", "true");

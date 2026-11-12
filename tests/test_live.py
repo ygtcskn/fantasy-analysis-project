@@ -48,9 +48,48 @@ class LiveNormalizationTests(unittest.TestCase):
         rows = decode(live.csv_bytes(live.normalize([fixture()], "600", "2026")))
         match = rows[0]
         self.assertEqual((match["home_score"], match["away_score"]), ("2.0", "0.0"))
+        self.assertEqual((match["home_half_score"], match["away_half_score"]), ("1.0", ""))
         self.assertEqual((match["minute"], match["extra_minute"]), ("90.0", "2.0"))
         self.assertEqual(match["home_name"], "Ev, Takımı")
-        self.assertEqual([row["value"] for row in rows[1:]], ["0.0", ""])
+        self.assertEqual([row["value"] for row in rows if row["record_type"] == "statistic"], ["0.0", ""])
+
+    def test_enriched_relations_are_flat_and_keep_zero_and_missing_separate(self):
+        game = fixture(
+            periods=[{"description": "1st-half", "minutes": 48, "ticking": False}],
+            pressure=[{"participant_id": 1, "minute": 7, "pressure": 0},
+                      {"participant_id": 2, "minute": 7, "pressure": 12.25},
+                      {"participant_id": 3, "minute": 7, "pressure": 24},
+                      {"participant_id": 1, "minute": 8, "pressure": None}],
+            expected=[{"participant_id": 1, "type_id": 7944, "data": {"value": 0.2}}],
+            formations=[{"participant_id": 1, "formation": "4-3-3"}],
+            lineups=[{"team_id": 1, "player_id": 123, "type_id": "11", "details": [
+                {"type": {"developer_name": "AERIALS_WON"}, "data": {"value": 0}},
+                {"type": {"developer_name": "FOULS_DRAWN"}, "data": {"value": 1}},
+                {"type": {"developer_name": "FOULS_DRAWN"}, "data": {"value": 1}},
+                {"type": {"developer_name": "PASSES"}, "data": {"value": 18}},
+            ]}],
+        )
+        match, *rows = decode(live.csv_bytes(live.normalize([game], "600", "2026")))
+        for field in ("periods_available", "pressure_available", "xg_available", "formations_available", "lineups_available"):
+            self.assertEqual(match[field], "1")
+        period = next(row for row in rows if row["record_type"] == "period")
+        self.assertEqual((period["code"], period["minute"], period["ticking"]), ("1ST_HALF", "48.0", "0"))
+        self.assertEqual([(row["team_id"], row["minute"], row["value"]) for row in rows if row["record_type"] == "pressure"],
+                         [("1", "7.0", "0.0"), ("2", "7.0", "12.25")])
+        xg = next(row for row in rows if row["source"] == "xgfixture")
+        self.assertEqual((xg["type_id"], xg["value"]), ("7944", "0.2"))
+        formation = next(row for row in rows if row["record_type"] == "formation")
+        self.assertEqual((formation["team_id"], formation["formation"]), ("1", "4-3-3"))
+        player = next(row for row in rows if row["record_type"] == "lineup")
+        self.assertEqual((player["started"], player["aerials_won"], player["fouls_drawn"], player["passes"]),
+                         ("1", "0.0", "", "18.0"))
+
+    def test_malformed_optional_relations_leave_base_result(self):
+        game = fixture(pressure={"minute": 5}, formations=[None], lineups={"player_id": 123}, xgfixture="missing")
+        rows = decode(live.csv_bytes(live.normalize([game], "600", "2026")))
+        self.assertEqual(rows[0]["home_score"], "2.0")
+        for field in ("pressure_available", "xg_available", "formations_available", "lineups_available"):
+            self.assertEqual(rows[0][field], "0")
 
     def test_scope_and_completed_or_scheduled_games_are_excluded(self):
         fixtures = [fixture(state_id=state) for state in (1, 5, 7, 8, 10, 12, 15, 16)]
@@ -114,6 +153,9 @@ class LivePollingTests(unittest.TestCase):
         patcher = patch.object(live, "fetch_fixture_details", return_value=[])
         self.details = patcher.start()
         self.addCleanup(patcher.stop)
+        enrich = patch.object(live.LiveFeed, "enrich")
+        enrich.start()
+        self.addCleanup(enrich.stop)
 
     @patch.object(live, "season_scope", return_value=("600", "2026"))
     @patch.object(live, "fetch_inplay")
@@ -138,6 +180,30 @@ class LivePollingTests(unittest.TestCase):
         self.assertEqual((player["player_id"], player["started"], player["minutes_played"]), ("123", "1", "90.0"))
         self.assertEqual(player["rating"], "")
         self.details.assert_called_with(["100"])
+
+    @patch.object(live, "season_scope", return_value=("600", "2026"))
+    @patch.object(live, "fetch_inplay")
+    @patch.object(live.time, "monotonic", return_value=100)
+    def test_confirmed_final_with_incomplete_score_is_retried_after_backoff(self, clock, fetch, scope):
+        feed = live.LiveFeed(Path("2026-2027"))
+        fetch.side_effect = [[fixture()], [], [], []]
+        partial = fixture(state_id=5)
+        partial["scores"].pop(1)
+        self.details.side_effect = [[partial], [fixture(state_id=5)]]
+        feed.snapshot()
+
+        clock.return_value = 131
+        final = next(row for row in decode(feed.snapshot()) if row["record_type"] == "fixture")
+        self.assertEqual((final["state"], final["home_score"], final["away_score"]), ("FT", "2.0", ""))
+
+        clock.return_value = 192
+        feed.snapshot()
+        self.details.assert_called_once_with(["100"])
+
+        clock.return_value = 253
+        final = next(row for row in decode(feed.snapshot()) if row["record_type"] == "fixture")
+        self.assertEqual((final["state"], final["home_score"], final["away_score"]), ("FT", "2.0", "0.0"))
+        self.assertNotIn("100", feed.observed)
 
     @patch.object(live, "season_scope", return_value=("600", "2026"))
     @patch.object(live, "fetch_inplay")
@@ -256,6 +322,68 @@ class LivePollingTests(unittest.TestCase):
             handler.serve_file()
             self.assertEqual(handler.send_error.call_args.args[0], 403)
         feed_class.return_value.snapshot.assert_not_called()
+
+
+class LiveEnrichmentTests(unittest.TestCase):
+    @patch.object(live, "fetch_fixtures")
+    @patch.object(live.time, "monotonic", return_value=100)
+    def test_add_on_denial_keeps_base_and_other_relations_and_backs_off(self, clock, fetch):
+        def response(endpoint, params, timeout):
+            self.assertEqual(endpoint, "livescores/inplay")
+            self.assertEqual(params["filters"], "fixtureLeagues:600")
+            self.assertEqual(timeout, live.OPTIONAL_TIMEOUT)
+            if params["include"] == "xGFixture.type":
+                raise live.LiveUnavailable("xG unavailable", status=403)
+            if params["include"] == "pressure":
+                return [fixture(season_id=2025, pressure=[{}]), fixture(pressure=[{
+                    "participant_id": 1, "minute": 2, "pressure": 1,
+                }])]
+            return []
+
+        fetch.side_effect = response
+        feed = live.LiveFeed(Path("2026-2027"))
+        game = fixture()
+        feed.enrich([game], "600", "2026")
+        self.assertEqual(live.normalize([game], "600", "2026")[0]["home_score"], 2)
+        self.assertEqual(game["pressure"][0]["pressure"], 1)
+        self.assertNotIn("xgfixture", game)
+        fetch.reset_mock()
+        clock.return_value += 30
+        feed.enrich([fixture()], "600", "2026")
+        includes = [call.args[1]["include"] for call in fetch.call_args_list]
+        self.assertIn("pressure", includes)
+        self.assertNotIn("xGFixture.type", includes)
+
+    @patch.object(live, "fetch_fixtures")
+    def test_final_lineups_fall_back_to_the_team_sheet_when_details_are_denied(self, fetch):
+        def response(endpoint, params, timeout):
+            self.assertEqual(endpoint, "fixtures/multi/100")
+            if params["include"] == live.OPTIONAL_INCLUDES["lineups"]:
+                raise live.LiveUnavailable("Player details unavailable", status=403)
+            self.assertEqual(params["include"], "lineups")
+            return [fixture(state_id=5, lineups=[{"team_id": 1, "player_id": 123, "type_id": 11}])]
+
+        fetch.side_effect = response
+        feed = live.LiveFeed(Path("2026-2027"))
+        game = fixture(state_id=5, pressure=[], formations=[], xgfixture=[])
+        feed.enrich([game], "600", "2026", finished=True)
+        rows = live.normalize([game], "600", "2026", include_finished=True)
+        self.assertEqual(rows[0]["state"], "FT")
+        self.assertEqual(rows[-1]["player_id"], 123)
+        self.assertEqual(fetch.call_count, 2)
+
+    @patch.object(live, "fetch_fixtures")
+    @patch.object(live.time, "monotonic", return_value=100)
+    def test_optional_rate_limit_pauses_extra_requests_and_never_requests_idle_matches(self, clock, fetch):
+        feed = live.LiveFeed(Path("2026-2027"))
+        feed.enrich([fixture(state_id=1)], "600", "2026")
+        fetch.assert_not_called()
+        fetch.side_effect = live.LiveUnavailable("Rate limit", retry=600, status=429)
+        feed.enrich([fixture()], "600", "2026")
+        fetch.reset_mock()
+        clock.return_value += 599
+        feed.enrich([fixture()], "600", "2026")
+        fetch.assert_not_called()
 
 
 if __name__ == "__main__":

@@ -8,8 +8,32 @@ league table below them. A week picker with ← and → either side (as on the
 team page's match picker) chooses the week; it opens on the current week, by
 the same `currentRoundIndex` rule as every other page, and keeps the visitor's
 choice until the data reloads. The week's matches are listed earliest first:
-the played ones open the match, and the ones still to play are greyed with
-their kickoff and open nothing. Choosing another week changes only the list.
+played and live games open the match, and games still to play show their
+kickoff. Choosing another week changes only the list. A live game from outside
+the selected week can still be opened from the top of the list.
+
+On the local site the dashboard opens a live match automatically before you
+choose a match yourself. The scoreboard, stats, pressure charts, lineups and
+events use the same Sportmonks snapshot as Maç Haftası. Standings are marked
+provisional while a snapshot contributes a result. The season cards compare
+the live match's values so far with completed matches and show final values
+after Sportmonks confirms full time. Optional fields depend on coverage and
+plan access.
+
+Click **Simulate match** beside **Matches** to preview the full dashboard
+between real games. The local demo plays a fixture from kickoff to full time
+in about 40 seconds, including goals, substitutions and halftime. Click
+**Stop simulation** to return to the saved or live data. The demo keeps its
+data in the browser and works when the server is started with `--no-live`.
+
+Move the pressure chart's slider back to replay the whole dashboard at the
+selected minute. Moving it to the right end restores the latest view. Saved
+matches use timed events, pressure and `fixture_trends.csv` where available.
+The local live feed also keeps a short history of the snapshots seen in the
+current tab. xG and player totals display a dash when the selected minute
+has no recorded values. The replay standings are provisional. They use the
+results available before the selected match kicked off and its score at the
+replay minute.
 
 The league table below (**SÜPER LİG · Puan Durumu**) lists each club's place
 ("1."), crest and name under one "Takım" heading, then O (played), G (won) and
@@ -71,10 +95,8 @@ gives every card the tallest one's height, and Fiziksel Mücadele is meant to
 be that one, so the other five are kept no taller (the pass scatter's height,
 the rows' padding). On a phone the six stack, still of one height.
 
-The right-hand column is an empty panel holding the place of a future one. The
-two outer columns are always the same width, and as tall as each other: as tall
-as the left one's content, while the match runs on below them. On narrower
-screens the right one is dropped, and on a phone the match comes first.
+The right-hand column shows match events and Asistan. On narrower screens the
+events move below the match cards. On a phone the match comes first.
 
 Everything comes from files the published site serves: `fixtures.csv`,
 `fixture_scores.csv`, `team_metrics.csv`, `player_match_stats.csv`,
@@ -203,8 +225,9 @@ the browser or logs. No widget subscription or embed snippet is used: this is a
 native panel powered by the [Sportmonks in-play endpoint](https://docs.sportmonks.com/v3/endpoints-and-entities/endpoints/livescores/get-inplay-livescores).
 Available statistics/events depend on Sportmonks coverage and subscription access.
 
-The visible page polls every 30 seconds during games and every 60 seconds when
-none are live. It pauses when hidden or when another view is selected. The server
+The visible local tab polls every 30 seconds during games and every 60 seconds
+when none are live. Ana Sayfa, Maç Haftası and the sidebar share that snapshot.
+Polling pauses when the tab is hidden. The server
 shares a locked CSV snapshot across tabs, backs off for at least 120 seconds after
 errors, and honors longer `Retry-After` delays. A HEAD request makes no API call.
 The league/season pair must be unambiguous in `fixtures.csv`; returned fixtures are
@@ -242,7 +265,9 @@ The same sidebar is available on team pages. `sidebar.js` owns the shared menu a
 
 **Puan Durumu** appears directly below **Home** in the sidebar, with a direct address of `http://127.0.0.1:8000/index.html?view=standings`. The Turkish table includes Sıra, Takım, O, G, B, M, A, Y, AV, Puan, and Son 5 maç. A narrow marker beside Sıra shows the base UEFA places: green for Champions League, blue for Europa League, and purple for Conference League. The Türkiye Kupası winner can shift the Europa and Conference places down one league position. Team names and logos link to team pages. Form badges run from oldest to newest and open the corresponding match on the team's page. The table scrolls horizontally on smaller screens.
 
-Positions and points always use the supplied standings; the page does not recalculate the league order or infer tiebreak rules. Detailed columns prefer the provider's `details.overall_*` columns in `standings.csv`. The exporter now preserves these scalar details, including home/away details for later use. To add them to existing exports, use the documented `--rebuild-csv` command yourself; no API calls are needed.
+The supplied standings are the starting point. On the local site, both Ana Sayfa and Puan Durumu show the score and minute for clubs in play. Points and position update as if the matches ended at their current scores, and Puan Durumu also updates the match record and goal totals. Provisional positions use points, goal difference, then goals scored. Confirmed results stay in the provisional table until the saved data includes them. To see both tables between real matches, start **Simulate match** on Ana Sayfa and open **Puan Durumu** from the sidebar.
+
+Detailed columns prefer the provider's `details.overall_*` columns in `standings.csv`. The exporter preserves these scalar details, including home/away details for later use. To add them to existing exports, use the documented `--rebuild-csv` command yourself.
 
 The page also works with older exports: detailed totals fall back to completed fixtures and saved CURRENT scores for the matching season, league, stage, and group. These values have an asterisk. If results are missing, dependent totals remain unavailable rather than silently using zero; if the provider supplies a played-match count, the results must cover that count. Form always uses saved completed fixtures. Provider standings and saved fixtures may have different update times, which the page states explicitly. No datasets or analyses have been run by the assistant.
 

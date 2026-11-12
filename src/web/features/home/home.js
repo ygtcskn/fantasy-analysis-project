@@ -2,8 +2,8 @@
 
 // Ana Sayfa: the season's played matches and the league table on the left, and
 // one chosen match in the middle: its result, its flow minute by minute, its
-// statistics and the two elevens. The newest match is open until another is
-// chosen. A right-hand column is kept empty for a future panel.
+// statistics and the two elevens. Local live snapshots use the same dashboard
+// as saved matches. The right column contains the events and the assistant.
 //
 // Shared parts, so every page agrees: standings (renderStandings, also used by
 // Maç Haftası), the statistic rule and versus rows (matchweek/results.js), the
@@ -12,6 +12,9 @@
 // already reads (teamAnalysisExtras); formations are read here.
 
 const homeExtras = { key: null, state: "idle", formations: null, referees: null };
+const homeSelection = { season: "", manual: false, observed: new Map() };
+const HOME_REPLAY_PAINT_INTERVAL = 90;
+const homeReplay = { fixtureId: null, simulated: false, at: null, context: null, dragging: false, refresh: false, frame: 0, timer: 0 };
 
 function homeTeams() {
   const teams = new Map((state.tables["teams.csv"] || []).map((row) => [row.id, row]));
@@ -28,7 +31,7 @@ function standingGroupKey(row) {
 // The league table. With `record`, as on Ana Sayfa, each club's played and won
 // matches come between its name and its points (Puan Durumu's figures, by the
 // same standingFigureCell), and the place reads "1.".
-function renderStandings(teams, prefix = "standings", { record = false } = {}) {
+function renderStandings(teams, prefix = "standings", { record = false, snapshot = [], simulated = false, replay = null } = {}) {
   const source = state.tables["standings.csv"] || [];
   const groups = [...new Set(source.map(standingGroupKey))];
   if (!groups.includes(state.standingsGroup)) state.standingsGroup = groups[0] ?? null;
@@ -43,18 +46,32 @@ function renderStandings(teams, prefix = "standings", { record = false } = {}) {
   const rows = source.filter((row) => standingGroupKey(row) === state.standingsGroup).sort((a, b) => (number(a.position) ?? Infinity) - (number(b.position) ?? Infinity));
   const count = $(`${prefix}-count`);
   if (count) count.textContent = t("{count} takım", { count: rows.length }, rows.length);
-  // Maç Haftası shows the table as it would stand if the matches in play ended now.
-  const live = prefix === "matchweek-standings" && typeof matchweekLiveStandings === "function" ? matchweekLiveStandings(rows) : null;
+  const live = replay ? homeReplayStandings(replay.fixture, replay.fixture.homeSnapshot.summary, rows)
+    : simulated ? homeSimulationStandings(rows)
+    : matchweekLiveStandings(rows, prefix === "matchweek-standings" ? undefined : snapshot);
+  if (prefix === "standings") {
+    const eyebrow = $("home-standings-eyebrow");
+    const inPlay = live && [...live.teams.values()].some((entry) => entry.live);
+    eyebrow.classList.toggle("home-standings-live-label", Boolean(!replay && inPlay));
+    eyebrow.textContent = replay ? t("Maç tekrarı · Geçici") : !live ? t("SÜPER LİG")
+      : simulated ? (inPlay ? t("Simülasyon · Canlı") : t("Simülasyon · Geçici"))
+      : inPlay ? t("Canlı puan durumu") : t("Geçici puan durumu");
+    eyebrow.title = replay ? t("Maç öncesi sonuçlar ve seçilen dakikadaki skor kullanılarak hesaplandı.")
+      : live && simulated ? t("Simülasyon · Geçici puan durumu") : "";
+  }
   $(`${prefix}-note`).textContent = state.tables["standings.csv"] ? "" : t("Puan tablosu için sezon verilerini yükleyin.");
   let scores = null;
   const body = document.createDocumentFragment();
-  for (const [index, row] of (live ? live.order : rows).entries()) {
+  const standingsRows = replay ? live?.order || [] : live?.order || rows;
+  for (const [index, row] of standingsRows.entries()) {
     const tr = element("tr");
     const club = element("td");
     const identity = createTeamLink(row.participant_id, teamName(row.participant_id, teams), "standing-club");
-    identity.replaceChildren(createTeamLogo(row.participant_id, teams, false), element("span", "", teamName(row.participant_id, teams)));
-    club.append(identity);
+    const name = element("span", "", teamName(row.participant_id, teams));
     const entry = live?.teams.get(String(row.participant_id));
+    identity.replaceChildren(createTeamLogo(row.participant_id, teams, false), name);
+    club.append(identity);
+    if (record && entry) addStandingMatch(identity, name, entry, teams, `home-standing-match-${row.participant_id}`, !replay);
     const points = element("td", `numeric standing-points${entry ? ` standing-live standing-live-${entry.status}` : ""}`,
       displayNumber(entry ? entry.points : row.points));
     if (entry) points.title = `${displayNumber(entry.base)} + ${entry.gained} · ${entry.own}–${entry.other} ${entry.opponent} (${entry.live ? t("sürüyor") : t("bitti, kayda girmedi")})`;
@@ -62,13 +79,15 @@ function renderStandings(teams, prefix = "standings", { record = false } = {}) {
     tr.append(element("td", "standing-position", record && place !== "—" ? `${place}.` : place), club);
     if (record) {
       const results = () => standingResults(row, scores ??= currentFixtureScores());
-      tr.append(standingFigureCell(row, "overall_matches", "played", results), standingFigureCell(row, "overall_wins", "wins", results));
+      tr.append(standingFigureCell(row, "overall_matches", "played", results, entry?.played),
+        standingFigureCell(row, "overall_wins", "wins", results, entry?.won));
     }
     tr.append(points);
     body.append(tr);
   }
-  if (!rows.length) {
-    const tr = element("tr"), td = element("td", "no-results", state.tables["standings.csv"] ? t("Bu dosyada puan durumu yok.") : t("Puan tablosu burada görünecek."));
+  if (!standingsRows.length) {
+    const tr = element("tr"), td = element("td", "no-results", replay ? t("Bu maç için geçmiş puan durumu oluşturulamadı.")
+      : state.tables["standings.csv"] ? t("Bu dosyada puan durumu yok.") : t("Puan tablosu burada görünecek."));
     td.colSpan = record ? 5 : 3; tr.append(td); body.append(tr);
   }
   $(`${prefix}-body`).replaceChildren(body);
@@ -102,16 +121,74 @@ async function loadHomeExtras() {
   if (state.view === "home" && state.seasonSlug === key) renderHome();
 }
 
-// ------------------------------------------------------------ played matches
+// ------------------------------------------------------------ match selection
 
-// Finished matches with a saved score for both sides, newest first.
-function homePlayedGames() {
+function homeScoreValue(value) {
+  const score = number(value);
+  return Number.isInteger(score) && score >= 0 ? score : null;
+}
+
+function homeScoreText(score) {
+  return score.map(displayNumber).join(" – ");
+}
+
+function homeSnapshotGames() {
+  if (homeSelection.season !== state.seasonSlug || !state.homeFixture) {
+    if (homeSelection.season !== state.seasonSlug) homeSelection.observed.clear();
+    homeSelection.season = state.seasonSlug;
+    homeSelection.manual = false;
+  }
+  const simulated = siteMode === "local" && homeSimulationActive();
+  const feed = simulated ? homeSimulationRows() : siteMode === "local" && state.seasonSlug ? liveCentre.rows : [];
+  const byFixture = new Map();
+  for (const row of feed) {
+    if (!row.fixture_id) continue;
+    if (!byFixture.has(row.fixture_id)) byFixture.set(row.fixture_id, []);
+    byFixture.get(row.fixture_id).push(row);
+  }
+
   const scores = currentFixtureScores();
-  const valid = (value) => Number.isInteger(value) && value >= 0;
-  return (state.tables["fixtures.csv"] || []).filter(fixtureFinished).map((fixture) => ({ fixture,
-    score: [scores.get(`${fixture.fixture_id}:${fixture.home_team_id}`), scores.get(`${fixture.fixture_id}:${fixture.away_team_id}`)] }))
-    .filter((game) => game.score.every(valid))
-    .sort((a, b) => kickoffTime(b.fixture) - kickoffTime(a.fixture) || String(b.fixture.fixture_id).localeCompare(String(a.fixture.fixture_id)));
+  const games = [], standings = [];
+  for (const fixture of state.tables["fixtures.csv"] || []) {
+    const id = fixture.fixture_id;
+    const savedScore = [fixture.home_team_id, fixture.away_team_id].map((team) => homeScoreValue(scores.get(`${id}:${team}`)));
+    const savedFinished = fixtureFinished(fixture);
+    const useConfirmed = !simulated && siteMode === "local" && (!savedFinished || savedScore.includes(null));
+    const rows = byFixture.get(id) || (useConfirmed ? matchweekCompletedSnapshot(fixture) : null);
+    const summaries = rows?.filter((row) => row.record_type === "fixture") || [];
+    const summary = summaries[0];
+    const match = summaries.length === 1 && ["league_id", "season_id", "home_team_id", "away_team_id"]
+      .every((key) => String(summary[key]) === String(fixture[key]));
+    if (match && (simulated || !savedFinished || (savedScore.includes(null) && matchweekFinished(summary)))) {
+      const inPlay = !matchweekFinished(summary);
+      if (inPlay && !simulated) homeSelection.observed.set(id, Date.now());
+      if (!inPlay && !simulated) homeSelection.observed.delete(id);
+      const snapshot = { rows, summary, inPlay, simulated };
+      games.push({ fixture: { ...fixture, homeSnapshot: snapshot }, score: [homeScoreValue(summary.home_score), homeScoreValue(summary.away_score)] });
+      if (!savedFinished || simulated) standings.push(summary);
+      continue;
+    }
+    if (savedFinished) {
+      homeSelection.observed.delete(id);
+      if (!savedScore.includes(null)) games.push({ fixture, score: savedScore });
+    } else if (!simulated && id === state.homeFixture && Date.now() - homeSelection.observed.get(id) < 10 * 60000) {
+      // The in-play row can disappear before the fixture endpoint confirms the
+      // result. Keep the selected match open and clear its old live figures.
+      games.push({ fixture: { ...fixture, homeSnapshot: { rows: [], pending: true } }, score: [null, null] });
+    }
+  }
+  games.sort((a, b) => kickoffTime(b.fixture) - kickoffTime(a.fixture) || String(b.fixture.fixture_id).localeCompare(String(a.fixture.fixture_id)));
+  return { games, standings, simulated };
+}
+
+function homeGameStatus(fixture) {
+  const snapshot = fixture.homeSnapshot;
+  if (snapshot?.replay) return t("Maç tekrarı · {minute}", { minute: homePressureClock(snapshot.replay.at, snapshot.replay.firstHalf) });
+  if (snapshot?.pending) return t("Maç durumu bekleniyor");
+  if (!snapshot) return fixtureStateLabel(fixture);
+  const summary = snapshot.summary;
+  const status = liveStateLabels[summary.state] || fixtureStateLabel({ state: summary.state });
+  return [snapshot.simulated ? t("Simülasyon") : snapshot.inPlay ? t("CANLI") : "", status, liveMinute(summary)].filter(Boolean).join(" · ");
 }
 
 const homeShortDate = new Intl.DateTimeFormat(LOCALE, { timeZone: MATCH_TIME_ZONE, day: "numeric", month: "short" });
@@ -137,9 +214,8 @@ function homeWeeks() {
 
 // The chosen week's matches, earliest first. It opens on the current week
 // (currentRoundIndex, the rule every page uses) and stays where the visitor
-// puts it until the data reloads. Played matches are buttons that open the
-// match; the week's other matches are listed with their kickoff, greyed, with
-// nothing to open yet.
+// puts it until the data reloads. Live matches from another week are also
+// selectable, without resetting the week the visitor is browsing.
 function renderHomeGames(games, teams) {
   const weeks = homeWeeks();
   if (!weeks.some((week) => week.key === state.homeWeek)) state.homeWeek = weeks[currentRoundIndex(weeks)]?.key ?? null;
@@ -152,8 +228,14 @@ function renderHomeGames(games, teams) {
   $("home-week-prev").disabled = index <= 0;
   $("home-week-next").disabled = index < 0 || index >= weeks.length - 1;
   const played = new Map(games.map((game) => [game.fixture.fixture_id, game]));
-  const fixtures = weeks[index]?.fixtures || [];
-  $("home-games-note").textContent = state.tables["fixtures.csv"] ? "" : t("Maçları görmek için sezon verilerini yükleyin.");
+  const inWeek = weeks[index]?.fixtures || [];
+  const ids = new Set(inWeek.map((fixture) => fixture.fixture_id));
+  const outsideWeek = games.filter(({ fixture }) => fixture.homeSnapshot?.inPlay && !ids.has(fixture.fixture_id)).map(({ fixture }) => fixture);
+  const fixtures = [...outsideWeek, ...inWeek];
+  const unavailable = siteMode === "local" && !homeSimulationActive() && liveCentre.meta?.status === "unavailable";
+  $("home-games-note").textContent = unavailable ? t("Canlı veriler şu anda alınamıyor.")
+    : state.tables["fixtures.csv"] ? "" : t("Maçları görmek için sezon verilerini yükleyin.");
+  const focused = document.activeElement?.dataset.fixture;
   const list = document.createDocumentFragment();
   for (const fixture of fixtures) {
     const time = kickoffTime(fixture);
@@ -166,18 +248,38 @@ function renderHomeGames(games, teams) {
       list.append(row);
       continue;
     }
-    const { score } = game;
     const selected = fixture.fixture_id === state.homeFixture;
     const button = element("button", "home-game");
     button.type = "button";
     button.dataset.fixture = fixture.fixture_id;
     button.setAttribute("aria-pressed", String(selected));
     button.setAttribute("aria-controls", "home-detail");
-    button.setAttribute("aria-label", `${teamName(fixture.home_team_id, teams)} ${score[0]} – ${score[1]} ${teamName(fixture.away_team_id, teams)}, ${when}`);
-    button.append(element("span", "home-game-meta", when), homeGameLine(fixture, teams, `${score[0]} – ${score[1]}`));
+    button.append(element("span", "home-game-meta"), homeGameLine(fixture, teams, ""));
+    updateHomeGameButton(button, game, teams, when);
     list.append(button);
   }
-  $("home-games-list").replaceChildren(list);
+  const gamesList = $("home-games-list");
+  gamesList.classList.toggle("has-other-week", outsideWeek.length > 0);
+  gamesList.style.setProperty("--home-week-games", Math.max(1, inWeek.length));
+  gamesList.replaceChildren(list);
+  if (focused) gamesList.querySelector(`[data-fixture="${CSS.escape(focused)}"]`)?.focus({ preventScroll: true });
+}
+
+function updateHomeGameButton(button, game, teams, kickoff) {
+  if (!button) return;
+  const { fixture, score } = game;
+  const snapshot = fixture.homeSnapshot;
+  const when = kickoff ?? button.dataset.kickoff;
+  button.dataset.kickoff = when;
+  const status = snapshot ? homeGameStatus(fixture) : when;
+  const text = homeScoreText(score);
+  const scoreNode = button.querySelector(".home-game-score");
+  if (scoreNode.textContent !== text) scoreNode.textContent = text;
+  const meta = button.querySelector(".home-game-meta");
+  if (meta.textContent !== status) meta.textContent = status;
+  button.classList.toggle("home-game-live", Boolean(snapshot?.inPlay || snapshot?.simulated));
+  const label = `${teamName(fixture.home_team_id, teams)} ${text} ${teamName(fixture.away_team_id, teams)}, ${status}`;
+  if (button.getAttribute("aria-label") !== label) button.setAttribute("aria-label", label);
 }
 
 // Home logo and code, the score (or a dash), away code and logo.
@@ -228,7 +330,9 @@ function homeWeather(fixture) {
 }
 
 function homeFormation(fixture, teamId) {
-  const rows = (homeExtras.formations || []).filter((row) => row.fixture_id === fixture.fixture_id && row.participant_id === teamId);
+  const snapshot = fixture.homeSnapshot;
+  const rows = snapshot ? snapshot.rows.filter((row) => row.record_type === "formation" && row.team_id === teamId)
+    : (homeExtras.formations || []).filter((row) => row.fixture_id === fixture.fixture_id && row.participant_id === teamId);
   return rows.length === 1 && /^\d(-\d){1,4}$/.test(rows[0].formation || "") ? rows[0].formation : "";
 }
 
@@ -262,7 +366,7 @@ const HOME_STADIUM_PHOTOS = {
 };
 
 function renderHomeScoreboard(game, teams) {
-  const { fixture, score } = game;
+  const { fixture } = game;
   const card = element("section", "home-panel home-card home-scoreboard");
   const photo = HOME_STADIUM_PHOTOS[fixture.venue_id || fixture["venue.id"]];
   if (photo) {
@@ -271,35 +375,51 @@ function renderHomeScoreboard(game, teams) {
     // relative to home.css, not to the page.
     card.style.setProperty("--home-stadium", `url("${new URL(`assets/stadiums/${photo}-stadium.jpg`, document.baseURI).href}")`);
   }
-  card.setAttribute("aria-label", t("Maç sonucu: {result}", { result: `${teamName(fixture.home_team_id, teams)} ${score[0]} – ${score[1]} ${teamName(fixture.away_team_id, teams)}` }));
   const grid = element("div", "home-score-grid");
   const side = (id, index) => {
     const box = element("div", `home-score-team${index ? " home-score-away" : ""}`);
     const name = createTeamLink(id, teamName(id, teams), "home-score-name");
-    const formation = homeFormation(fixture, id);
-    box.append(createTeamLogo(id, teams, true), name,
-      element("span", "home-score-role", `${index ? t("Deplasman") : t("Ev sahibi")}${formation ? ` · ${formation}` : ""}`));
+    box.append(createTeamLogo(id, teams, true), name, element("span", "home-score-role"));
     return box;
   };
   const middle = element("div", "home-score-middle");
-  const half = currentFixtureScores("1ST_HALF");
-  const halfScore = [half.get(`${fixture.fixture_id}:${fixture.home_team_id}`), half.get(`${fixture.fixture_id}:${fixture.away_team_id}`)];
-  const halfText = halfScore.every((value) => Number.isInteger(value) && value >= 0) ? ` · ${t("İY {score}", { score: `${halfScore[0]}–${halfScore[1]}` })}` : "";
-  middle.append(element("strong", "home-score-value", `${score[0]} – ${score[1]}`),
-    element("span", "home-score-state", `${fixtureStateLabel(fixture)}${halfText}`));
+  middle.append(element("strong", "home-score-value"), element("span", "home-score-state"));
   grid.append(side(fixture.home_team_id, 0), middle, side(fixture.away_team_id, 1));
   card.append(grid);
   const venue = [fixture["venue.name"], fixture["venue.city_name"]].filter(Boolean).join(" · ");
-  if (venue) card.append(element("p", "home-score-venue", venue));
+  card.append(element("p", "home-score-venue", venue));
   const chips = element("div", "home-chips");
   const round = fixture["round.name"] ? `${t("{round}. hafta", { round: fixture["round.name"] })} · ` : "";
-  chips.append(element("span", "home-chip", `${round}${homeLongDate.format(kickoffTime(fixture))} ${kickoffClock(fixture)}`));
+  const kickoff = kickoffTime(fixture);
+  if (Number.isFinite(Number(kickoff))) chips.append(element("span", "home-chip", `${round}${homeLongDate.format(kickoff)} ${kickoffClock(fixture)}`));
   const referee = homeReferee(fixture);
   if (referee) chips.append(element("span", "home-chip", t("Hakem: {name}", { name: referee })));
   const weather = homeWeather(fixture);
   if (weather) chips.append(element("span", "home-chip", weather));
   card.append(chips);
+  updateHomeScoreboard(card, game, teams);
   return card;
+}
+
+function updateHomeScoreboard(card, game, teams) {
+  const { fixture, score } = game;
+  const snapshot = fixture.homeSnapshot;
+  const sides = [fixture.home_team_id, fixture.away_team_id];
+  const scoreText = homeScoreText(score), status = homeGameStatus(fixture);
+  const half = snapshot ? null : currentFixtureScores("1ST_HALF");
+  const halfSummary = snapshot?.summary?.state === "INPLAY_1ST_HALF" ? null : snapshot?.summary;
+  const halfScore = (snapshot ? [halfSummary?.home_half_score, halfSummary?.away_half_score]
+    : sides.map((team) => half.get(`${fixture.fixture_id}:${team}`))).map(homeScoreValue);
+  const halfText = halfScore.includes(null) ? "" : ` · ${t("İY {score}", { score: halfScore.map(displayNumber).join("–") })}`;
+  const value = card.querySelector(".home-score-value"), clock = card.querySelector(".home-score-state");
+  if (value.textContent !== scoreText) value.textContent = scoreText;
+  if (clock.textContent !== status + halfText) clock.textContent = status + halfText;
+  card.setAttribute("aria-label", `${teamName(sides[0], teams)} ${scoreText} ${teamName(sides[1], teams)} · ${status}`);
+  card.querySelectorAll(".home-score-role").forEach((role, index) => {
+    const formation = homeFormation(fixture, sides[index]);
+    const text = `${index ? t("Deplasman") : t("Ev sahibi")}${formation ? ` · ${formation}` : ""}`;
+    if (role.textContent !== text) role.textContent = text;
+  });
 }
 
 // ----------------------------------------------------------------- momentum
@@ -324,16 +444,25 @@ function homeChartTime(minute, extra, firstHalf, total) {
   return Math.max(0, Math.min(at, total));
 }
 
+function homeEventRows(fixture) {
+  const snapshot = fixture.homeSnapshot;
+  if (snapshot) return snapshot.rows.filter((row) => row.record_type === "event");
+  return (teamAnalysisExtras.events || []).filter((row) => String(row.fixture_id) === String(fixture.fixture_id)).map((event) => ({
+    ...event, record_type: "event", event_id: String(event.event_id || event.id || ""),
+    code: event["type.developer_name"], label: event["type.name"], team_id: String(event.participant_id || event.team_id || ""),
+  }));
+}
+
 // This match's goals, cards and substitutions on the pressure chart's clock.
 function homeMatchEvents(fixture, firstHalf, total) {
   const sides = [String(fixture.home_team_id), String(fixture.away_team_id)];
   const events = [];
-  for (const event of teamAnalysisExtras.events || []) {
-    if (String(event.fixture_id) !== String(fixture.fixture_id)) continue;
-    const kind = String(event["type.developer_name"] || "").toUpperCase();
+  for (const event of homeEventRows(fixture)) {
+    const code = String(event.code || "").toUpperCase().replace(/[- ]/g, "_");
+    const kind = code === "OWN_GOAL" ? "OWNGOAL" : code;
     if (!HOME_GOALS.has(kind) && !HOME_CARDS.has(kind) && kind !== "SUBSTITUTION") continue;
     if (["true", "1"].includes(String(event.rescinded).toLowerCase())) continue;
-    const team = String(event.participant_id || event.team_id || ""), minute = number(event.minute), extra = number(event.extra_minute) || 0;
+    const team = event.team_id, minute = number(event.minute), extra = number(event.extra_minute) || 0;
     if (!sides.includes(team) || minute === null) continue;
     events.push({ kind, home: team === sides[0], at: homeChartTime(minute, extra, firstHalf, total), sort: number(event.sort_order) ?? 0,
       clock: `${minute}${extra ? `+${extra}` : ""}'`, player: playerName(event.player_id, event.player_name),
@@ -365,38 +494,69 @@ function homeEventText(event) {
 // fixture_periods, else guessed from the last minute) puts a minute on the
 // match clock. A message instead while the files load, or when there is none.
 function homePressure(fixture) {
-  if (teamAnalysisExtras.key !== state.seasonSlug || teamAnalysisExtras.state !== "ready") return { message: t("Baskı verisi yükleniyor…") };
-  if (!teamAnalysisExtras.pressure) return { message: t("fixture_pressure.csv okunamadı.") };
+  const snapshot = fixture.homeSnapshot;
+  if (snapshot?.replay) {
+    const { at, firstHalf, total, minutes, message } = snapshot.replay;
+    return { firstHalf, total, minutes: minutes.filter(([minute]) => minute <= at), message };
+  }
+  if (!snapshot && (teamAnalysisExtras.key !== state.seasonSlug || teamAnalysisExtras.state !== "ready")) return { message: t("Baskı verisi yükleniyor…") };
+  if (!snapshot && !teamAnalysisExtras.pressure) return { message: t("fixture_pressure.csv okunamadı.") };
   const id = String(fixture.fixture_id), home = String(fixture.home_team_id), away = String(fixture.away_team_id);
+  const rows = snapshot ? snapshot.rows.filter((row) => row.record_type === "pressure") : teamAnalysisExtras.pressure;
   const byMinute = new Map();
-  for (const row of teamAnalysisExtras.pressure) {
+  for (const row of rows) {
     if (String(row.fixture_id) !== id) continue;
-    const minute = number(row.minute), value = number(row.pressure);
+    const minute = number(row.minute), value = number(snapshot ? row.value : row.pressure);
     if (minute === null || minute < 1 || value === null) continue;
     if (!byMinute.has(minute)) byMinute.set(minute, new Map());
-    byMinute.get(minute).set(String(row.participant_id), value);
+    byMinute.get(minute).set(String(snapshot ? row.team_id : row.participant_id), value);
   }
   const minutes = [...byMinute].filter(([, values]) => values.has(home) && values.has(away))
     .map(([minute, values]) => [minute, values.get(home), values.get(away)]).sort((a, b) => a[0] - b[0]);
   if (!minutes.length) return { message: t("Bu maç için baskı verisi yok.") };
   const last = minutes[minutes.length - 1][0];
-  const period = (teamAnalysisExtras.periods || []).find((row) => String(row.fixture_id) === id && String(row.description || "").toLowerCase().includes("1st"));
-  const firstHalf = number(period?.minutes) ?? 45 + Math.max(0, Math.round((last - 90) / 2));
-  return { minutes, firstHalf, total: Math.max(last, firstHalf + 45) };
+  const period = snapshot ? snapshot.rows.find((row) => row.record_type === "period" && row.code === "1ST_HALF")
+    : (teamAnalysisExtras.periods || []).find((row) => String(row.fixture_id) === id && String(row.description || "").toLowerCase().includes("1st"));
+  const clock = number(snapshot?.summary?.minute);
+  const extra = number(snapshot?.summary?.extra_minute) ?? 0;
+  const firstHalf = snapshot ? Math.max(45, number(period?.minute) ?? 0, snapshot.summary?.state === "INPLAY_1ST_HALF" && clock !== null ? clock + extra : 0)
+    : number(period?.minutes) ?? 45 + Math.max(0, Math.round((last - 90) / 2));
+  const current = clock === null ? 0 : homeChartTime(clock, extra, firstHalf, Infinity);
+  const total = Math.max(last, firstHalf + 45, current);
+  const through = snapshot?.inPlay ? Math.max(last, current) : total;
+  return { minutes, firstHalf, total, through };
+}
+
+function homeReplayTimeline(fixture) {
+  const pressure = homePressure(fixture);
+  const snapshot = fixture.homeSnapshot;
+  const periods = snapshot ? snapshot.rows.filter((row) => row.record_type === "period")
+    : (teamAnalysisExtras.periods || []).filter((row) => String(row.fixture_id) === String(fixture.fixture_id));
+  const periodMinute = (code) => {
+    const period = periods.find((row) => String(row.code || row.description).toUpperCase().replace(/[- ]/g, "_").includes(code));
+    return number(period?.minute ?? period?.minutes);
+  };
+  const firstHalf = Math.max(45, pressure.firstHalf ?? 0, periodMinute("1ST") ?? 0);
+  const secondHalf = periodMinute("2ND");
+  const normalEnd = Math.max(pressure.total ?? 0, firstHalf + 45, secondHalf === null ? 0 : firstHalf + secondHalf - 45);
+  const total = snapshot ? normalEnd : homeHistoricalReplayDuration(fixture, normalEnd);
+  const clock = number(snapshot?.summary?.minute);
+  const current = clock === null ? 0 : homeChartTime(clock, number(snapshot.summary.extra_minute) ?? 0, firstHalf, total);
+  const atBreak = snapshot?.summary?.state === "HT" ? firstHalf : 0;
+  const through = snapshot?.inPlay || snapshot?.pending ? Math.max(pressure.through ?? 0, current, atBreak) : total;
+  const liveAt = snapshot?.inPlay ? (clock === null ? atBreak || through : current) : null;
+  return { ...pressure, firstHalf, total, through, liveAt, minutes: pressure.minutes || [] };
 }
 
 // The chart alone, with no title row, so all of the card is chart; how to read
 // it is the chart's hover text.
-function renderHomeMomentum(fixture, teams) {
+function renderHomeMomentum(fixture, teams, timeline) {
   const card = element("section", "home-panel home-card home-momentum");
   card.setAttribute("aria-label", t("Maçın akışı: baskı dengesi"));
-  const pressure = homePressure(fixture);
-  if (pressure.message) {
-    card.append(element("p", "home-card-note", pressure.message)); return card;
-  }
+  const pressure = timeline;
   const home = String(fixture.home_team_id), away = String(fixture.away_team_id);
-  const { firstHalf, total } = pressure;
-  const balance = pressure.minutes.map(([minute, own, other]) => [minute, own - other]);
+  const { firstHalf = 45, total = 90, minutes = [] } = pressure;
+  const balance = minutes.map(([minute, own, other]) => [minute, own - other]);
   const events = homeMatchEvents(fixture, firstHalf, total);
   const [homeColor, awayColor] = teamColorPair(fixture.home_team_id, fixture.away_team_id);
 
@@ -420,7 +580,7 @@ function renderHomeMomentum(fixture, teams) {
   for (const [minute, value] of balance) {
     if (!value) continue;
     const h = (Math.abs(value) / reach) * (half - 1);
-    const bar = homeSvg(svg, "rect", { x: x(minute - 1) + slot * 0.1, y: value > 0 ? middle - h : middle, width: slot * 0.8, height: h,
+    const bar = homeSvg(svg, "rect", { "data-replay-at": minute, x: x(minute - 1) + slot * 0.1, y: value > 0 ? middle - h : middle, width: slot * 0.8, height: h,
       fill: value > 0 ? homeColor : awayColor, rx: 0.5 });
     homeSvg(bar, "title", {}, `${homePressureClock(minute, firstHalf)} · ${homeShortName(value > 0 ? home : away, teams)} +${displayNumber(Math.abs(value))}`);
   }
@@ -439,7 +599,7 @@ function renderHomeMomentum(fixture, teams) {
   for (const event of events) {
     const cx = x(event.at), color = event.home ? homeColor : awayColor;
     if (HOME_GOALS.has(event.kind)) {
-      const group = homeSvg(svg, "g", { class: "home-momentum-goal" });
+      const group = homeSvg(svg, "g", { class: "home-momentum-goal", "data-replay-at": event.at });
       homeSvg(group, "title", {}, homeEventText(event));
       homeSvg(group, "line", { x1: cx, y1: top, x2: cx, y2: bottom, stroke: color, opacity: 0.7 });
       const cy = event.home ? top + 5 : bottom - 5;
@@ -456,7 +616,7 @@ function renderHomeMomentum(fixture, teams) {
       continue;
     }
     const lane = event.home ? laneHome : laneAway;
-    const group = homeSvg(svg, "g");
+    const group = homeSvg(svg, "g", { "data-replay-at": event.at });
     homeSvg(group, "title", {}, homeEventText(event));
     if (event.kind === "SUBSTITUTION") {
       homeSvg(group, "text", { x: cx, y: lane + 3, "text-anchor": "middle", class: "home-momentum-sub" }, "⇄");
@@ -465,31 +625,61 @@ function renderHomeMomentum(fixture, teams) {
         class: event.kind === "YELLOWCARD" ? "home-card-yellow" : event.kind === "REDCARD" ? "home-card-red" : "home-card-second" });
     }
   }
-  // A slider under the chart walks through the match: a line marks its minute
-  // on the chart, and Maç Olayları lights the event nearest to it. Nothing is
-  // marked until it is first moved.
+  // Keep the range input in place while repainting the replayed panels.
   const marker = homeSvg(svg, "line", { x1: 0, y1: top - 2, x2: 0, y2: height, class: "home-momentum-cursor", visibility: "hidden" });
   const slider = element("input", "home-momentum-slider");
-  Object.assign(slider, { type: "range", min: 0, max: total, step: 1, value: 0 });
-  slider.setAttribute("aria-label", t("Maç olaylarında dakika seç"));
+  Object.assign(slider, { type: "range", min: 0, max: total, step: 1, value: homeReplay.at ?? pressure.through });
+  slider.setAttribute("aria-label", t("Maçın tekrar dakikasını seç"));
   slider.style.setProperty("--plot-left", `${(left / width) * 100}%`);
   slider.style.setProperty("--plot-right", `${(right / width) * 100}%`);
+  const summary = fixture.homeSnapshot?.summary;
+  const liveClock = pressure.liveAt === null ? "" : liveMinute(summary) ||
+    (summary.state === "HT" ? t("Devre arası") : pressure.liveAt ? homePressureClock(pressure.liveAt, firstHalf) : "");
+  const liveLabel = liveClock ? t("CANLI · {minute}", { minute: liveClock }) : "";
+  const mark = () => {
+    const at = Math.min(Number(slider.value), pressure.through);
+    slider.value = at;
+    marker.setAttribute("x1", x(at));
+    marker.setAttribute("x2", x(at));
+    marker.setAttribute("visibility", at < pressure.through ? "visible" : "hidden");
+    const viewedMinute = at < pressure.through ? homePressureClock(at, firstHalf) : t("En güncel maç görünümü");
+    slider.setAttribute("aria-valuetext", [viewedMinute, liveLabel].filter(Boolean).join(" · "));
+    return at;
+  };
+  slider.addEventListener("pointerdown", () => { homeReplay.dragging = true; });
   slider.addEventListener("input", () => {
-    const at = Number(slider.value);
-    marker.setAttribute("x1", x(at)); marker.setAttribute("x2", x(at)); marker.setAttribute("visibility", "visible");
-    slider.setAttribute("aria-valuetext", homePressureClock(at, firstHalf));
-    highlightHomeEvents(at);
+    const at = mark();
+    homeReplay.at = at < pressure.through ? at : null;
+    if (homeReplay.at !== null && !fixture.homeSnapshot?.simulated) loadHomeReplayHistory();
+    queueHomeReplayPaint();
   });
   const track = element("div", "home-momentum-track");
   track.append(svg, slider);
+  if (liveLabel) {
+    const live = element("span", "home-momentum-live");
+    live.setAttribute("aria-hidden", "true");
+    live.style.setProperty("--live-position", `${x(pressure.liveAt) / width * 100}%`);
+    live.append(element("span", "home-momentum-live-label", liveLabel));
+    track.append(live);
+  }
   const scroll = element("div", "home-momentum-scroll");
   scroll.append(track);
   // Screen readers get the match's goals and dismissals as a list.
   const key = element("ol", "sr-only");
   for (const event of events.filter((item) => HOME_GOALS.has(item.kind) || item.kind === "REDCARD" || item.kind === "YELLOWREDCARD")) {
-    key.append(element("li", "", `${event.home ? teamName(home, teams) : teamName(away, teams)}: ${homeEventText(event)}`));
+    const item = element("li", "", `${event.home ? teamName(home, teams) : teamName(away, teams)}: ${homeEventText(event)}`);
+    item.dataset.replayAt = event.at;
+    key.append(item);
   }
   card.append(scroll, key);
+  if (pressure.message) card.append(element("p", "home-momentum-status", pressure.message));
+  mark();
+  const timedMarks = [...card.querySelectorAll("[data-replay-at]")];
+  homeReplay.context.updateMarks = () => {
+    for (const item of timedMarks) {
+      item.classList.toggle("home-replay-future", homeReplay.at !== null && Number(item.dataset.replayAt) > homeReplay.at);
+    }
+  };
   return card;
 }
 
@@ -505,11 +695,16 @@ function homeStatisticRows() {
   return rows;
 }
 
+function homeFixtureMetrics(fixture) {
+  if (fixture.homeSnapshot) return fixture.homeSnapshot.rows.filter((row) => row.record_type === "statistic");
+  if (matchweekResults.metricsStatus === "idle") loadMatchweekResultMetrics();
+  return matchweekResults.metrics.filter((row) => row.fixture_id === fixture.fixture_id);
+}
+
 function renderHomeStatistics(fixture, teams) {
   const card = homeCard("home-statistics", t("MAÇ"), t("Maç İstatistikleri"));
   const sides = [fixture.home_team_id, fixture.away_team_id];
-  if (matchweekResults.metricsStatus === "idle") loadMatchweekResultMetrics();
-  const metrics = matchweekResults.metrics.filter((row) => row.fixture_id === fixture.fixture_id);
+  const metrics = homeFixtureMetrics(fixture);
   card.append(matchweekVersusHeader(sides, teams));
   for (const row of homeStatisticRows()) {
     const rows = metrics.filter((metric) => (metric.source || "statistics") === row.source);
@@ -518,8 +713,10 @@ function renderHomeStatistics(fixture, teams) {
       value: value === null ? "—" : row.percent ? percentText(value) : row.decimals ? value.toLocaleString(LOCALE, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : displayNumber(value),
       note: "" })), values));
   }
-  const status = matchweekResults.metricsStatus;
-  card.append(element("p", "home-card-note", status === "loading" || status === "idle" ? t("Maç istatistikleri yükleniyor…")
+  const status = fixture.homeSnapshot ? "ready" : matchweekResults.metricsStatus;
+  card.append(element("p", "home-card-note", fixture.homeSnapshot?.simulated ? t("Simülasyon istatistikleri.")
+    : fixture.homeSnapshot?.replay ? t("Bu dakika için kaydedilen değerler gösteriliyor.")
+    : status === "loading" || status === "idle" ? t("Maç istatistikleri yükleniyor…")
     : status === "unavailable" ? t("team_metrics.csv okunamadı; değerler gösterilemiyor.")
       : t("Bu maçın Sportmonks istatistikleri. — sağlanmayan veya doğrulanamayan değer.")));
   return card;
@@ -567,11 +764,9 @@ function homeLineupCaption(fixture, teamId, teams, index) {
   return caption;
 }
 
-function renderHomeLineups(fixture, teams) {
+function renderHomeLineups(fixture, teams, starters) {
   const card = homeCard("home-lineups", t("KADROLAR"), t("İlk 11'ler"));
   const sides = [fixture.home_team_id, fixture.away_team_id];
-  const rows = (state.tables["player_match_stats.csv"] || []).filter((row) => row.fixture_id === fixture.fixture_id);
-  const starters = sides.map((team) => rows.filter((row) => row.team_id === team && ["1", "true"].includes(String(row.started).toLowerCase())));
   const pitch = element("div", "home-pitch");
   pitch.setAttribute("role", "group");
   pitch.setAttribute("aria-label", t("{top} üstte, {bottom} altta", { top: teamName(sides[1], teams), bottom: teamName(sides[0], teams) }));
@@ -582,36 +777,69 @@ function renderHomeLineups(fixture, teams) {
   pitch.append(markings, away.half, home.half);
   card.append(homeLineupCaption(fixture, sides[1], teams, 1), pitch, homeLineupCaption(fixture, sides[0], teams, 0));
 
-  // Who came on, from the match's substitution events.
-  const subs = homeSubstitutions(fixture);
-  if (subs.length) {
-    const details = element("details", "home-subs");
-    details.append(element("summary", "", t("Oyuncu değişiklikleri ({count})", { count: subs.length })));
-    for (const [index, team] of sides.entries()) {
-      const own = subs.filter((event) => event.home === !index);
-      if (!own.length) continue;
-      const list = element("ul");
-      list.setAttribute("aria-label", teamName(team, teams));
-      for (const event of own) {
-        const item = element("li");
-        item.append(element("span", "home-subs-minute", event.clock), element("span", "home-subs-in", `↑ ${event.player}`),
-          element("span", "home-subs-out", event.related ? `↓ ${event.related}` : ""));
-        list.append(item);
-      }
-      details.append(element("h3", "", teamName(team, teams)), list);
-    }
-    card.append(details);
-  }
   // How to read the pitch is its hover text; only the warning that a side's
   // shape is a guess stays on the card.
   const exact = away.exact && home.exact;
   pitch.title = `${exact ? `${t("Kaydedilmiş dizilişler.")} ` : ""}${t("Numara forma numarasıdır; tam ad için oyuncunun üzerine gelin.")}`;
-  if (!exact) card.append(element("p", "home-card-note", t("Dizilişi kaydedilmemiş takımın oyuncuları mevkilerine göre gruplandı; sıraları kesin değildir.")));
+  if (!exact && starters.some((players) => players.length === 11)) {
+    const note = t("Dizilişi kaydedilmemiş takımın oyuncuları mevkilerine göre gruplandı; sıraları kesin değildir.");
+    pitch.title = `${pitch.title} ${note}`;
+    pitch.setAttribute("aria-description", note);
+  }
   return card;
 }
 
+function renderHomeSubstitutions(fixture, teams, subs) {
+  const count = t("Oyuncu değişiklikleri ({count})", { count: subs.length });
+  if (!subs.length) return element("p", "home-subs home-subs-empty", count);
+  const details = element("details", "home-subs");
+  details.append(element("summary", "", count));
+  for (const [index, team] of [fixture.home_team_id, fixture.away_team_id].entries()) {
+    const own = subs.filter((event) => event.home === !index);
+    if (!own.length) continue;
+    const list = element("ul");
+    list.setAttribute("aria-label", teamName(team, teams));
+    for (const event of own) {
+      const item = element("li");
+      item.append(element("span", "home-subs-minute", event.clock), element("span", "home-subs-in", `↑ ${event.player}`),
+        element("span", "home-subs-out", event.related ? `↓ ${event.related}` : ""));
+      list.append(item);
+    }
+    details.append(element("h3", "", teamName(team, teams)), list);
+  }
+  return details;
+}
+
+function updateHomeLineups(pair, fixture, teams, context) {
+  const sides = [fixture.home_team_id, fixture.away_team_id];
+  const rows = homePlayerRows(fixture).filter((row) => /^(1|true)$/i.test(String(row.started)));
+  const starters = sides.map((team) => rows.filter((row) => row.team_id === team));
+  const formations = sides.map((team) => homeFormation(fixture, team));
+  const lineupKey = [formations, ...rows.map((row) => [row.team_id, row.player_id, row.name, row.position, row.formation_field, row.jersey_number])]
+    .map((fields) => fields.join("\x1f")).join("\x1e");
+  const subs = homeSubstitutions(fixture);
+  const subsKey = subs.map(({ home, clock, player, related }) => [home, clock, player, related].join("\x1f")).join("\x1e");
+  let card = pair.querySelector(".home-lineups");
+  if (card && context.lineupKey === lineupKey && context.subsKey === subsKey) return;
+  const oldSubs = card?.querySelector(".home-subs");
+  const wasFocused = oldSubs?.contains(document.activeElement);
+  if (!card || context.lineupKey !== lineupKey) {
+    const next = renderHomeLineups(fixture, teams, starters);
+    if (card) card.replaceWith(next);
+    else pair.append(next);
+    card = next;
+  }
+  const nextSubs = renderHomeSubstitutions(fixture, teams, subs);
+  if (nextSubs.tagName === "DETAILS") nextSubs.open = Boolean(oldSubs?.open);
+  if (oldSubs?.parentElement === card) oldSubs.replaceWith(nextSubs);
+  else card.append(nextSubs);
+  if (wasFocused) nextSubs.querySelector("summary")?.focus({ preventScroll: true });
+  context.lineupKey = lineupKey;
+  context.subsKey = subsKey;
+}
+
 function homeSubstitutions(fixture) {
-  if (teamAnalysisExtras.key !== state.seasonSlug || !teamAnalysisExtras.events) return [];
+  if (!fixture.homeSnapshot && (teamAnalysisExtras.key !== state.seasonSlug || !teamAnalysisExtras.events)) return [];
   return homeMatchEvents(fixture, 45, 200).filter((event) => event.kind === "SUBSTITUTION");
 }
 
@@ -645,13 +873,38 @@ function homeMirrorRow(label, values, format) {
 // A team's total of a player statistic: its players who were on the pitch,
 // each blank read by the site's one rule (countedValue). Unknown when any of
 // them is unknown.
+function homePlayerRows(fixture) {
+  if (fixture.homeSnapshot) {
+    return fixture.homeSnapshot.rows.filter((row) => row.record_type === "lineup").map((row) => ({ ...row, name: row.player_name }));
+  }
+  return (state.tables["player_match_stats.csv"] || []).filter((row) => row.fixture_id === fixture.fixture_id);
+}
+
 function homePlayerTotal(fixture, teamId, column) {
-  const rows = (state.tables["player_match_stats.csv"] || [])
-    .filter((row) => row.fixture_id === fixture.fixture_id && row.team_id === teamId && playerAppeared(row));
-  if (!rows.length) return null;
+  if (fixture.homeSnapshot?.replay?.at === 0) return 0;
+  const rows = homePlayerRows(fixture).filter((row) => row.team_id === teamId);
+  let appeared = rows.filter(playerAppeared);
+  const justEntered = new Set();
+  if (fixture.homeSnapshot) {
+    const starters = new Set(rows.filter((row) => String(row.started) === "1").map((row) => row.player_id));
+    const incoming = new Set(homeEventRows(fixture).filter((row) =>
+      row.team_id === teamId && row.player_id && String(row.code).toUpperCase() === "SUBSTITUTION"
+      && !/^(true|1)$/i.test(row.rescinded)).map((row) => row.player_id));
+    if (starters.size !== 11 || starters.has("")) return null;
+    appeared = rows.filter((row) => starters.has(row.player_id) || incoming.has(row.player_id) || playerAppeared(row));
+    const ids = new Set(appeared.map((row) => row.player_id));
+    if (ids.size !== appeared.length || [...incoming].some((id) => !ids.has(id))) return null;
+    // A substitution establishes participation even when the incoming
+    // player's elapsed minutes still round down to zero.
+    for (const row of appeared) {
+      if (incoming.has(row.player_id) && number(row.minutes_played) === 0) justEntered.add(row.player_id);
+    }
+    if (!appeared.some((row) => number(row[column]) !== null)) return null;
+  }
+  if (!appeared.length) return null;
   let total = 0;
-  for (const row of rows) {
-    const value = countedValue(row, column);
+  for (const row of appeared) {
+    const value = justEntered.has(row.player_id) && ruleBlank(row[column]) ? 0 : countedValue(row, column);
     if (value === null) return null;
     total += value;
   }
@@ -663,14 +916,14 @@ function homePlayerTotal(fixture, teamId, column) {
 // told apart from any other header. Unknown when the match has no events.
 function homeDeadBallGoals(fixture) {
   const sides = [String(fixture.home_team_id), String(fixture.away_team_id)];
-  const own = (teamAnalysisExtras.events || []).filter((event) => String(event.fixture_id) === String(fixture.fixture_id));
-  if (!own.length) return [null, null];
+  const own = homeEventRows(fixture);
+  if (!own.length && String(fixture.homeSnapshot?.summary?.events_available) !== "1") return [null, null];
   const counts = [0, 0];
   for (const event of own) {
     if (["true", "1"].includes(String(event.rescinded).toLowerCase())) continue;
-    const kind = String(event["type.developer_name"] || "").toUpperCase();
+    const kind = String(event.code || "").toUpperCase();
     if (kind !== "PENALTY" && !(kind === "GOAL" && String(event.info || "").toLowerCase() === "free kick")) continue;
-    const index = sides.indexOf(String(event.participant_id || event.team_id || ""));
+    const index = sides.indexOf(event.team_id);
     if (index >= 0) counts[index] += 1;
   }
   return counts;
@@ -684,8 +937,7 @@ const homeDecimal = (value) => value.toLocaleString(LOCALE, { minimumFractionDig
 function homeMirrorCard(className, eyebrow, title, fixture, teams, measures) {
   const card = homeCard(className, eyebrow, title);
   const sides = [fixture.home_team_id, fixture.away_team_id];
-  if (matchweekResults.metricsStatus === "idle") loadMatchweekResultMetrics();
-  const metrics = matchweekResults.metrics.filter((row) => row.fixture_id === fixture.fixture_id);
+  const metrics = homeFixtureMetrics(fixture);
   card.append(matchweekVersusHeader(sides, teams));
   for (const measure of measures) {
     const values = measure.type ? matchweekStatisticValues(metrics.filter((metric) => (metric.source || "statistics") === (measure.source || "statistics")), sides, measure.type)
@@ -769,21 +1021,37 @@ function renderHomePhases(fixture, teams) {
 // match, its values keyed "source|type". A statistic recorded twice is
 // unknown, as on Maç İstatistikleri. Built once per loaded team_metrics.csv.
 const homeSeason = { rows: null, fixtures: null, matches: [] };
-function homeSeasonMatches() {
+function homeSeasonMatches(fixture) {
   const fixtures = state.tables["fixtures.csv"] || [];
-  if (homeSeason.rows === matchweekResults.metrics && homeSeason.fixtures === fixtures) return homeSeason.matches;
-  const finished = new Set(fixtures.filter(fixtureFinished).map((fixture) => String(fixture.fixture_id)));
+  const relevant = (matches) => {
+    if (!fixture?.homeSnapshot?.replay) return matches;
+    const kickoff = kickoffTime(fixture), finishes = homeReplayFinishTimes();
+    return matches.filter((match) => homeReplayFinishedBy(match.saved, kickoff, finishes));
+  };
+  if (homeSeason.rows === matchweekResults.metrics && homeSeason.fixtures === fixtures) return relevant(homeSeason.matches);
+  const finished = new Map(fixtures.filter(fixtureFinished).map((row) => [String(row.fixture_id), row]));
   const matches = new Map();
   for (const row of matchweekResults.metrics) {
     const fixture = String(row.fixture_id), team = String(row.team_id);
     if (!finished.has(fixture)) continue;
     const key = `${fixture}|${team}`;
-    if (!matches.has(key)) matches.set(key, { fixture, team, values: new Map() });
+    if (!matches.has(key)) matches.set(key, { fixture, team, saved: finished.get(fixture), values: new Map() });
     const values = matches.get(key).values, id = `${row.source || "statistics"}|${row.type_id}`;
     values.set(id, values.has(id) ? null : number(row.value));
   }
   Object.assign(homeSeason, { rows: matchweekResults.metrics, fixtures, matches: [...matches.values()] });
-  return homeSeason.matches;
+  return relevant(homeSeason.matches);
+}
+
+function homeSeasonFixture(fixture, team, history) {
+  if (!fixture.homeSnapshot) return history.find((match) => match.fixture === String(fixture.fixture_id) && match.team === team);
+  const values = new Map();
+  for (const row of homeFixtureMetrics(fixture)) {
+    if (row.team_id !== team) continue;
+    const key = `${row.source || "statistics"}|${row.type_id}`;
+    values.set(key, values.has(key) ? null : number(row.value));
+  }
+  return { values };
 }
 
 // One team's value in one match: a statistic, or one statistic as a share of
@@ -828,6 +1096,14 @@ function homeSeasonStatus(card) {
   return false;
 }
 
+function homeProvisionalNote(card, fixture, text) {
+  if (!fixture.homeSnapshot?.inPlay) return;
+  const label = card.querySelector(".eyebrow");
+  label.append(` · ${t("CANLI")}`);
+  label.title = text;
+  card.setAttribute("aria-description", text);
+}
+
 const HOME_SEASON_RANKS = [
   { label: "xG", type: 5304, source: "xgfixture", decimals: true },
   { label: t("Toplam şut"), type: 42 },
@@ -842,22 +1118,26 @@ function renderHomeSeasonRanks(fixture, teams) {
   const card = homeCard("home-season-ranks", t("SEZON"), t("Sezona Göre Bu Maç"));
   if (!homeSeasonStatus(card)) return card;
   const sides = [String(fixture.home_team_id), String(fixture.away_team_id)];
-  const season = homeSeasonMatches();
+  const season = homeSeasonMatches(fixture);
   const scale = element("div", "home-rank-scale");
   scale.setAttribute("aria-hidden", "true");
   scale.append(element("span", "", t("en düşük")), element("span", "", t("sezonun en yükseği")));
   card.append(homeDotLegend(fixture, teams), scale);
+  homeProvisionalNote(card, fixture, t("Şu ana kadarki değerler tamamlanan maçlarla karşılaştırılıyor."));
   for (const measure of HOME_SEASON_RANKS) {
     const row = element("div", "home-rank-row");
     const track = element("div", "home-rank-track");
     const spoken = [];
     sides.forEach((team, index) => {
-      const own = season.filter((match) => match.team === team);
-      const value = homeMatchValue(own.find((match) => match.fixture === String(fixture.fixture_id)), measure);
+      const own = season.filter((match) => match.team === team && (!fixture.homeSnapshot || match.fixture !== String(fixture.fixture_id)));
+      const value = homeMatchValue(homeSeasonFixture(fixture, team, own), measure);
       const known = own.map((match) => homeMatchValue(match, measure)).filter((other) => other !== null);
-      if (value === null || known.length < 2) { spoken.push(`${teamName(team, teams)}: —`); return; }
+      if (value === null || known.length < 2) {
+        spoken.push(`${teamName(team, teams)}: ${homeMeasureText(measure, value)}`);
+        return;
+      }
       const below = known.filter((other) => other < value).length, equal = known.filter((other) => other === value).length;
-      const place = (below + (equal - 1) / 2) / (known.length - 1);
+      const place = fixture.homeSnapshot ? (below + equal / 2) / known.length : (below + (equal - 1) / 2) / (known.length - 1);
       const dot = element("i", `home-dot home-dot-${index ? "away" : "home"}`);
       dot.style.left = `${place * 100}%`;
       const range = t("sezonda {count} maç: en düşük {low}, en yüksek {high}", { count: known.length,
@@ -878,13 +1158,26 @@ function renderHomeSeasonRanks(fixture, teams) {
 // long, against how many found a teammate. This match's two sides stand out
 // in their colours. Short, patient passing sits top left; direct long balls
 // bottom right.
-function renderHomePassingStyle(fixture, teams) {
-  const card = homeCard("home-passing", t("PAS"), t("Ligde Pas Tarzı"));
-  if (!homeSeasonStatus(card)) return card;
+function renderHomePassingStyle(fixture, teams, context) {
+  const makeCard = () => homeCard("home-passing", t("PAS"), t("Ligde Pas Tarzı"));
+  if (matchweekResults.metricsStatus !== "ready") {
+    const card = makeCard();
+    homeSeasonStatus(card);
+    return card;
+  }
   const longShare = { ratio: [62, 80] }, accuracy = { ratio: [81, 80] };
-  const points = homeSeasonMatches().map((match) => ({ match, x: homeMatchValue(match, longShare), y: homeMatchValue(match, accuracy) }))
-    .filter((point) => point.x !== null && point.y !== null);
-  if (points.length < 2) {
+  const mode = fixture.homeSnapshot?.replay ? "replay" : fixture.homeSnapshot ? "snapshot" : "saved";
+  let plot = context.passing;
+  if (!plot || plot.mode !== mode || plot.metrics !== matchweekResults.metrics || plot.periods !== teamAnalysisExtras.periods) {
+    const season = homeSeasonMatches(fixture).filter((match) => mode === "saved" || match.fixture !== String(fixture.fixture_id));
+    const points = season.map((match) => ({ match, x: homeMatchValue(match, longShare), y: homeMatchValue(match, accuracy) }))
+      .filter((point) => point.x !== null && point.y !== null);
+    plot = { mode, season, points, metrics: matchweekResults.metrics, periods: teamAnalysisExtras.periods };
+    context.passing = plot;
+  }
+  const { season, points } = plot;
+  if (points.length < 2 && !fixture.homeSnapshot?.replay) {
+    const card = makeCard();
     card.append(element("p", "home-card-note", t("Bu sezon için pas verisi yok."))); return card;
   }
   // Low enough that the card is no taller than Fiziksel Mücadele.
@@ -893,47 +1186,65 @@ function renderHomePassingStyle(fixture, teams) {
     const low = Math.min(...values), high = Math.max(...values), pad = (high - low) * 0.06 || 1;
     return [low - pad, high + pad];
   };
-  const [x0, x1] = span(points.map((point) => point.x)), [y0, y1] = span(points.map((point) => point.y));
+  const sides = [String(fixture.home_team_id), String(fixture.away_team_id)];
+  const own = sides.map((team) => {
+    if (!fixture.homeSnapshot) return points.find((point) => point.match.fixture === String(fixture.fixture_id) && point.match.team === team) || null;
+    const match = homeSeasonFixture(fixture, team, season);
+    const x = homeMatchValue(match, longShare), y = homeMatchValue(match, accuracy);
+    return x === null || y === null ? null : { x, y };
+  });
+  const plotted = [...points, ...own.filter(Boolean)];
+  const [x0, x1] = plotted.length >= 2 ? span(plotted.map((point) => point.x)) : [0, 100];
+  const [y0, y1] = plotted.length >= 2 ? span(plotted.map((point) => point.y)) : [0, 100];
   const x = (value) => left + (value - x0) / (x1 - x0) * (width - left - right);
   const y = (value) => height - bottom - (value - y0) / (y1 - y0) * (height - top - bottom);
-  const sides = [String(fixture.home_team_id), String(fixture.away_team_id)];
-  const own = sides.map((team) => points.find((point) => point.match.fixture === String(fixture.fixture_id) && point.match.team === team) || null);
   const label = own.map((point, index) => point
     ? t("{team}: uzun pas oranı {long}, pas isabeti {accuracy}", { team: teamName(sides[index], teams),
       long: homeMeasureText({ percent: true }, point.x), accuracy: homeMeasureText({ percent: true }, point.y) })
     : t("{team}: veri yok", { team: teamName(sides[index], teams) }));
-  const svg = homeSvg(null, "svg", { viewBox: `0 0 ${width} ${height}`, role: "img", class: "home-passing-chart",
-    "aria-label": `${t("Bu sezonun {count} takım-maçında uzun pas oranı ve pas isabeti.", { count: points.length })} ${label.join(". ")}.` });
-  for (const value of TeamAnalysis.niceTicks(x0, x1, 5).ticks) {
-    homeSvg(svg, "line", { x1: x(value), y1: top, x2: x(value), y2: height - bottom, class: "home-passing-grid" });
-    homeSvg(svg, "text", { x: x(value), y: height - bottom + 11, "text-anchor": "middle", class: "home-passing-tick" }, displayNumber(value));
+  const axisKey = [x0, x1, y0, y1].join(":");
+  if (plot.axisKey !== axisKey) {
+    const svg = homeSvg(null, "svg", { viewBox: `0 0 ${width} ${height}`, role: "img", class: "home-passing-chart" });
+    const card = makeCard();
+    for (const value of TeamAnalysis.niceTicks(x0, x1, 5).ticks) {
+      homeSvg(svg, "line", { x1: x(value), y1: top, x2: x(value), y2: height - bottom, class: "home-passing-grid" });
+      homeSvg(svg, "text", { x: x(value), y: height - bottom + 11, "text-anchor": "middle", class: "home-passing-tick" }, displayNumber(value));
+    }
+    for (const value of TeamAnalysis.niceTicks(y0, y1, 5).ticks) {
+      homeSvg(svg, "line", { x1: left, y1: y(value), x2: width - right, y2: y(value), class: "home-passing-grid" });
+      homeSvg(svg, "text", { x: left - 4, y: y(value) + 3, "text-anchor": "end", class: "home-passing-tick" }, displayNumber(value));
+    }
+    homeSvg(svg, "text", { x: width - right, y: height - 4, "text-anchor": "end", class: "home-passing-axis" }, t("uzun pas oranı % →"));
+    homeSvg(svg, "text", { x: 0, y: 9, class: "home-passing-axis" }, t("pas isabeti % ↑"));
+    homeSvg(svg, "text", { x: left + 4, y: top + 10, class: "home-passing-corner" }, t("kısa ve sabırlı"));
+    homeSvg(svg, "text", { x: width - right - 4, y: height - bottom - 5, "text-anchor": "end", class: "home-passing-corner" }, t("uzun ve direkt"));
+    for (const point of points) {
+      if (own.includes(point)) continue;
+      homeSvg(svg, "circle", { cx: x(point.x), cy: y(point.y), r: 2.2, class: "home-passing-dot" });
+    }
+    const box = element("div", "home-passing-plot");
+    const layer = homeSvg(svg, "g");
+    box.append(svg);
+    homeProvisionalNote(card, fixture, t("Maç sürüyor · Geçici karşılaştırma"));
+    card.append(box);
+    Object.assign(plot, { axisKey, card, svg, layer, label: null });
   }
-  for (const value of TeamAnalysis.niceTicks(y0, y1, 5).ticks) {
-    homeSvg(svg, "line", { x1: left, y1: y(value), x2: width - right, y2: y(value), class: "home-passing-grid" });
-    homeSvg(svg, "text", { x: left - 4, y: y(value) + 3, "text-anchor": "end", class: "home-passing-tick" }, displayNumber(value));
-  }
-  homeSvg(svg, "text", { x: width - right, y: height - 4, "text-anchor": "end", class: "home-passing-axis" }, t("uzun pas oranı % →"));
-  homeSvg(svg, "text", { x: 0, y: 9, class: "home-passing-axis" }, t("pas isabeti % ↑"));
-  homeSvg(svg, "text", { x: left + 4, y: top + 10, class: "home-passing-corner" }, t("kısa ve sabırlı"));
-  homeSvg(svg, "text", { x: width - right - 4, y: height - bottom - 5, "text-anchor": "end", class: "home-passing-corner" }, t("uzun ve direkt"));
-  for (const point of points) {
-    if (own.includes(point)) continue;
-    homeSvg(svg, "circle", { cx: x(point.x), cy: y(point.y), r: 2.2, class: "home-passing-dot" });
-  }
+  const description = `${t("Bu sezonun {count} takım-maçında uzun pas oranı ve pas isabeti.", { count: points.length })} ${label.join(". ")}.`;
+  const values = own.map((point) => point ? `${point.x}:${point.y}` : "").join("|");
+  if (plot.label === values) return plot.card;
+  plot.label = values;
+  plot.svg.setAttribute("aria-label", description);
+  plot.layer.replaceChildren();
   own.forEach((point, index) => {
     if (!point) return;
-    const group = homeSvg(svg, "g");
+    const group = homeSvg(plot.layer, "g");
     homeSvg(group, "title", {}, label[index]);
     homeSvg(group, "circle", { cx: x(point.x), cy: y(point.y), r: 5, class: `home-passing-own home-passing-${index ? "away" : "home"}` });
     const onRight = x(point.x) < width - right - 40;
     homeSvg(group, "text", { x: x(point.x) + (onRight ? 8 : -8), y: y(point.y) + 3.5, "text-anchor": onRight ? "start" : "end", class: "home-passing-name" },
       homeShortName(sides[index], teams));
   });
-  // In a box, so the card's side margins fall on the box and the chart fills it.
-  const plot = element("div", "home-passing-plot");
-  plot.append(svg);
-  card.append(plot);
-  return card;
+  return plot.card;
 }
 
 const HOME_SEASON_SHIFTS = [
@@ -951,12 +1262,12 @@ function renderHomeSeasonShifts(fixture, teams) {
   const card = homeCard("home-season-shifts", t("OYUN TARZI"), t("Sezon Ortalamasına Göre"));
   if (!homeSeasonStatus(card)) return card;
   const sides = [String(fixture.home_team_id), String(fixture.away_team_id)];
-  const season = homeSeasonMatches(), id = String(fixture.fixture_id);
+  const season = homeSeasonMatches(fixture), id = String(fixture.fixture_id);
   const rows = HOME_SEASON_SHIFTS.map((measure) => ({
     measure,
     sides: sides.map((team) => {
       const own = season.filter((match) => match.team === team);
-      const value = homeMatchValue(own.find((match) => match.fixture === id), measure);
+      const value = homeMatchValue(homeSeasonFixture(fixture, team, own), measure);
       const others = own.filter((match) => match.fixture !== id).map((match) => homeMatchValue(match, measure)).filter((other) => other !== null);
       const average = others.length ? others.reduce((sum, other) => sum + other, 0) / others.length : null;
       const change = value === null || !average ? null : (value - average) / average * 100;
@@ -970,6 +1281,7 @@ function renderHomeSeasonShifts(fixture, teams) {
   head.setAttribute("aria-hidden", "true");
   head.append(homeDotLegend(fixture, teams), element("span", "home-shift-zero", t("sezon ortalaması")));
   card.append(head);
+  homeProvisionalNote(card, fixture, t("Şu ana kadarki değerler tamamlanan maçlarla karşılaştırılıyor."));
   for (const { measure, sides: values } of rows) {
     const row = element("div", "home-shift-row");
     row.setAttribute("role", "group");
@@ -998,20 +1310,14 @@ function renderHomeEvents(fixture, teams) {
   const list = $("home-events-list");
   const note = (text) => list.replaceChildren(element("li", "live-events-empty", text));
   if (!fixture) return note(t("Maç seçildiğinde olayları burada görünür."));
-  if (teamAnalysisExtras.key !== state.seasonSlug || teamAnalysisExtras.state !== "ready") return note(t("Maç olayları yükleniyor…"));
-  if (!teamAnalysisExtras.events) return note(t("events.csv okunamadı."));
+  const snapshot = fixture.homeSnapshot;
+  if (!snapshot && (teamAnalysisExtras.key !== state.seasonSlug || teamAnalysisExtras.state !== "ready")) return note(t("Maç olayları yükleniyor…"));
+  if (!snapshot && !teamAnalysisExtras.events) return note(t("events.csv okunamadı."));
   const id = String(fixture.fixture_id);
-  const rows = teamAnalysisExtras.events.filter((event) => String(event.fixture_id) === id).map((event) => ({
-    record_type: "event", fixture_id: id, event_id: String(event.event_id || event.id || ""),
-    minute: event.minute, extra_minute: event.extra_minute, sort_order: event.sort_order,
-    code: event["type.developer_name"], label: event["type.name"], team_id: String(event.participant_id || event.team_id || ""),
-    player_id: event.player_id, player_name: event.player_name, related_player_id: event.related_player_id,
-    related_player_name: event.related_player_name, result: event.result, info: event.info, addition: event.addition,
-    rescinded: event.rescinded,
-  }));
+  const rows = homeEventRows(fixture);
   if (list.dataset.fixture !== id) list.scrollTop = 0;
   list.dataset.fixture = id;
-  renderLiveEvents({ fixture_id: id, events_available: "1" }, teams, rows, list);
+  renderLiveEvents({ fixture_id: id, events_available: snapshot ? String(snapshot.summary?.events_available || "") : "1" }, teams, rows, list);
   // Each event's place on the pressure chart's clock, for its slider.
   const pressure = homePressure(fixture);
   if (pressure.message) return;
@@ -1028,22 +1334,150 @@ function renderHomeEvents(fixture, teams) {
 // Light the event (or events, when several share a minute) nearest to a
 // minute on the pressure chart's clock, and bring it into the list's view
 // without moving the page.
-function highlightHomeEvents(at) {
+function highlightHomeEvents(at, scroll = true) {
   const list = $("home-events-list");
   const items = [...list.querySelectorAll("li[data-at]")];
   if (!items.length) return;
   const distance = (item) => Math.abs(Number(item.dataset.at) - at);
   const nearest = items.reduce((best, item) => (distance(item) < distance(best) ? item : best));
   for (const item of items) item.classList.toggle("is-current", item.dataset.at === nearest.dataset.at);
+  if (!scroll) return;
   const view = list.getBoundingClientRect(), box = nearest.getBoundingClientRect();
   if (box.top < view.top) list.scrollTop -= view.top - box.top;
   else if (box.bottom > view.bottom) list.scrollTop += box.bottom - view.bottom;
 }
 
-function renderHomeDetail(game, teams) {
+function homeReplayGame(game, timeline) {
+  const at = homeReplay.at;
+  if (at === null || at >= timeline.through) return game;
+  const fixture = game.fixture;
+  const simulated = Boolean(fixture.homeSnapshot?.simulated);
+  const saved = simulated ? homeSimulationReplayRows(at) : homeHistoricalReplayRows(fixture, at, timeline.firstHalf, timeline.total);
+  const [summary, ...rows] = saved;
+  if (!summary) return game;
+  if (!simulated) {
+    const frame = homeCapturedReplayFrame(fixture, at, timeline.firstHalf);
+    if (frame) {
+      const [captured, ...capturedRows] = frame.rows;
+      const metricKey = (row) => `${row.team_id}|${row.source || "statistics"}|${row.type_id}`;
+      const metrics = new Map();
+      rows.forEach((row, index) => { if (row.record_type === "statistic") metrics.set(metricKey(row), index); });
+      const players = new Map(rows.filter((row) => row.record_type === "lineup").map((row) => [row.player_id, row]));
+      for (const row of capturedRows) {
+        if (row.record_type === "statistic" && number(row.value) !== null) {
+          const index = metrics.get(metricKey(row));
+          if (index === undefined) rows.push(row);
+          else if (frame.elapsed > rows[index].minute) rows[index] = row;
+        }
+        if (row.record_type === "lineup") {
+          const player = players.get(row.player_id);
+          if (player) Object.assign(player, row);
+          else rows.push(row);
+        }
+      }
+      for (const field of ["home_score", "away_score", "home_half_score", "away_half_score"]) {
+        if (number(summary[field]) === null) summary[field] = captured[field];
+      }
+    }
+  }
+  const snapshot = { rows, summary, inPlay: true, simulated, replay: { ...timeline, at } };
+  return {
+    fixture: { ...fixture, homeSnapshot: snapshot },
+    score: [homeScoreValue(summary.home_score), homeScoreValue(summary.away_score)],
+  };
+}
+
+function cancelHomeReplayPaint() {
+  cancelAnimationFrame(homeReplay.frame);
+  clearTimeout(homeReplay.timer);
+  homeReplay.frame = 0;
+  homeReplay.timer = 0;
+}
+
+function queueHomeReplayPaint() {
+  if (homeReplay.frame || homeReplay.timer) return;
+  if (homeReplay.dragging) {
+    homeReplay.timer = setTimeout(() => {
+      homeReplay.timer = 0;
+      paintHomeReplay();
+    }, HOME_REPLAY_PAINT_INTERVAL);
+  } else {
+    homeReplay.frame = requestAnimationFrame(() => {
+      homeReplay.frame = 0;
+      paintHomeReplay();
+    });
+  }
+}
+
+function paintHomeReplay() {
+  const context = homeReplay.context;
+  if (state.view !== "home" || !context || context.paintedAt === homeReplay.at) return;
+  const firstPaint = context.paintedAt === undefined;
+  context.paintedAt = homeReplay.at;
+  context.updateMarks();
+  const { baseGame, timeline, teams, games, standings, simulated } = context;
+  const game = homeReplayGame(baseGame, timeline);
+  const fixture = game.fixture;
+  const replay = fixture.homeSnapshot?.replay ? game : null;
+  const standingsKey = replay ? `${game.score.join(":")}|${homeReplay.at === 0}` : "latest";
+  if (context.standingsKey !== standingsKey) {
+    renderStandings(teams, "standings", { record: true, snapshot: standings, simulated, replay });
+    context.standingsKey = standingsKey;
+  }
+  if (firstPaint) {
+    renderHomeGames(games, teams);
+    context.matchButton = $("home-games-list").querySelector(`[data-fixture="${CSS.escape(fixture.fixture_id)}"]`);
+  }
+  updateHomeGameButton(context.matchButton, game, teams);
+  const eventCount = homeEventRows(fixture).length;
+  const eventsKey = `${Boolean(replay)}|${fixture.homeSnapshot?.summary?.events_available ?? ""}|${eventCount}`;
+  if (context.eventsKey !== eventsKey || context.savedEvents !== teamAnalysisExtras.events) {
+    renderHomeEvents(fixture, teams);
+    context.eventsKey = eventsKey;
+    context.savedEvents = teamAnalysisExtras.events;
+  }
+  if (replay) highlightHomeEvents(homeReplay.at, false);
   const detail = $("home-detail");
-  renderHomeEvents(game?.fixture, teams);
+  const pair = detail.children[2].firstElementChild;
+  const statistics = renderHomeStatistics(fixture, teams);
+  updateHomeCard(pair, statistics, 0);
+  updateHomeLineups(pair, fixture, teams, context);
+  const more = detail.children[3].firstElementChild;
+  const cards = [renderHomeSeasonRanks(fixture, teams), renderHomePassingStyle(fixture, teams, context), renderHomeSeasonShifts(fixture, teams),
+    renderHomePhysical(fixture, teams), renderHomeSetPieces(fixture, teams), renderHomePhases(fixture, teams)];
+  cards.forEach((card, index) => updateHomeCard(more, card, index));
+  const scoreboard = detail.children[0].firstElementChild;
+  if (scoreboard) updateHomeScoreboard(scoreboard, game, teams);
+  else detail.children[0].append(renderHomeScoreboard(game, teams));
+}
+
+function updateHomeCard(parent, next, index) {
+  const current = parent.children[index];
+  if (!current) parent.append(next);
+  else if (!current.isEqualNode(next)) current.replaceWith(next);
+}
+
+function renderHomeDetail(game, teams, games, standings, simulated) {
+  const detail = $("home-detail");
+  const events = $("home-events");
+  events.classList.toggle("has-match", Boolean(game));
+  const sameMatch = detail.dataset.fixture && detail.dataset.fixture === game?.fixture.fixture_id;
+  const fixtureId = game?.fixture.fixture_id ?? null;
+  const isSimulation = Boolean(game?.fixture.homeSnapshot?.simulated);
+  if (homeReplay.fixtureId !== fixtureId || homeReplay.simulated !== isSimulation) homeReplay.at = null;
+  homeReplay.fixtureId = fixtureId;
+  homeReplay.simulated = isSimulation;
+  const oldSlider = sameMatch && detail.querySelector(".home-momentum-slider");
+  const oldScroll = sameMatch && detail.querySelector(".home-momentum-scroll");
+  const oldSubs = sameMatch && detail.querySelector("details.home-subs");
+  const focused = document.activeElement;
+  detail.dataset.fixture = game?.fixture.fixture_id || "";
+  cancelHomeReplayPaint();
   if (!game) {
+    homeReplay.context = null;
+    renderStandings(teams, "standings", { record: true, snapshot: standings, simulated });
+    renderHomeGames(games, teams);
+    renderHomeEvents(null, teams);
     detail.style.removeProperty("--matchweek-home");
     detail.style.removeProperty("--matchweek-away");
     const empty = element("section", "home-panel home-card home-empty");
@@ -1057,19 +1491,33 @@ function renderHomeDetail(game, teams) {
   // takes its second colour when the two would be hard to tell apart.
   teamColorPair(fixture.home_team_id, fixture.away_team_id)
     .forEach((color, index) => detail.style.setProperty(`--matchweek-${index ? "away" : "home"}`, color));
-  const pair = element("div", "home-pair");
-  pair.append(renderHomeStatistics(fixture, teams), renderHomeLineups(fixture, teams));
-  // Below them, six cards of one size in two columns: under the statistics,
-  // this match against the season; under İlk 11'ler, its battles and phases.
-  const more = element("div", "home-more");
-  more.append(renderHomeSeasonRanks(fixture, teams), renderHomePassingStyle(fixture, teams), renderHomeSeasonShifts(fixture, teams),
-    renderHomePhysical(fixture, teams), renderHomeSetPieces(fixture, teams), renderHomePhases(fixture, teams));
-  // Each part sits in a row of its own (home.css) that its cards size themselves against.
-  const row = (part) => { const box = element("div", "home-row"); box.append(part); return box; };
-  detail.replaceChildren(row(renderHomeScoreboard(game, teams)), row(renderHomeMomentum(fixture, teams)), row(pair), row(more));
+  const timeline = homeReplayTimeline(fixture);
+  homeReplay.context = { baseGame: game, timeline, teams, games, standings, simulated };
+  if (homeReplay.at !== null && homeReplay.at >= timeline.through) homeReplay.at = null;
+  const row = () => element("div", "home-row");
+  detail.replaceChildren(row(), row(), row(), row());
+  detail.children[1].append(renderHomeMomentum(fixture, teams, timeline));
+  detail.children[2].append(element("div", "home-pair"));
+  detail.children[3].append(element("div", "home-more"));
+  paintHomeReplay();
+  if (oldSlider) {
+    const slider = detail.querySelector(".home-momentum-slider");
+    if (slider && focused === oldSlider) slider.focus({ preventScroll: true });
+  }
+  const momentumScroll = oldScroll && detail.querySelector(".home-momentum-scroll");
+  if (momentumScroll) momentumScroll.scrollLeft = oldScroll.scrollLeft;
+  const subs = oldSubs && detail.querySelector("details.home-subs");
+  if (subs) {
+    subs.open = oldSubs.open;
+    if (oldSubs.contains(focused)) subs.querySelector("summary")?.focus({ preventScroll: true });
+  }
 }
 
 function renderHome() {
+  if (homeReplay.dragging) {
+    homeReplay.refresh = true;
+    return;
+  }
   const teams = homeTeams();
   const season = $("season-label").textContent;
   $("home-season-note").textContent = season !== "—" ? t("{season} sezonu · Sportmonks verisi", { season }) : t("Başlamak için standings.csv, fixtures.csv, teams.csv ve fixture_scores.csv dosyalarını açın.");
@@ -1077,31 +1525,57 @@ function renderHome() {
     if (teamAnalysisExtras.key !== state.seasonSlug) loadTeamAnalysisExtras();
     if (homeExtras.key !== state.seasonSlug) loadHomeExtras();
   }
-  const games = homePlayedGames();
-  if (!games.some((game) => game.fixture.fixture_id === state.homeFixture)) state.homeFixture = games[0]?.fixture.fixture_id ?? null;
-  renderStandings(teams, "standings", { record: true });
-  renderHomeGames(games, teams);
-  renderHomeDetail(games.find((game) => game.fixture.fixture_id === state.homeFixture), teams);
+  syncHomeSimulationControl();
+  const { games, standings, simulated } = homeSnapshotGames();
+  const selected = games.find((game) => game.fixture.fixture_id === state.homeFixture);
+  const active = games.find((game) => game.fixture.homeSnapshot?.inPlay);
+  const game = selected && (simulated || homeSelection.manual || selected.fixture.homeSnapshot || !active) ? selected : active || games[0];
+  state.homeFixture = game?.fixture.fixture_id ?? null;
+  renderHomeDetail(game, teams, games, standings, simulated);
+}
+
+function renderHomeLive() {
+  if (state.view === "home") renderHome();
 }
 
 function setupHome() {
+  setupHomeSimulation();
+  const finishDrag = () => {
+    if (!homeReplay.dragging) return;
+    homeReplay.dragging = false;
+    cancelHomeReplayPaint();
+    if (state.view !== "home") {
+      homeReplay.refresh = false;
+      return;
+    }
+    if (!homeReplay.refresh) {
+      paintHomeReplay();
+      return;
+    }
+    homeReplay.refresh = false;
+    renderHome();
+  };
+  document.addEventListener("pointerup", finishDrag);
+  document.addEventListener("pointercancel", finishDrag);
+  window.addEventListener("blur", finishDrag);
   $("standings-group").addEventListener("change", (event) => { state.standingsGroup = event.target.value; renderHome(); });
   // Another week changes only the list; the match on show stays until one is clicked.
   $("home-games-week").addEventListener("change", (event) => {
     state.homeWeek = event.target.value;
-    renderHomeGames(homePlayedGames(), homeTeams());
+    renderHome();
   });
   for (const [id, step] of [["home-week-prev", -1], ["home-week-next", 1]]) {
     $(id).addEventListener("click", () => {
       const weeks = homeWeeks(), next = weeks[weeks.findIndex((week) => week.key === state.homeWeek) + step];
       if (!next) return;
       state.homeWeek = next.key;
-      renderHomeGames(homePlayedGames(), homeTeams());
+      renderHome();
     });
   }
   $("home-games-list").addEventListener("click", (event) => {
     const button = event.target.closest(".home-game");
     if (!button) return;
+    homeSelection.manual = true;
     state.homeFixture = button.dataset.fixture;
     renderHome();
     $("home-games-list").querySelector(`[data-fixture="${CSS.escape(state.homeFixture)}"]`)?.focus({ preventScroll: true });
