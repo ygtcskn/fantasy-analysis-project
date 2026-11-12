@@ -221,7 +221,7 @@ a.team-link:hover { color: #507624; text-decoration: underline; text-underline-o
 .fixture-team-link .club-logo { width: 31px; height: 31px; flex-basis: 31px; }
 .fixture-team-link .club-logo img { width: 28px; height: 28px; }
 .fixture-matchweek-row td {
-  padding: 13px 16px;
+  padding: 0;
   border-top: 1px solid var(--matchweek-border);
   border-bottom: 1px solid var(--matchweek-border);
   background: var(--matchweek-bg);
@@ -233,6 +233,24 @@ a.team-link:hover { color: #507624; text-decoration: underline; text-underline-o
 }
 .fixture-matchweek-row:first-child td { border-top: 0; }
 .fixture-matchweek-row:hover td { background: var(--matchweek-bg); }
+.fixture-matchweek-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 13px 16px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-align: left;
+  text-transform: inherit;
+  cursor: pointer;
+}
+.fixture-matchweek-toggle::after { content: "⌄"; font-size: 16px; line-height: 1; transition: transform .15s ease; }
+.fixture-matchweek-toggle[aria-expanded="false"]::after { transform: rotate(-90deg); }
+.fixture-matchweek-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
 .fixture-game-row td { padding-top: 12px; padding-bottom: 12px; }
 .fixture-game-row.zebra-purple,
 #detailed-standings-body > tr:nth-child(odd) { background: var(--zebra-purple); }

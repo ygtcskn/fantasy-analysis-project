@@ -650,7 +650,10 @@ function renderHomeMomentum(fixture, teams, timeline) {
   slider.addEventListener("input", () => {
     const at = mark();
     homeReplay.at = at < pressure.through ? at : null;
-    if (homeReplay.at !== null && !fixture.homeSnapshot?.simulated) loadHomeReplayHistory();
+    if (homeReplay.at !== null && !fixture.homeSnapshot?.simulated) {
+      loadHomeReplayHistory();
+      if (at > 0) loadHomeRecordedReplayXg(fixture);
+    }
     queueHomeReplayPaint();
   });
   const track = element("div", "home-momentum-track");
@@ -701,21 +704,42 @@ function homeFixtureMetrics(fixture) {
   return matchweekResults.metrics.filter((row) => row.fixture_id === fixture.fixture_id);
 }
 
-function renderHomeStatistics(fixture, teams) {
+function homeComparisonValues(fixture, sides, metrics, measure) {
+  if (measure.type) {
+    const source = measure.source || "statistics";
+    const rows = metrics.filter((metric) => (metric.source || "statistics") === source);
+    return matchweekStatisticValues(rows, sides, measure.type, measure.percent);
+  }
+  if (measure.column) return sides.map((team) => homePlayerTotal(fixture, team, measure.column));
+  return measure.values(fixture);
+}
+
+function homeComparisonText(value, format, final) {
+  if (value !== null) return format(value);
+  return final == null ? "—" : t("MS {value}", { value: format(final) });
+}
+
+function renderHomeStatistics(fixture, teams, finalValues) {
   const card = homeCard("home-statistics", t("MAÇ"), t("Maç İstatistikleri"));
   const sides = [fixture.home_team_id, fixture.away_team_id];
   const metrics = homeFixtureMetrics(fixture);
   card.append(matchweekVersusHeader(sides, teams));
+  let showsFinal = false;
   for (const row of homeStatisticRows()) {
-    const rows = metrics.filter((metric) => (metric.source || "statistics") === row.source);
-    const values = matchweekStatisticValues(rows, sides, row.type, row.percent);
-    card.append(matchweekVersusRow(row.label, values.map((value) => ({
-      value: value === null ? "—" : row.percent ? percentText(value) : row.decimals ? value.toLocaleString(LOCALE, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : displayNumber(value),
-      note: "" })), values));
+    const values = homeComparisonValues(fixture, sides, metrics, row);
+    const final = values.includes(null) ? finalValues?.(row) : null;
+    const format = row.percent ? percentText : row.decimals ? homeDecimal : displayNumber;
+    const cells = values.map((value, side) => {
+      const total = final?.[side];
+      if (value === null && total != null) showsFinal = true;
+      return { value: homeComparisonText(value, format, total), note: "" };
+    });
+    card.append(matchweekVersusRow(row.label, cells, values));
   }
   const status = fixture.homeSnapshot ? "ready" : matchweekResults.metricsStatus;
   card.append(element("p", "home-card-note", fixture.homeSnapshot?.simulated ? t("Simülasyon istatistikleri.")
-    : fixture.homeSnapshot?.replay ? t("Bu dakika için kaydedilen değerler gösteriliyor.")
+    : showsFinal ? t("MS maç sonu değerini gösterir. — bu dakika için veri yok.")
+    : fixture.homeSnapshot?.replay ? t("Seçilen dakikaya kadar kaydedilen son değerler gösteriliyor.")
     : status === "loading" || status === "idle" ? t("Maç istatistikleri yükleniyor…")
     : status === "unavailable" ? t("team_metrics.csv okunamadı; değerler gösterilemiyor.")
       : t("Bu maçın Sportmonks istatistikleri. — sağlanmayan veya doğrulanamayan değer.")));
@@ -850,10 +874,10 @@ function homeSubstitutions(fixture) {
 // One home-against-away line: the label in the middle, each side's bar growing
 // out from it towards that club, as long as its value against the larger one.
 // The side with more is in full colour, the other faded.
-function homeMirrorRow(label, values, format) {
+function homeMirrorRow(label, values, format, final) {
   const row = element("div", "home-mirror-row");
   row.setAttribute("role", "group");
-  const shown = values.map((value) => (value === null ? "—" : format(value)));
+  const shown = values.map((value, side) => homeComparisonText(value, format, final?.[side]));
   row.setAttribute("aria-label", `${label}: ${shown.join(" – ")}`);
   const top = Math.max(0, ...values.filter((value) => value !== null));
   const lead = values.every((value) => value !== null) ? Math.sign(values[0] - values[1]) : 0;
@@ -934,16 +958,15 @@ const homeDecimal = (value) => value.toLocaleString(LOCALE, { minimumFractionDig
 // A mirror card: the versus header, then a row per measure. Each measure is a
 // team statistic (team_metrics type), a sum over the team's players, or its
 // own function of the fixture.
-function homeMirrorCard(className, eyebrow, title, fixture, teams, measures) {
+function homeMirrorCard(className, eyebrow, title, fixture, teams, measures, finalValues) {
   const card = homeCard(className, eyebrow, title);
   const sides = [fixture.home_team_id, fixture.away_team_id];
   const metrics = homeFixtureMetrics(fixture);
   card.append(matchweekVersusHeader(sides, teams));
   for (const measure of measures) {
-    const values = measure.type ? matchweekStatisticValues(metrics.filter((metric) => (metric.source || "statistics") === (measure.source || "statistics")), sides, measure.type)
-      : measure.column ? sides.map((team) => homePlayerTotal(fixture, team, measure.column))
-        : measure.values(fixture);
-    card.append(homeMirrorRow(measure.label, values, measure.decimals ? homeDecimal : displayNumber));
+    const values = homeComparisonValues(fixture, sides, metrics, measure);
+    const final = values.includes(null) ? finalValues?.(measure) : null;
+    card.append(homeMirrorRow(measure.label, values, measure.decimals ? homeDecimal : displayNumber, final));
   }
   return card;
 }
@@ -951,24 +974,24 @@ function homeMirrorCard(className, eyebrow, title, fixture, teams, measures) {
 // Duels and dribbles are the team's own Sportmonks totals, as on the team
 // radar; aerials, fouls won and dispossessions have no team total, so they are
 // the sum of the team's players. Names as on the player radar.
-function renderHomePhysical(fixture, teams) {
+function renderHomePhysical(fixture, teams, finalValues) {
   return homeMirrorCard("home-physical", t("MÜCADELE"), t("Fiziksel Mücadele"), fixture, teams, [
     { label: t("Kazanılan ikili"), type: 106 },
     { label: t("Kazanılan hava topu"), column: "aerials_won" },
     { label: t("Başarılı dribling"), type: 109 },
     { label: t("Kazanılan faul"), column: "fouls_drawn" },
     { label: t("Top kaptırma"), column: "dispossessed" },
-  ]);
+  ], finalValues);
 }
 
-function renderHomeSetPieces(fixture, teams) {
+function renderHomeSetPieces(fixture, teams, finalValues) {
   return homeMirrorCard("home-set-pieces", t("TEHLİKE"), t("Duran Top ve Akan Oyun"), fixture, teams, [
     { label: t("Korner"), type: 34 },
     { label: t("Serbest vuruş"), type: 55 },
     { label: t("Duran top xG"), type: 7944, source: "xgfixture", decimals: true },
     { label: t("Akan oyun xG"), type: 7945, source: "xgfixture", decimals: true },
     { label: t("Penaltı ve serbest vuruş golü"), values: homeDeadBallGoals },
-  ]);
+  ], finalValues);
 }
 
 // Each side's share of the pressure index in every fifteen-minute block (the
@@ -1355,7 +1378,7 @@ function homeReplayGame(game, timeline) {
   const saved = simulated ? homeSimulationReplayRows(at) : homeHistoricalReplayRows(fixture, at, timeline.firstHalf, timeline.total);
   const [summary, ...rows] = saved;
   if (!summary) return game;
-  if (!simulated) {
+  if (!simulated && at > 0) {
     const frame = homeCapturedReplayFrame(fixture, at, timeline.firstHalf);
     if (frame) {
       const [captured, ...capturedRows] = frame.rows;
@@ -1364,10 +1387,16 @@ function homeReplayGame(game, timeline) {
       rows.forEach((row, index) => { if (row.record_type === "statistic") metrics.set(metricKey(row), index); });
       const players = new Map(rows.filter((row) => row.record_type === "lineup").map((row) => [row.player_id, row]));
       for (const row of capturedRows) {
-        if (row.record_type === "statistic" && number(row.value) !== null) {
+        const value = number(row.value);
+        if (row.record_type === "statistic" && value !== null && value >= 0) {
           const index = metrics.get(metricKey(row));
           if (index === undefined) rows.push(row);
-          else if (frame.elapsed > rows[index].minute) rows[index] = row;
+          else {
+            const recorded = rows[index];
+            const newerXgAtSameMinute = row.source === "xgfixture" && frame.elapsed === recorded.minute
+              && frame.timestamp > recorded.replayTimestamp;
+            if (frame.elapsed > recorded.minute || newerXgAtSameMinute) rows[index] = row;
+          }
         }
         if (row.record_type === "lineup") {
           const player = players.get(row.player_id);
@@ -1409,6 +1438,22 @@ function queueHomeReplayPaint() {
   }
 }
 
+function homeReplayFinalValues(context) {
+  const fixture = context.baseGame.fixture, snapshot = fixture.homeSnapshot;
+  if (snapshot ? snapshot.simulated || !snapshot.summary || !matchweekFinished(snapshot.summary) : !fixtureFinished(fixture)) return null;
+  if (!context.finalValues) {
+    const sides = [fixture.home_team_id, fixture.away_team_id];
+    const metrics = homeFixtureMetrics(fixture);
+    const totals = new Map();
+    context.finalValues = (measure) => {
+      const key = measure.column || measure.values || `${measure.source || "statistics"}:${measure.type}`;
+      if (!totals.has(key)) totals.set(key, homeComparisonValues(fixture, sides, metrics, measure));
+      return totals.get(key);
+    };
+  }
+  return context.finalValues;
+}
+
 function paintHomeReplay() {
   const context = homeReplay.context;
   if (state.view !== "home" || !context || context.paintedAt === homeReplay.at) return;
@@ -1439,12 +1484,13 @@ function paintHomeReplay() {
   if (replay) highlightHomeEvents(homeReplay.at, false);
   const detail = $("home-detail");
   const pair = detail.children[2].firstElementChild;
-  const statistics = renderHomeStatistics(fixture, teams);
+  const finalValues = replay ? homeReplayFinalValues(context) : null;
+  const statistics = renderHomeStatistics(fixture, teams, finalValues);
   updateHomeCard(pair, statistics, 0);
   updateHomeLineups(pair, fixture, teams, context);
   const more = detail.children[3].firstElementChild;
   const cards = [renderHomeSeasonRanks(fixture, teams), renderHomePassingStyle(fixture, teams, context), renderHomeSeasonShifts(fixture, teams),
-    renderHomePhysical(fixture, teams), renderHomeSetPieces(fixture, teams), renderHomePhases(fixture, teams)];
+    renderHomePhysical(fixture, teams, finalValues), renderHomeSetPieces(fixture, teams, finalValues), renderHomePhases(fixture, teams)];
   cards.forEach((card, index) => updateHomeCard(more, card, index));
   const scoreboard = detail.children[0].firstElementChild;
   if (scoreboard) updateHomeScoreboard(scoreboard, game, teams);

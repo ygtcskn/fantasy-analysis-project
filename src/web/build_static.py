@@ -30,7 +30,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from src.shared import season_folder  # noqa: E402
 from src.web.serve import (  # noqa: E402
     ASSET_PATH, CSV_NAMES, DATA_ROOT, FINAL_ROOT, HISTORY_NAMES, OPTIONAL_CSV_NAMES,
-    analysis_files, history_seasons,
+    REPLAY_XG_DIR, analysis_files, history_seasons, replay_xg_file,
 )
 
 
@@ -124,6 +124,11 @@ def data_files(season):
         raise SystemExit(f"Missing season CSVs in {csv_root}: {', '.join(missing_required)}")
     wanted = {name: csv_root / name for name in sorted(CSV_NAMES | OPTIONAL_CSV_NAMES)}
     wanted.update(analysis_files(season))
+    for source in sorted((csv_root / REPLAY_XG_DIR).glob("*.csv")):
+        relative = source.relative_to(csv_root).as_posix()
+        recording = replay_xg_file(csv_root, relative)
+        if recording is not None:
+            wanted[relative] = recording
     wanted["spider/spider_stats.csv"] = FINAL_ROOT / "spider" / season / "spider_stats.csv"
     earlier = [name for name in history_seasons() if name < season]
     for name in earlier:

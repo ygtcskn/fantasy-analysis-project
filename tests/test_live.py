@@ -11,7 +11,8 @@ from unittest.mock import Mock, patch
 from urllib.error import HTTPError
 from urllib.parse import parse_qs, urlsplit
 
-from src.web import live
+from src.shared import read_csv
+from src.web import live, record_live_xg
 from src.web.serve import make_handler
 
 
@@ -146,6 +147,33 @@ class LiveNormalizationTests(unittest.TestCase):
                 path.write_text(text, encoding="utf-8")
                 with self.assertRaises(live.LiveUnavailable):
                     live.season_scope(root)
+
+
+class LiveXgRecordingTests(unittest.TestCase):
+    @patch.object(record_live_xg, "utc_stamp", side_effect=["2026-11-13T17:49:00Z", "2026-11-13T18:45:00Z", "2026-11-13T18:49:00Z"])
+    @patch.object(record_live_xg, "fetch_fixtures")
+    def test_records_observed_clocks_and_preserves_history_after_full_time(self, fetch, _stamp):
+        first_half = {"counts_from": 0, "period_length": 45, "minutes": 49, "ticking": False}
+
+        def xg(value):
+            return {"participant_id": 1, "type_id": 5304, "data": {"value": value}}
+
+        half_time = fixture(state_id=3, periods=[first_half], expected=[xg(0)])
+        in_play = fixture(periods=[first_half, *fixture()["periods"]], expected=[xg(1.2)])
+        finished = fixture(state_id=5, expected=[xg(1.4)])
+        fetch.side_effect = [[half_time], [in_play], [finished]]
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for _ in range(3):
+                record_live_xg.record_poll(root, "600", "2026")
+            observations = read_csv(root / "replay_xg" / "100.csv", required=True)
+
+        fields = ("state", "minute", "extra_minute", "first_half_minute", "fetched_at", "team_id", "type_id", "value")
+        self.assertEqual([tuple(row[field] for field in fields) for row in observations], [
+            ("HT", "", "", "49", "2026-11-13T17:49:00Z", "1", "5304", "0.0"),
+            ("INPLAY_2ND_HALF", "90", "2", "49", "2026-11-13T18:45:00Z", "1", "5304", "1.2"),
+        ])
 
 
 class LivePollingTests(unittest.TestCase):

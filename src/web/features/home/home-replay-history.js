@@ -2,6 +2,10 @@
 
 const homeReplayHistory = { season: "", fixtures: null, status: "idle", trends: new Map() };
 const HOME_REPLAY_TREND_TYPES = new Set(["34", "42", "44", "45", "55", "56", "62", "80", "81", "83", "84", "85", "86", "98", "106", "109"]);
+const homeRecordedReplayXg = { season: "", fixtures: null, readings: new Map() };
+const HOME_RECORDED_XG_TYPES = new Set(["5304", "7944", "7945"]);
+const HOME_RECORDED_XG_FIELDS = ["fixture_id", ...HOME_REPLAY_IDENTITY, "state", "minute", "extra_minute",
+  "first_half_minute", "fetched_at", "team_id", "type_id", "value"];
 
 async function loadHomeReplayHistory() {
   const season = state.seasonSlug, fixtures = state.tables["fixtures.csv"];
@@ -18,6 +22,65 @@ async function loadHomeReplayHistory() {
   }
   Object.assign(homeReplayHistory, { status: rows ? "ready" : "unavailable", trends });
   if (state.view === "home") renderHome();
+}
+
+function homeRecordedXgFrame(row, fixture) {
+  if (row.fixture_id !== String(fixture.fixture_id) || HOME_REPLAY_IDENTITY.some((key) => row[key] !== String(fixture[key]))
+      || ![fixture.home_team_id, fixture.away_team_id].map(String).includes(row.team_id) || !HOME_RECORDED_XG_TYPES.has(row.type_id)) return null;
+  const value = number(row.value), timestamp = Date.parse(row.fetched_at);
+  if (value === null || value < 0 || !Number.isFinite(timestamp)
+      || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(row.fetched_at)
+      || new Date(timestamp).toISOString().slice(0, 19) !== row.fetched_at.slice(0, 19)) return null;
+  const minute = number(row.minute), extra = row.extra_minute === "" ? 0 : number(row.extra_minute);
+  const first = number(row.first_half_minute), phase = row.state;
+  if (!Number.isInteger(extra) || extra < 0 || (row.first_half_minute !== "" && (!Number.isInteger(first) || first < 0))) return null;
+  if (phase === "HT") {
+    if (first === null || first < 45 || (row.minute === "" ? extra !== 0 : minute !== 45 || 45 + extra > first)) return null;
+  } else {
+    const range = phase === "INPLAY_1ST_HALF" ? [0, 45] : phase === "INPLAY_2ND_HALF" ? [45, 90]
+      : phase === "INPLAY_ET" ? [90, 120] : null;
+    if (!range || !Number.isInteger(minute) || minute < range[0] || minute > range[1]
+        || (extra > 0 && minute !== range[1] && (phase !== "INPLAY_ET" || minute !== 105))) return null;
+  }
+  return { state: phase, minute, extra, first, second: null, timestamp, team_id: row.team_id, type_id: row.type_id, value: row.value };
+}
+
+async function loadHomeRecordedReplayXg(fixture) {
+  const season = state.seasonSlug, fixtures = state.tables["fixtures.csv"], id = String(fixture.fixture_id);
+  if (!season || !/^[1-9]\d*$/.test(id)) return;
+  if (homeRecordedReplayXg.season !== season || homeRecordedReplayXg.fixtures !== fixtures) {
+    Object.assign(homeRecordedReplayXg, { season, fixtures, readings: new Map() });
+  }
+  const { readings } = homeRecordedReplayXg;
+  if (readings.has(id)) return;
+  readings.set(id, []);
+  const rows = await readFantasyCSV(`replay_xg/${id}.csv`, HOME_RECORDED_XG_FIELDS, season, true).catch(() => null);
+  if (homeRecordedReplayXg.readings !== readings || state.seasonSlug !== season || state.tables["fixtures.csv"] !== fixtures) return;
+  const frames = (rows || []).map((row) => homeRecordedXgFrame(row, fixture)).filter(Boolean);
+  readings.set(id, frames);
+  if (frames.length && state.view === "home" && homeReplay.fixtureId === id && !homeReplay.simulated && homeReplay.at !== null && homeReplay.context) {
+    // Repaint the current minute while keeping the slider under the pointer.
+    homeReplay.context.paintedAt = null;
+    queueHomeReplayPaint();
+  }
+}
+
+function homeRecordedReplayXgRows(fixture, periods, elapsed, firstHalf) {
+  if (homeRecordedReplayXg.season !== state.seasonSlug || homeRecordedReplayXg.fixtures !== state.tables["fixtures.csv"]) return [];
+  const fixtureId = String(fixture.fixture_id), latest = new Map();
+  const extraPeriods = new Map([...periods.values()].filter((period) => period.start >= 90).map((period) => [period.start, period]));
+  for (const frame of homeRecordedReplayXg.readings.get(fixtureId) || []) {
+    const extraPeriod = frame.state === "INPLAY_ET" ? extraPeriods.get(frame.minute <= 105 ? 90 : 105) : null;
+    const at = extraPeriod ? extraPeriod.offset + frame.minute - extraPeriod.start + frame.extra : homeReplayFrameElapsed(frame, firstHalf);
+    if (at === null || at > elapsed) continue;
+    const key = `${frame.team_id}:${frame.type_id}`, previous = latest.get(key);
+    if (previous && (previous.at > at || (previous.at === at && previous.frame.timestamp >= frame.timestamp))) continue;
+    latest.set(key, { at, frame });
+  }
+  return [...latest.values()].map(({ at, frame }) => ({
+    record_type: "statistic", fixture_id: fixtureId, source: "xgfixture", team_id: frame.team_id,
+    type_id: frame.type_id, value: frame.value, minute: at, replayTimestamp: frame.timestamp,
+  }));
 }
 
 // Trend minutes count from the regulation minute where each period starts.
@@ -118,7 +181,7 @@ function homeHistoricalReplayRows(fixture, elapsed, firstHalf, total) {
       record_type: "statistic", fixture_id: fixtureId, team_id, source: "xgfixture", type_id, value: "0", minute: 0,
     })),
   ]) : complete ? homeFixtureMetrics(fixture).map((row) => ({ ...row, record_type: "statistic" }))
-    : homeReplayTrendRows(periods, sides, elapsed, fixtureId);
+    : [...homeReplayTrendRows(periods, sides, elapsed, fixtureId), ...homeRecordedReplayXgRows(fixture, periods, elapsed, firstHalf)];
   const pressure = homePressure(fixture);
   const events = kickoff ? [] : timed.filter(({ at }) => complete || (at !== null && at <= elapsed)).map(({ event }) => event);
   const lineups = homePlayerRows(fixture).filter((row) => /^(1|true)$/i.test(row.started)).map((row) => ({

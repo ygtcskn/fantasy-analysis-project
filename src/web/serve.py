@@ -30,6 +30,8 @@ CSV_NAMES = {
 OPTIONAL_CSV_NAMES = {"fixture_formations.csv", "download_status.csv", "team_metrics.csv",
                       "events.csv", "fixture_pressure.csv", "fixture_periods.csv",
                       "current_squads.csv", "fixture_referees.csv", "fixture_trends.csv"}
+REPLAY_XG_DIR = "replay_xg"
+REPLAY_XG_PATH = re.compile(rf"{REPLAY_XG_DIR}/[1-9][0-9]*\.csv")
 # Earlier seasons are read only to widen the radar's reference population; the
 # player's own plotted values always come from the served season.
 HISTORY_NAMES = {"fixtures.csv", "player_match_stats.csv", "squads.csv", "team_metrics.csv", "spider_stats.csv"}
@@ -96,6 +98,19 @@ def analysis_files(season):
         "player_projections/player_projections.csv": FINAL_ROOT / "player_projections" / season / "player_projections.csv",
         "fantasy_pipeline/pipeline_status.csv": FINAL_ROOT / "fantasy_pipeline" / season / "pipeline_status.csv",
     }
+
+
+def replay_xg_file(csv_root, relative):
+    """Allow the same season-scoped recording files locally and in the build."""
+    if not REPLAY_XG_PATH.fullmatch(relative):
+        return None
+    path = csv_root / relative
+    try:
+        # A numeric name can still be a link to an unrelated file or folder.
+        resolved = path.resolve()
+        return resolved if resolved == csv_root.resolve() / relative and resolved.is_file() else None
+    except (OSError, RuntimeError):
+        return None
 
 
 def make_handler(csv_root, live_enabled=True, chat=None):
@@ -222,7 +237,9 @@ def make_handler(csv_root, live_enabled=True, chat=None):
                 relative, content_type = history[2], "text/csv; charset=utf-8"
             elif path == "/local-data/spider/spider_stats.csv":
                 root, relative, content_type = FINAL_ROOT / "spider" / csv_root.name, "spider_stats.csv", "text/csv; charset=utf-8"
-            elif path.startswith("/local-data/") and csv_name in CSV_NAMES | OPTIONAL_CSV_NAMES:
+            elif path.startswith("/local-data/") and (
+                csv_name in CSV_NAMES | OPTIONAL_CSV_NAMES or replay_xg_file(csv_root, csv_name) is not None
+            ):
                 root, relative, content_type = csv_root, csv_name, "text/csv; charset=utf-8"
             elif path.startswith("/local-data/") and csv_name in fantasy_files:
                 file = fantasy_files[csv_name]

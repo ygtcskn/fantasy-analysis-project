@@ -30,10 +30,14 @@ Move the pressure chart's slider back to replay the whole dashboard at the
 selected minute. Moving it to the right end restores the latest view. Saved
 matches use timed events, pressure and `fixture_trends.csv` where available.
 The local live feed also keeps a short history of the snapshots seen in the
-current tab. xG and player totals display a dash when the selected minute
-has no recorded values. The replay standings are provisional. They use the
-results available before the selected match kicked off and its score at the
-replay minute.
+current tab. For matches recorded with `record_live_xg`, the slider also
+uses the latest saved xG reading at or before the selected minute. If the
+selected minute has no value for a stat such as xG or
+aerials won, the match cards show the saved full-time value with an **FT**
+label (**MS** in Turkish), or a dash if that value is also unavailable.
+Replay bars use time-stamped values. The replay standings are provisional.
+They use the results available before the selected match kicked off and its
+score at the replay minute.
 
 The league table below (**SÜPER LİG · Puan Durumu**) lists each club's place
 ("1."), crest and name under one "Takım" heading, then O (played), G (won) and
@@ -242,6 +246,36 @@ for the browser, and discarded. Nothing is saved to disk.
 
 To keep the server entirely offline, add `--no-live` to the startup command.
 Direct file opening and manually loaded datasets do not activate the live feed.
+
+### Record xG for future replays
+
+Live recording requires the Sportmonks xG Advanced add-on for the league.
+Run this from the project folder before kickoff and leave the terminal open
+until the matches finish. The recorder can run with the website closed.
+
+```powershell
+.\.venv\Scripts\python.exe -m src.web.record_live_xg --season 2026/2027
+```
+
+The recorder checks for in-play matches once a minute. It saves the team xG,
+set-piece xG and open-play xG values Sportmonks actually returns, with the
+match clock and the time of collection. Ctrl+C stops recording. Restarting
+the recorder adds to any existing recordings for that season. The local
+website reads `data/final/sportmonks/<season>/replay_xg/<fixture_id>.csv` when
+you move the slider back. Reload the page to pick up readings saved after
+you opened a replay. Older matches have readings only if they were recorded
+during play.
+
+For the public site, push the code first. After recording finishes, wait
+for any active site update, then send the saved CSV to R2. Replace
+`FIXTURE_ID` with the ID the recorder printed and repeat for each file.
+
+```powershell
+.\.venv\Scripts\python.exe src/sync_data.py push --path data/final/sportmonks/2026-2027/replay_xg/FIXTURE_ID.csv
+```
+
+The next **Update fantezianaliz.com** run picks up the recordings. To publish
+immediately, run that workflow with `now` enabled.
 Offline regression cases are in `tests/test_live.py`; run them yourself with
 `python -m unittest discover -s tests -p test_live.py`. They mock all provider calls.
 Finished-result display and identity regressions can be run separately with
@@ -254,7 +288,7 @@ You can still double-click `index.html` for manual file selection instead of sta
 3. For **Home**, select `standings.csv`, `fixtures.csv`, `teams.csv`, and `fixture_scores.csv` together (hold Ctrl while selecting). Add `player_match_stats.csv`, `players.csv`, and `squads.csv` for the player pages. All seven files can be selected together.
 4. **Home** is the opening page: a wide season overview above a league points table on the left and fixtures on the right, matching the supplied layout. The panels stack on mobile. The points table uses the provider's position and points without recalculating them. If multiple competition groups exist, use the group selector. Fixtures can be browsed by matchweek, with club logos, kickoff, status, and saved scores. Only `CURRENT` score records are used; half-time and period scores are never added together. Missing scores stay blank (a dash). The page is a saved snapshot, not a live feed; times are shown in Turkish time.
 5. Open **Player Tier List** from the sidebar. The centered table begins with **Sıra, Logo, Mevki, Oyuncu, Kademe, Ort. Reyting**, followed by rated matches, matches played, minutes, goals, assists, xG, shots, key passes, and saves. Team names remain searchable even though clubs are represented by logos: typing `Galatasaray` shows players associated with that club in the loaded season. You can also filter by team or position. Click a player's name to open their full match history; select **Show every exported field** for all statistics from every supplied match record, including missing fields and the original provider ratings.
-6. **Fikstür**, directly below **Puan Durumu** in the shared sidebar, displays the complete season without filters, matchweek selection, pagination, or a column-heading row. Each Turkish section row uses `Maç Haftası N - DD/MM`, based on that matchweek's earliest kickoff date, followed by Saat, Ev Sahibi, Skor, and Deplasman values. Home and away club names and logos link to their team pages. Missing scores stay as dashes. Fixture and standings rows alternate between purple and light purple in dark mode. Direct URL: `http://127.0.0.1:8000/index.html?view=fixtures`.
+6. **Fikstür**, directly below **Puan Durumu** in the shared sidebar, displays the complete season without filters, matchweek selection, pagination, or a column-heading row. Each Turkish section row uses `Maç Haftası N - DD/MM`, based on that matchweek's earliest kickoff date, followed by Saat, Ev Sahibi, Skor, and Deplasman values. Home and away club names and logos link to their team pages. Missing scores stay as dashes. Each matchweek heading opens or closes its own games; the current and previous weeks start open, and the choices are kept in `state.fixtureRoundsOpen` until another season is loaded. Fixture and standings rows alternate between purple and light purple in dark mode. Direct URL: `http://127.0.0.1:8000/index.html?view=fixtures`.
 7. **Player appearances** continues to provide searchable, sortable records with its existing 40-row pages and Sportmonks ratings.
 
 The main workspace is centered with empty side margins. Move the mouse to the left edge for a temporary navigation preview; moving away closes it. Click the menu button to lock the sidebar open, then click the same button again to close it. A sidebar locked open stays visible when the pointer moves away or the page is clicked. Escape and selecting a destination close it. The slide animation remains active, except when reduced motion is enabled in the operating system. The sidebar overlays the page and does not change its horizontal position.

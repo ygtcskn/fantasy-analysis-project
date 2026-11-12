@@ -1,7 +1,7 @@
 "use strict";
 
 // CSVs come from the local server or file picker and stay in browser memory.
-const state = { tables: {}, seasonSlug: "", view: "home", page: 0, sort: "date", direction: -1, busy: false, tierCache: null, homeFixture: null, homeWeek: null, standingsGroup: null };
+const state = { tables: {}, seasonSlug: "", fixtureRoundsOpen: new Map(), view: "home", page: 0, sort: "date", direction: -1, busy: false, tierCache: null, homeFixture: null, homeWeek: null, standingsGroup: null };
 const pageSize = 40;
 let renderedPageCount = 1;
 const expected = {
@@ -73,7 +73,9 @@ async function loadFiles(files, { replace = false, local = false } = {}) {
     const incomingSeason = incoming["fixtures.csv"]?.find((row) => row.season_id)?.season_id;
     if (previousSeason && incomingSeason && previousSeason !== incomingSeason) resetSquadBuilder();
     state.tables = next;
-    state.seasonSlug = local && sourceSeasons.size === 1 ? [...sourceSeasons][0] : "";
+    const seasonSlug = local && sourceSeasons.size === 1 ? [...sourceSeasons][0] : "";
+    if (seasonSlug !== state.seasonSlug) state.fixtureRoundsOpen = new Map();
+    state.seasonSlug = seasonSlug;
     currentSquad = null;
     resetFantasyData();
     resetMatchweekOdds();
@@ -328,14 +330,23 @@ function render() {
   const fragment = document.createDocumentFragment();
   const fixtureTeams = homeTeams();
   const roundDates = new Map();
+  const fixtureRounds = [];
   if (!playerView) for (const row of rows) {
     const date = String(row.day || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (!date) continue;
     const key = String(row.round || "");
-    const sortable = `${date[1]}-${date[2]}-${date[3]}`;
-    if (!roundDates.has(key) || sortable < roundDates.get(key).sortable) roundDates.set(key, { sortable, display: `${date[3]}/${date[2]}` });
+    const group = fixtureRounds.at(-1);
+    if (!group || group.key !== key) fixtureRounds.push({ key, fixtures: [row] });
+    else group.fixtures.push(row);
+    if (date) {
+      const sortable = `${date[1]}-${date[2]}-${date[3]}`;
+      if (!roundDates.has(key) || sortable < roundDates.get(key).sortable) roundDates.set(key, { sortable, display: `${date[3]}/${date[2]}` });
+    }
   }
+  const currentFixtureRound = currentRoundIndex(fixtureRounds);
+  const defaultOpenRounds = new Set(fixtureRounds.slice(Math.max(0, currentFixtureRound - 1), currentFixtureRound + 1).map((round) => round.key));
+  const roundOpen = (key) => state.fixtureRoundsOpen.get(key) ?? defaultOpenRounds.has(key);
   let previousRound = Symbol("first fixture group");
+  let roundGameRows = [];
   let fixtureStripe = 0;
   rows.slice(state.page * rowsPerPage, (state.page + 1) * rowsPerPage).forEach((row) => {
     if (!playerView && row.round !== previousRound) {
@@ -345,13 +356,31 @@ function render() {
       const round = String(row.round || "").trim();
       const roundName = round.replace(/^matchweek\s*/i, "");
       const date = roundDates.get(String(row.round || ""))?.display;
-      groupCell.textContent = `${round ? t("Maç Haftası {round}", { round: roundName }) : t("Diğer Maçlar")}${date ? ` - ${date}` : ""}`;
+      const button = document.createElement("button");
+      const roundKey = String(row.round || "");
+      const expanded = roundOpen(roundKey);
+      const weekRows = roundGameRows = [];
+      button.className = "fixture-matchweek-toggle";
+      button.type = "button";
+      button.setAttribute("aria-expanded", String(expanded));
+      button.textContent = `${round ? t("Maç Haftası {round}", { round: roundName }) : t("Diğer Maçlar")}${date ? ` - ${date}` : ""}`;
+      button.addEventListener("click", () => {
+        const open = button.getAttribute("aria-expanded") !== "true";
+        button.setAttribute("aria-expanded", String(open));
+        state.fixtureRoundsOpen.set(roundKey, open);
+        weekRows.forEach((gameRow) => { gameRow.hidden = !open; });
+      });
+      groupCell.append(button);
       groupRow.append(groupCell);
       fragment.append(groupRow);
       previousRound = row.round;
     }
     const tr = document.createElement("tr");
-    if (!playerView) tr.className = `fixture-game-row ${fixtureStripe++ % 2 ? "zebra-light" : "zebra-purple"}`;
+    if (!playerView) {
+      tr.className = `fixture-game-row ${fixtureStripe++ % 2 ? "zebra-light" : "zebra-purple"}`;
+      tr.hidden = !roundOpen(String(row.round || ""));
+      roundGameRows.push(tr);
+    }
     columns.forEach(([key, , numeric]) => {
       const td = document.createElement("td");
       if (!playerView) td.className = `fixture-${key}-cell`;

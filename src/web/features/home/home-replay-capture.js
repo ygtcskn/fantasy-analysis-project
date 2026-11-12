@@ -78,5 +78,5 @@ function homeCapturedReplayFrame(fixture, elapsed, firstHalf) {
     closest = frame;
     closestMinute = minute;
   }
-  return closest && { elapsed: closestMinute, rows: closest.rows };
+  return closest && { elapsed: closestMinute, timestamp: closest.timestamp, rows: closest.rows };
 }
