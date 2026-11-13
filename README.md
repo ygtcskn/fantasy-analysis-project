@@ -1,10 +1,111 @@
-# Super Lig data — Sportmonks with TFF Fantasy snapshots
+# Fantezi Analiz
+
+**A Süper Lig data and fantasy football project I built from collection to decision-making.** It brings together historical and live football data, reviewed player identities, match probabilities, fantasy projections, interactive dashboards, and a database-backed AI assistant.
+
+**[Explore the live website](https://fantezianaliz.com/)** · [Squad Builder](https://fantezianaliz.com/index.html?view=builder) · [Matchweek analysis](https://fantezianaliz.com/index.html?view=matchweek) · [Player statistics](https://fantezianaliz.com/index.html?view=statistics)
+
+The live website is the product demo. This repository explains how I built it and where each result comes from. The public website serves prepared season CSVs and a Cloudflare chatbot endpoint. The local version also supports an on-demand Sportmonks live match feed and server-side XI recommendations; those two request-time features are not part of the public files-only build.
+
+## Explore the live dashboard
+
+Start on [Home](https://fantezianaliz.com/index.html?view=home) to open a saved match and inspect its timeline, statistics, lineups, and team comparisons. Then try [Matchweek](https://fantezianaliz.com/index.html?view=matchweek) for pre-match probabilities, [Player Statistics](https://fantezianaliz.com/index.html?view=statistics) for peer comparisons, and [Squad Builder](https://fantezianaliz.com/index.html?view=builder) to assemble a fantasy XI. The public pages use published data; an on-demand live-match demonstration requires the local server and provider access.
+
+## The problem
+
+Picking a fantasy XI means comparing players who have different prices, positions, opponents, playing-time risks, and incomplete statistics. A table of season totals does not answer who is likely to help **next matchweek**. I built Fantezi Analiz to connect the underlying data to that decision while making missing coverage and model uncertainty visible.
+
+## What I built
+
+| Area | My work | Explore the code |
+| --- | --- | --- |
+| Historical data collection | A Sportmonks client with pagination, CSV caching, request limits, raw captures, and rebuildable season exports. | [Client](src/fetch/sportmonks.py) · [Downloader](src/fetch/download_season.py) |
+| Live API data | A separate local match feed with bounded polling, a shared snapshot cache, and explicit unavailable states. It never overwrites saved results or forecasts. | [Live feed](src/web/live.py) · [Match centre](src/web/features/matchweek/live-centre.js) |
+| Cleaning and analysis | Analysis-ready CSVs, reviewed TFF-to-Sportmonks player IDs, a reconstructed fantasy-points ledger, player projections, and a constrained XI optimizer. | [Identity matching](src/fetch/update_tff_players.py) · [Pipeline](src/run_pipeline.py) · [Optimizer](src/xi_optimizer/README.md) |
+| Match probabilities and fair odds | Python models for home win, draw, and away win, including Poisson and XGBoost. The pipeline exports probabilities and their implied fair odds. | [Model and evaluation](src/odds/README.md) · [Implementation](src/odds/run.py) |
+| Visualizations | Player and team radar charts, peer distributions, match-flow charts, and model diagnostics, each tied to a specific comparison. | [Radar methods](src/web/lib/radar.md) · [Team charts](src/web/lib/team-analysis.md) |
+| Dashboards | A bilingual, light/dark website for matches, clubs, players, forecasts, and fantasy squad building. | [Website guide](src/web/README.md) · [Page source](src/web/index.html) |
+| AI assistant | Python and Cloudflare versions of a chatbot that answer football-statistics questions through database tools rather than invented numbers. | [Chatbot guide](docs/chatbot/README.md) · [Tool queries](src/chat/tools.py) · [Public endpoint](functions/api/chat.js) |
+
+## Data flow
+
+```mermaid
+flowchart TD
+    SM[Sportmonks API] --> RAW[Raw CSV captures]
+    RAW --> CLEAN[Clean season CSVs]
+    TFF[TFF Fantasy snapshot] --> ID[Reviewed player-ID matching]
+    CLEAN --> ID
+    ID --> POINTS[Fantasy points and player projections]
+    CLEAN --> ODDS[Poisson and XGBoost probabilities]
+    ODDS --> POINTS
+    POINTS --> XI[XI optimization]
+    CLEAN --> SITE[Published dashboard]
+    ODDS --> SITE
+    POINTS --> SITE
+    XI --> RECS[Local XI recommendations]
+    CLEAN --> CHATDB[Chat database]
+    CHATDB --> CHAT[Tool-using AI assistant]
+    SM --> LIVE[Local live feed]
+    LIVE --> LOCAL[Local live dashboard]
+```
+
+Sportmonks is the primary provider. The TFF Fantasy table is a separate source for current fantasy prices, positions, and the game's own totals. Sportmonks player IDs are the join key. An ambiguous name match is reported for human review rather than assigned automatically. The pipeline keeps lossless provider captures under `data/raw`, rebuildable work under `data/temp`, and website-ready CSVs under `data/final`.
+
+## From data to a fantasy decision
+
+### Collect and check
+
+The downloader saves the provider response as typed raw CSV rows, then exports rectangular tables for fixtures, teams, players, lineups, events, and statistics. The [season audit](src/fetch/audit_season.py) checks structural problems before modeling. Missing values remain distinguishable from recorded zeroes, and the [identity review](src/fetch/update_tff_players.py) keeps unresolved TFF players out of ID-based joins.
+
+### Analyze and model
+
+The [points ledger](src/points/README.md) reconstructs fantasy scoring per player-match from reviewed rules. [Player projections](src/player_projections/README.md) estimate the next matchweek's minutes and scoring components, then the [optimizer](src/xi_optimizer/README.md) selects a legal XI under budget, position, and club limits. These are estimates, not guaranteed fantasy points.
+
+The [odds research](src/odds/README.md) compares Poisson and XGBoost against a simple outcome-frequency baseline. It uses chronological validation and a later held-out season, with log loss, Brier score, and calibration checks. The resulting `home_fair_odds`, `draw_fair_odds`, and `away_fair_odds` are reciprocals of model probabilities; they are **not bookmaker prices** or a claim of betting profit.
+
+### Make the analysis explorable
+
+The [live site](https://fantezianaliz.com/) lets visitors move from a match or club to player statistics and a fantasy squad. Charts reuse the same definitions across pages. The radar compares a player with an explicit peer population, accounts for small samples, and marks insufficient coverage rather than turning missing data into a score. The [distribution panel](src/web/features/statistics/distribution.md) and [team charts](src/web/lib/team-analysis.md) expose the comparisons behind the summary views.
+
+The assistant answers questions about recorded Süper Lig statistics using a read-only chat database and named SQL tools. Its instructions require names, dates, scores, and numbers to come from those tools, and ask for clarification when a player or club name is ambiguous. The public `/api/chat` runs as a Cloudflare Pages Function with a D1 database; the local `/local-chat` uses SQLite. [The chatbot guides](docs/chatbot/README.md) document the steps.
+
+## How I evaluate the work
+
+| Question | Evidence in this project |
+| --- | --- |
+| Did collection produce usable seasons? | Download status, feed coverage, duplicate-ID checks, and [season audit](src/fetch/audit_season.py). |
+| Did cleaning preserve the right identities? | Match reports, candidate lists, and explicit overrides from [TFF matching](src/fetch/update_tff_players.py). |
+| Does reconstructed scoring agree with TFF? | A [reconciliation report](src/points/README.md) compares player totals against a dated TFF snapshot and separates timing gaps from scoring differences. |
+| Are match probabilities useful? | The [odds backtest](src/odds/README.md) compares models with a baseline on later matches and inspects calibration. |
+| Do projections help choose an XI? | The [projection backtest](src/player_projections/README.md) can compare accuracy and the actual points of model-selected XIs with simple selection baselines. A current result is needed before claiming an improvement. |
+| Can the chatbot answer faithfully? | [Tool tests](tests/test_chat_tools.py), [cloud parity tests](tests/test_chat_cloud.py), and examples grounded in database rows. These do not by themselves establish an end-to-end answer-quality rate. |
+
+The scoring reconstruction still has known bonus-point differences, and player projections are experimental. The repository does not include the provider dataset or generated research reports, so this README makes no current accuracy claim for the full fantasy pipeline. Model limitations and available evaluation methods are explained in the linked module guides.
+
+## Website and deployment
+
+The public website is built from checked-in website code and prepared CSVs, then deployed to Cloudflare Pages. [The update workflow](.github/workflows/update-site.yml) refreshes data and publishes a new static build; [research reports](.github/workflows/research.yml) run separately. The chatbot is the public site's request-time exception. Visitor accounts and profiles live in Supabase, outside the CSV analysis pipeline.
+
+The local server can show provider live scores and compute XI recommendations on request. The public build displays saved matches, forecasts, statistics, and the interactive squad builder without exposing a Sportmonks token in the browser. The [website guide](src/web/README.md) describes the available pages and their data rules.
+
+## Explore the repository
+
+- [`src/fetch/`](src/fetch/) — Sportmonks and TFF acquisition, CSV exports, identity review, and SQLite build.
+- [`src/points/`](src/points/) and [`src/player_projections/`](src/player_projections/) — fantasy scoring and next-matchweek estimates.
+- [`src/odds/`](src/odds/) and [`src/xi_optimizer/`](src/xi_optimizer/) — match probabilities and constrained squad selection.
+- [`src/web/`](src/web/) — dashboard pages, shared visualizations, local server, and static-site builder.
+- [`src/chat/`](src/chat/) and [`functions/api/chat.js`](functions/api/chat.js) — local and cloud chatbot implementations.
+- [`tests/`](tests/) — tests for ingestion, analysis, models, website rules, and chatbot behavior.
+
+The full pipeline requires provider access and saved season CSVs, which are not committed. For local setup and the commands used by the working project, expand the reference below. Credentials belong in local `.env` or deployment secrets, never in this repository.
+
+<details>
+<summary>Full local workflow and data reference</summary>
+
+## Super Lig data — Sportmonks with TFF Fantasy snapshots
 
 Sportmonks is the primary football-data provider. TFF Fantasy table snapshots
 are kept separately as a supplemental source and matched to Sportmonks player
 IDs. Use **CSV for Python analysis and data exchange**, and **SQLite for the final dataset and SQL queries**. CSV fits these rectangular tables; JSON is more useful for nested API responses, which this project already preserves in typed raw CSV files.
-
-You run downloads, database builds, tests, and analysis. The assistant edits code and performs explicitly requested cleanup. These preferences are saved in `AGENTS.md`.
 
 ## Local website
 
@@ -16,7 +117,7 @@ python src/web/serve.py --season 2026/2027
 
 Open [http://127.0.0.1:8000](http://127.0.0.1:8000) and leave the terminal running. The page automatically loads the saved season CSVs from `data/final/sportmonks/2026-2027`. After your next download finishes, reload the page or click **Refresh saved data**; no file selection or code changes are needed. Maç Haftası also shows an on-demand live match centre using the local Sportmonks token while that view is visible. Add `--no-live` to disable provider requests. See [live match centre setup](src/web/README.md#live-match-centre). Stop the server with Ctrl+C.
 
-**Home** shows the league points table on the left and fixtures on the right. **Player Tier List** groups players by average Sportmonks match rating, shows season totals, and opens full match statistics, including roster players with no appearances. You can still open `src/web/index.html` directly and select CSVs manually. See `src/web/README.md` for details. No domain has been connected or website published.
+**Home** shows the league points table on the left and fixtures on the right. **Player Tier List** groups players by average Sportmonks match rating, shows season totals, and opens full match statistics, including roster players with no appearances. You can still open `src/web/index.html` directly and select CSVs manually. See `src/web/README.md` for details. The public website is [fantezianaliz.com](https://fantezianaliz.com/).
 
 ## Python setup
 
@@ -26,17 +127,11 @@ Python 3.10+ is sufficient for the core scripts; they have no third-party packag
 SPORTMONKS_API_TOKEN=your_token
 ```
 
-If your normal Python command is unavailable, replace `python` in the commands below with this workstation's bundled executable:
-
-```powershell
-& 'C:\Users\ygtcs\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe' src/fetch/download_season.py --season 2026/2027
-```
-
 ## Match probability research
-fa
+
 The separate research area is documented in [src/odds/README.md](src/odds/README.md).
 It audits existing season CSVs and supports chronological comparisons of frequency,
-Poisson, and Dixon-Coles models. Research reports are saved in unique run folders
+Poisson, and XGBoost models. Research reports are saved in unique run folders
 under `data/temp/odds`; they do not feed the website automatically.
 
 ```powershell
@@ -187,8 +282,7 @@ in timing. It does not change the full history used by the projection model.
 See [points](src/points/README.md),
 [player projections](src/player_projections/README.md) and
 [XI optimizer](src/xi_optimizer/README.md) for model details and
-standalone commands. The assistant has not executed the integrated pipeline or
-its tests; run the command above to generate the first published generation.
+standalone commands. Run the pipeline command above to publish a new matching fantasy generation.
 
 ## CSV conventions
 
@@ -241,7 +335,7 @@ cells and zero stays zero. Other headers retain their source abbreviations in
 lowercase because the copied HTML does not include tooltip definitions.
 Only copied rows and visible columns are available, so one table export must
 not be assumed to contain the full catalogue. Player IDs are not inferred from
-names or kit/logo filenames. The assistant has not run this parser.
+names or kit/logo filenames.
 
 For paginated tables, select all desired columns using **Kolonlar**, clear
 filters for a full catalogue, and keep the same columns, filters and sort order
@@ -384,8 +478,6 @@ that live sorting did not move a player between pages. Menu and pagination
 locators are based on the supplied screenshots and table HTML and have not yet
 been verified against a logged-in browser. If the site changes labels or markup,
 the exporter stops with an error rather than claiming an incomplete CSV is done.
-The assistant has not run the exporter or installed its dependencies.
-
 See [Playwright's Python library setup](https://playwright.dev/python/docs/library)
 for browser installation details. Sportmonks remains the main data pipeline;
 these optional TFF exports are separate from its CSVs and database build.
@@ -400,4 +492,6 @@ python src/fetch/audit_season.py
 python -m unittest discover -s tests -v
 ```
 
-`--rebuild-csv` rebuilds flat tables from saved raw CSVs without network calls. `audit_season.py` only checks structural consistency. No automatic download, database rebuild, or analysis is scheduled. The assistant has not executed this revision or its tests.
+`--rebuild-csv` rebuilds flat tables from saved raw CSVs without network calls. `audit_season.py` only checks structural consistency. Automatic updates are configured in `.github/workflows/update-site.yml`.
+
+</details>
