@@ -8,6 +8,10 @@ The live website is the product demo. This repository explains how I built it an
 
 ## Explore the live dashboard
 
+![Accelerated local match simulation showing the score, match flow, events, statistics, and lineups](docs/media/dashboard-simulation.gif)
+
+*Local dashboard simulation: the first 39 seconds of a recording, played at 2.5× speed (15.6 seconds). This is a demonstration, not a real live match.*
+
 Start on [Home](https://fantezianaliz.com/index.html?view=home) to open a saved match and inspect its timeline, statistics, lineups, and team comparisons. Then try [Matchweek](https://fantezianaliz.com/index.html?view=matchweek) for pre-match probabilities, [Player Statistics](https://fantezianaliz.com/index.html?view=statistics) for peer comparisons, and [Squad Builder](https://fantezianaliz.com/index.html?view=builder) to assemble a fantasy XI. The public pages use published data; an on-demand live-match demonstration requires the local server and provider access.
 
 ## The problem
