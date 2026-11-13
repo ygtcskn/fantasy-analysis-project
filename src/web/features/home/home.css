@@ -74,6 +74,7 @@
 /* The event the pressure strip's slider points at is lit in light pink. */
 .home-events .live-event, .home-events .live-event:first-child { padding: 10px 8px; border-radius: 6px; transition: background-color 0.15s; }
 .home-events .live-event.is-current { background: var(--home-event-highlight); }
+.home-events .live-event.is-latest-live { background: var(--home-event-highlight); box-shadow: inset 2px 0 var(--home-event-marker); }
 
 /* Asistan: a chat in the right column, beside statistics and İlk 11'ler (for
    now a demo, home-chat.js). Like Maç Olayları it takes its height from its
@@ -302,11 +303,14 @@
    the chart's label margin and right edge as shares of its width (home.js).
    The 8px either side lets the thumb's centre, not its edge, reach each end. */
 .home-momentum-slider { display: block; box-sizing: border-box; width: calc(100% - var(--plot-left) - var(--plot-right) + 16px);
-  height: 16px; margin: 4px 0 0 calc(var(--plot-left) - 8px); padding: 0; accent-color: var(--home-event-marker); cursor: pointer; }
-.home-momentum-live { position: absolute; inset: auto 0 0; height: 16px; color: var(--result-win); pointer-events: none; }
-.home-momentum-live::before { content: ""; position: absolute; left: var(--live-position); bottom: 2px; width: 3px; height: 12px;
-  border-radius: 2px; background: currentColor; transform: translateX(-50%); }
-.home-momentum-live-label { position: absolute; left: clamp(3rem, var(--live-position), calc(100% - 3rem)); bottom: 100%;
+  height: 16px; margin: 0 0 0 calc(var(--plot-left) - 8px); padding: 0; accent-color: var(--home-event-marker); cursor: pointer; }
+.home-momentum-control { position: relative; margin-top: 4px; }
+.home-momentum-control:has(.home-momentum-live) { margin-top: 24px; }
+.home-momentum-live { position: absolute; inset: 0; color: var(--result-loss); pointer-events: none; }
+.home-momentum-live::before { content: ""; position: absolute; left: var(--live-position); top: 50%; width: 3px; height: 12px;
+  border-radius: 2px; background: currentColor; transform: translate(-50%, -50%); }
+.home-momentum-live.is-under-thumb::before { visibility: hidden; }
+.home-momentum-live-label { position: absolute; left: clamp(3rem, var(--live-position), calc(100% - 3rem)); bottom: calc(100% + 8px);
   padding: 1px 5px; border-radius: 4px; background: var(--surface-raised); font-size: 10px; font-weight: 700;
   line-height: 1.4; white-space: nowrap; transform: translateX(-50%); }
 .home-momentum-cursor { stroke: var(--home-event-marker); stroke-width: 1.5; pointer-events: none; }

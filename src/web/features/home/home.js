@@ -61,36 +61,54 @@ function renderStandings(teams, prefix = "standings", { record = false, snapshot
   }
   $(`${prefix}-note`).textContent = state.tables["standings.csv"] ? "" : t("Puan tablosu için sezon verilerini yükleyin.");
   let scores = null;
-  const body = document.createDocumentFragment();
+  const body = $(`${prefix}-body`);
+  const previous = new Map([...body.rows].map((row) => [row.dataset.team, row]));
+  const next = [];
   const standingsRows = replay ? live?.order || [] : live?.order || rows;
   for (const [index, row] of standingsRows.entries()) {
-    const tr = element("tr");
-    const club = element("td");
-    const identity = createTeamLink(row.participant_id, teamName(row.participant_id, teams), "standing-club");
-    const name = element("span", "", teamName(row.participant_id, teams));
+    const team = row.participant_id, teamLabel = teamName(team, teams);
+    const tr = previous.get(team) || element("tr");
+    tr.dataset.team = team;
+    const club = tr.cells[1] || element("td");
+    const name = element("span", "", teamLabel);
     const entry = live?.teams.get(String(row.participant_id));
-    identity.replaceChildren(createTeamLogo(row.participant_id, teams, false), name);
-    club.append(identity);
+    let identity = club.firstElementChild;
+    if (identity?.firstElementChild?.title !== teamLabel) {
+      identity = createTeamLink(team, teamLabel, "standing-club");
+      identity.replaceChildren(createTeamLogo(team, teams, false), name);
+      club.replaceChildren(identity);
+    } else {
+      identity.lastElementChild.replaceWith(name);
+      identity.removeAttribute("aria-describedby");
+    }
     if (record && entry) addStandingMatch(identity, name, entry, teams, `home-standing-match-${row.participant_id}`, !replay);
     const points = element("td", `numeric standing-points${entry ? ` standing-live standing-live-${entry.status}` : ""}`,
       displayNumber(entry ? entry.points : row.points));
     if (entry) points.title = `${displayNumber(entry.base)} + ${entry.gained} · ${entry.own}–${entry.other} ${entry.opponent} (${entry.live ? t("sürüyor") : t("bitti, kayda girmedi")})`;
     const place = displayNumber(live ? index + 1 : row.position);
-    tr.append(element("td", "standing-position", record && place !== "—" ? `${place}.` : place), club);
+    const position = element("td", "standing-position", record && place !== "—" ? `${place}.` : place);
+    if (tr.cells.length) {
+      tr.cells[0].replaceWith(position);
+      while (tr.cells.length > 2) tr.deleteCell(-1);
+    } else tr.append(position, club);
     if (record) {
       const results = () => standingResults(row, scores ??= currentFixtureScores());
       tr.append(standingFigureCell(row, "overall_matches", "played", results, entry?.played),
         standingFigureCell(row, "overall_wins", "wins", results, entry?.won));
     }
     tr.append(points);
-    body.append(tr);
+    next.push(tr);
   }
   if (!standingsRows.length) {
     const tr = element("tr"), td = element("td", "no-results", replay ? t("Bu maç için geçmiş puan durumu oluşturulamadı.")
       : state.tables["standings.csv"] ? t("Bu dosyada puan durumu yok.") : t("Puan tablosu burada görünecek."));
-    td.colSpan = record ? 5 : 3; tr.append(td); body.append(tr);
+    td.colSpan = record ? 5 : 3; tr.append(td); next.push(tr);
   }
-  $(`${prefix}-body`).replaceChildren(body);
+  for (const [index, row] of next.entries()) {
+    const current = body.rows[index];
+    if (current !== row) body.insertBefore(row, current || null);
+  }
+  while (body.rows.length > next.length) body.deleteRow(-1);
 }
 
 // Saved scores of one kind, by "fixture:team": CURRENT (the result, the
@@ -636,9 +654,11 @@ function renderHomeMomentum(fixture, teams, timeline) {
   const liveClock = pressure.liveAt === null ? "" : liveMinute(summary) ||
     (summary.state === "HT" ? t("Devre arası") : pressure.liveAt ? homePressureClock(pressure.liveAt, firstHalf) : "");
   const liveLabel = liveClock ? t("CANLI · {minute}", { minute: liveClock }) : "";
+  const live = liveLabel ? element("span", "home-momentum-live") : null;
   const mark = () => {
     const at = Math.min(Number(slider.value), pressure.through);
     slider.value = at;
+    live?.classList.toggle("is-under-thumb", at === pressure.liveAt);
     marker.setAttribute("x1", x(at));
     marker.setAttribute("x2", x(at));
     marker.setAttribute("visibility", at < pressure.through ? "visible" : "hidden");
@@ -657,13 +677,14 @@ function renderHomeMomentum(fixture, teams, timeline) {
     queueHomeReplayPaint();
   });
   const track = element("div", "home-momentum-track");
-  track.append(svg, slider);
-  if (liveLabel) {
-    const live = element("span", "home-momentum-live");
+  const control = element("div", "home-momentum-control");
+  control.append(slider);
+  track.append(svg, control);
+  if (live) {
     live.setAttribute("aria-hidden", "true");
     live.style.setProperty("--live-position", `${x(pressure.liveAt) / width * 100}%`);
     live.append(element("span", "home-momentum-live-label", liveLabel));
-    track.append(live);
+    control.append(live);
   }
   const scroll = element("div", "home-momentum-scroll");
   scroll.append(track);
@@ -1338,6 +1359,9 @@ function renderHomeEvents(fixture, teams) {
   if (list.dataset.fixture !== id) list.scrollTop = 0;
   list.dataset.fixture = id;
   renderLiveEvents({ fixture_id: id, events_available: snapshot ? String(snapshot.summary?.events_available || "") : "1" }, teams, rows, list);
+  if (snapshot?.inPlay && !snapshot.replay && list.firstElementChild?.classList.contains("live-event")) {
+    list.firstElementChild.classList.add("is-latest-live");
+  }
   // Each event's place on the pressure chart's clock, for its slider.
   const pressure = homePressure(fixture);
   if (pressure.message) return;
@@ -1450,9 +1474,15 @@ function paintHomeReplay() {
     renderStandings(teams, "standings", { record: true, snapshot: standings, simulated, replay });
     context.standingsKey = standingsKey;
   }
-  if (firstPaint) {
+  if (firstPaint && !context.reuseMatchList) {
     renderHomeGames(games, teams);
     context.matchButton = $("home-games-list").querySelector(`[data-fixture="${CSS.escape(fixture.fixture_id)}"]`);
+  }
+  if (firstPaint && context.reuseMatchList) {
+    for (const button of $("home-games-list").querySelectorAll("button[data-fixture]")) {
+      const match = games.find(({ fixture }) => fixture.fixture_id === button.dataset.fixture);
+      if (match) updateHomeGameButton(button, match, teams);
+    }
   }
   updateHomeGameButton(context.matchButton, game, teams);
   const eventCount = homeEventRows(fixture).length;
@@ -1480,10 +1510,17 @@ function paintHomeReplay() {
 function updateHomeCard(parent, next, index) {
   const current = parent.children[index];
   if (!current) parent.append(next);
-  else if (!current.isEqualNode(next)) current.replaceWith(next);
+  else if (current !== next && !current.isEqualNode(next)) {
+    const header = current.querySelector(":scope > .matchweek-versus-head");
+    const nextHeader = next.querySelector(":scope > .matchweek-versus-head");
+    if (!header || !nextHeader) { current.replaceWith(next); return; }
+    // Keep the loaded club logos connected while replacing the figures below them.
+    while (header.nextElementSibling) header.nextElementSibling.remove();
+    while (nextHeader.nextElementSibling) current.append(nextHeader.nextElementSibling);
+  }
 }
 
-function renderHomeDetail(game, teams, games, standings, simulated) {
+function renderHomeDetail(game, teams, games, standings, simulated, liveRefresh) {
   const detail = $("home-detail");
   const events = $("home-events");
   events.classList.toggle("has-match", Boolean(game));
@@ -1518,13 +1555,20 @@ function renderHomeDetail(game, teams, games, standings, simulated) {
   teamColorPair(fixture.home_team_id, fixture.away_team_id)
     .forEach((color, index) => detail.style.setProperty(`--matchweek-${index ? "away" : "home"}`, color));
   const timeline = homeReplayTimeline(fixture);
-  homeReplay.context = { baseGame: game, timeline, teams, games, standings, simulated };
+  const previous = homeReplay.context;
+  const keepPanels = liveRefresh && sameMatch && previous?.simulated === simulated;
+  const listKey = games.map(({ fixture }) => `${fixture.fixture_id}:${Boolean(fixture.homeSnapshot?.inPlay)}`).join(",");
+  const reuseMatchList = keepPanels && previous.listKey === listKey;
+  homeReplay.context = { ...(keepPanels ? previous : {}), baseGame: game, timeline, teams, games, standings, simulated,
+    listKey, reuseMatchList, paintedAt: undefined, standingsKey: undefined, eventsKey: undefined };
   if (homeReplay.at !== null && homeReplay.at >= timeline.through) homeReplay.at = null;
-  const row = () => element("div", "home-row");
-  detail.replaceChildren(row(), row(), row(), row());
-  detail.children[1].append(renderHomeMomentum(fixture, teams, timeline));
-  detail.children[2].append(element("div", "home-pair"));
-  detail.children[3].append(element("div", "home-more"));
+  if (!keepPanels) {
+    const row = () => element("div", "home-row");
+    detail.replaceChildren(row(), row(), row(), row());
+    detail.children[2].append(element("div", "home-pair"));
+    detail.children[3].append(element("div", "home-more"));
+  }
+  detail.children[1].replaceChildren(renderHomeMomentum(fixture, teams, timeline));
   paintHomeReplay();
   if (oldSlider) {
     const slider = detail.querySelector(".home-momentum-slider");
@@ -1539,9 +1583,9 @@ function renderHomeDetail(game, teams, games, standings, simulated) {
   }
 }
 
-function renderHome() {
+function renderHome(liveRefresh = false) {
   if (homeReplay.dragging) {
-    homeReplay.refresh = true;
+    if (!liveRefresh || !homeReplay.refresh) homeReplay.refresh = liveRefresh === true ? "live" : "full";
     return;
   }
   const teams = homeTeams();
@@ -1557,11 +1601,11 @@ function renderHome() {
   const active = games.find((game) => game.fixture.homeSnapshot?.inPlay);
   const game = selected && (simulated || homeSelection.manual || selected.fixture.homeSnapshot || !active) ? selected : active || games[0];
   state.homeFixture = game?.fixture.fixture_id ?? null;
-  renderHomeDetail(game, teams, games, standings, simulated);
+  renderHomeDetail(game, teams, games, standings, simulated, liveRefresh === true);
 }
 
 function renderHomeLive() {
-  if (state.view === "home") renderHome();
+  if (state.view === "home") renderHome(true);
 }
 
 function setupHome() {
@@ -1578,8 +1622,9 @@ function setupHome() {
       paintHomeReplay();
       return;
     }
+    const liveRefresh = homeReplay.refresh === "live";
     homeReplay.refresh = false;
-    renderHome();
+    renderHome(liveRefresh);
   };
   document.addEventListener("pointerup", finishDrag);
   document.addEventListener("pointercancel", finishDrag);

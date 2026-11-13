@@ -67,8 +67,14 @@ function homeSimulationEligible(fixture) {
 
 function homeSimulationChooseFixture() {
   const weeks = homeWeeks();
-  const current = weeks[currentRoundIndex(weeks)];
   const options = (week) => week?.fixtures.filter(homeSimulationEligible) || [];
+  // Galatasaray vs Amed SK, 7 November 2026 (Sportmonks fixture ID).
+  for (const week of weeks) {
+    const fixture = week.fixtures.find((row) => row.fixture_id === "19746558" && homeSimulationEligible(row));
+    if (fixture) return { fixture, week: week.key };
+  }
+
+  const current = weeks[currentRoundIndex(weeks)];
   const scheduled = (fixture) => fixtureState(fixture) === "NS";
   const currentFixture = options(current).find(scheduled);
   if (currentFixture) return { fixture: currentFixture, week: current.key };
