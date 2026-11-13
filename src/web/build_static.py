@@ -16,6 +16,7 @@ import csv
 import io
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -160,16 +161,59 @@ def copy_season_rows(source, target, season):
         writer.writerows(rows)
 
 
-def headers_file(season, code):
+def supabase_origin(code):
+    """The Supabase project's address from the published core/auth-config.js; "" when sign-in is off."""
+    text = code.get("core/auth-config.js", b"").decode("utf-8", "replace")
+    found = re.search(r'\burl:\s*"(https://[A-Za-z0-9.-]+)', text)
+    return found[1] if found else ""
+
+
+def content_security_policy(supabase):
+    """What a page may load and where it may send data: this site, plus the few
+    outside addresses the code really uses. Anything else - a script a visitor's
+    post tried to smuggle in, a request to an unknown server - the browser refuses.
+
+    - script-src: the site's own files, the sign-in library (core/auth.js loads
+      it from jsDelivr) and Cloudflare's visitor counter. No inline scripts.
+    - style-src: 'unsafe-inline' because the pages set style="" on elements.
+    - img-src and connect-src: Supabase holds profile photos and answers
+      sign-in, profiles, Maç Tribünü and shared squads.
+    - frame-ancestors 'none': no other site may show these pages inside its own.
+    A page that needs a new outside address must add it here, or it will not load.
+    """
+    sign_in = f" {supabase}" if supabase else ""
+    sockets = f" {supabase.replace('https://', 'wss://', 1)}" if supabase else ""
+    return "; ".join((
+        "default-src 'self'",
+        "script-src 'self' https://cdn.jsdelivr.net https://static.cloudflareinsights.com",
+        "style-src 'self' 'unsafe-inline'",
+        f"img-src 'self'{sign_in}",
+        f"connect-src 'self'{sign_in}{sockets} https://cloudflareinsights.com",
+        "frame-ancestors 'none'",
+        "base-uri 'self'",
+        "form-action 'self'",
+        "object-src 'none'",
+    ))
+
+
+def headers_file(season, code, supabase=""):
     # The pages check the two X-Superlig headers before trusting a data file;
     # serve.py sends the same pair. Cloudflare compresses text/plain but not
     # text/csv, and the pages read the files as text whatever the type says.
     # X-Site-Code names the published code, so the live site can be checked.
+    # The rest are browser protections: the content policy above; always HTTPS
+    # for a year once visited (this address only, not other subdomains); no
+    # framing by other sites, said twice for older browsers; and no camera,
+    # microphone or location, which no page uses.
     return (f"{BUILD_MARK}\n"
             "/*\n"
             f"  X-Site-Code: {code}\n"
             "  X-Content-Type-Options: nosniff\n"
             "  Referrer-Policy: strict-origin-when-cross-origin\n"
+            f"  Content-Security-Policy: {content_security_policy(supabase)}\n"
+            "  Strict-Transport-Security: max-age=31536000\n"
+            "  X-Frame-Options: DENY\n"
+            "  Permissions-Policy: camera=(), microphone=(), geolocation=()\n"
             "/local-data/*\n"
             "  Content-Type: text/plain; charset=utf-8\n"
             "  X-Superlig-Local: 1\n"
@@ -197,7 +241,7 @@ def main():
     remove_build(STAGING_ROOT)
     STAGING_ROOT.mkdir(parents=True)
     # Written first, so an interrupted run still leaves a folder a rerun may delete.
-    (STAGING_ROOT / "_headers").write_text(headers_file(season, version), encoding="utf-8", newline="\n")
+    (STAGING_ROOT / "_headers").write_text(headers_file(season, version, supabase_origin(code)), encoding="utf-8", newline="\n")
     for path, content in code.items():
         target = STAGING_ROOT / path
         target.parent.mkdir(parents=True, exist_ok=True)

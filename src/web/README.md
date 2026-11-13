@@ -31,10 +31,11 @@ selected minute. Moving it to the right end restores the latest view. Saved
 matches use timed events, pressure and `fixture_trends.csv` where available.
 The local live feed also keeps a short history of the snapshots seen in the
 current tab. For matches recorded with `record_live_xg`, the slider also
-uses the latest saved xG reading at or before the selected minute. If the
-selected minute has no value for a stat such as xG or
-aerials won, the match cards show the saved full-time value with an **FT**
-label (**MS** in Turkish), or a dash if that value is also unavailable.
+uses the latest saved xG reading at or before the selected minute. Sportmonks sends
+no zeros, so a count missing at the selected minute is 0 when that minute has
+other figures for the team from the same feed; otherwise, and always for
+percentages such as possession, it is a dash. The cards never borrow the
+full-time value for an earlier minute.
 Replay bars use time-stamped values. The replay standings are provisional.
 They use the results available before the selected match kicked off and its
 score at the replay minute.
@@ -288,7 +289,7 @@ You can still double-click `index.html` for manual file selection instead of sta
 3. For **Home**, select `standings.csv`, `fixtures.csv`, `teams.csv`, and `fixture_scores.csv` together (hold Ctrl while selecting). Add `player_match_stats.csv`, `players.csv`, and `squads.csv` for the player pages. All seven files can be selected together.
 4. **Home** is the opening page: a wide season overview above a league points table on the left and fixtures on the right, matching the supplied layout. The panels stack on mobile. The points table uses the provider's position and points without recalculating them. If multiple competition groups exist, use the group selector. Fixtures can be browsed by matchweek, with club logos, kickoff, status, and saved scores. Only `CURRENT` score records are used; half-time and period scores are never added together. Missing scores stay blank (a dash). The page is a saved snapshot, not a live feed; times are shown in Turkish time.
 5. Open **Player Tier List** from the sidebar. The centered table begins with **Sıra, Logo, Mevki, Oyuncu, Kademe, Ort. Reyting**, followed by rated matches, matches played, minutes, goals, assists, xG, shots, key passes, and saves. Team names remain searchable even though clubs are represented by logos: typing `Galatasaray` shows players associated with that club in the loaded season. You can also filter by team or position. Click a player's name to open their full match history; select **Show every exported field** for all statistics from every supplied match record, including missing fields and the original provider ratings.
-6. **Fikstür**, directly below **Puan Durumu** in the shared sidebar, displays the complete season without filters, matchweek selection, pagination, or a column-heading row. Each Turkish section row uses `Maç Haftası N - DD/MM`, based on that matchweek's earliest kickoff date, followed by Saat, Ev Sahibi, Skor, and Deplasman values. Home and away club names and logos link to their team pages. Missing scores stay as dashes. Each matchweek heading opens or closes its own games; the current and previous weeks start open, and the choices are kept in `state.fixtureRoundsOpen` until another season is loaded. Fixture and standings rows alternate between purple and light purple in dark mode. Direct URL: `http://127.0.0.1:8000/index.html?view=fixtures`.
+6. **Fikstür**, directly below **Puan Durumu** in the shared sidebar, displays the complete season without filters, matchweek selection, pagination, or a column-heading row. Each Turkish section row uses `Maç Haftası N - DD/MM`, based on that matchweek's earliest kickoff date, followed by Saat, Ev Sahibi, Skor, and Deplasman values. Home and away club names and logos link to their team pages. Missing scores stay as dashes. Each matchweek heading opens or closes its own games; the current and previous weeks start open, and the choices are kept in `state.fixtureRoundsOpen` until another season is loaded. One more week on each side of that pair shows as a closed heading; every week further away folds into a vertical "⋮" row above and below (its tooltip says how many weeks), which brings those weeks back as closed headings (`state.fixtureRoundsShown`, reset with the season). Fixture and standings rows alternate between purple and light purple in dark mode. Direct URL: `http://127.0.0.1:8000/index.html?view=fixtures`.
 7. **Player appearances** continues to provide searchable, sortable records with its existing 40-row pages and Sportmonks ratings.
 
 The main workspace is centered with empty side margins. Move the mouse to the left edge for a temporary navigation preview; moving away closes it. Click the menu button to lock the sidebar open, then click the same button again to close it. A sidebar locked open stays visible when the pointer moves away or the page is clicked. Escape and selecting a destination close it. The slide animation remains active, except when reduced motion is enabled in the operating system. The sidebar overlays the page and does not change its horizontal position.
@@ -790,7 +791,16 @@ Custom domains** and add `fantezianaliz.com` and `www.fantezianaliz.com`.
   discard the rest, so publishing it whole cost every visitor about 11 MB.
 - **`_headers`** - sends the `X-Superlig-Local` and `X-Superlig-Season` headers
   the pages check before trusting a data file, and labels the data
-  `text/plain`: Cloudflare compresses that type but not `text/csv`.
+  `text/plain`: Cloudflare compresses that type but not `text/csv`. It also
+  sends the browser protections for every page: a `Content-Security-Policy`
+  that lets a page load scripts only from this site, jsDelivr (the sign-in
+  library) and Cloudflare's visitor counter, and talk only to this site and the
+  Supabase project named in `core/auth-config.js`; HTTPS only
+  (`Strict-Transport-Security`); no framing by other sites; and no camera,
+  microphone or location. A page that starts using another outside address
+  (a font, a map, another script host) must add it in
+  `content_security_policy` in `build_static.py`, or the browser will refuse it
+  on the public site while it still works locally.
 - **`404.html`** - without it Pages answers a missing CSV with `index.html`, and
   optional files such as `download_status.csv` would look present but broken.
 

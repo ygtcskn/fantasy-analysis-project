@@ -1,7 +1,7 @@
 "use strict";
 
 // CSVs come from the local server or file picker and stay in browser memory.
-const state = { tables: {}, seasonSlug: "", fixtureRoundsOpen: new Map(), view: "home", page: 0, sort: "date", direction: -1, busy: false, tierCache: null, homeFixture: null, homeWeek: null, standingsGroup: null };
+const state = { tables: {}, seasonSlug: "", fixtureRoundsOpen: new Map(), fixtureRoundsShown: { earlier: false, later: false }, view: "home", page: 0, sort: "date", direction: -1, busy: false, tierCache: null, homeFixture: null, homeWeek: null, standingsGroup: null };
 const pageSize = 40;
 let renderedPageCount = 1;
 const expected = {
@@ -74,7 +74,10 @@ async function loadFiles(files, { replace = false, local = false } = {}) {
     if (previousSeason && incomingSeason && previousSeason !== incomingSeason) resetSquadBuilder();
     state.tables = next;
     const seasonSlug = local && sourceSeasons.size === 1 ? [...sourceSeasons][0] : "";
-    if (seasonSlug !== state.seasonSlug) state.fixtureRoundsOpen = new Map();
+    if (seasonSlug !== state.seasonSlug) {
+      state.fixtureRoundsOpen = new Map();
+      state.fixtureRoundsShown = { earlier: false, later: false };
+    }
     state.seasonSlug = seasonSlug;
     currentSquad = null;
     resetFantasyData();
@@ -342,9 +345,33 @@ function render() {
       if (!roundDates.has(key) || sortable < roundDates.get(key).sortable) roundDates.set(key, { sortable, display: `${date[3]}/${date[2]}` });
     }
   }
+  // Around the current matchweek: it and the week before start open, one more
+  // week on each side shows as a closed heading, and every other week folds
+  // into a "···" row until the visitor asks for those weeks.
   const currentFixtureRound = currentRoundIndex(fixtureRounds);
+  const roundIndex = new Map(fixtureRounds.map((round, index) => [round.key, index]));
+  const firstShownRound = Math.max(0, currentFixtureRound - 2), lastShownRound = currentFixtureRound + 1;
   const defaultOpenRounds = new Set(fixtureRounds.slice(Math.max(0, currentFixtureRound - 1), currentFixtureRound + 1).map((round) => round.key));
   const roundOpen = (key) => state.fixtureRoundsOpen.get(key) ?? defaultOpenRounds.has(key);
+  const roundFolded = (key) => {
+    const index = roundIndex.get(key);
+    return index < firstShownRound ? !state.fixtureRoundsShown.earlier : index > lastShownRound ? !state.fixtureRoundsShown.later : false;
+  };
+  const foldedRoundsRow = (side, count) => {
+    const moreRow = document.createElement("tr"), moreCell = document.createElement("td"), more = document.createElement("button");
+    moreRow.className = "fixture-more-row";
+    moreCell.colSpan = columns.length;
+    more.className = "fixture-more-toggle";
+    more.type = "button";
+    const label = t(side === "earlier" ? "{count} önceki hafta" : "{count} sonraki hafta", { count });
+    more.textContent = "⋮";
+    more.title = label;
+    more.setAttribute("aria-label", label);
+    more.addEventListener("click", () => { state.fixtureRoundsShown[side] = true; render(); });
+    moreCell.append(more);
+    moreRow.append(moreCell);
+    return moreRow;
+  };
   let previousRound = Symbol("first fixture group");
   let roundGameRows = [];
   let fixtureStripe = 0;
@@ -359,6 +386,10 @@ function render() {
       const button = document.createElement("button");
       const roundKey = String(row.round || "");
       const expanded = roundOpen(roundKey);
+      const index = roundIndex.get(roundKey);
+      if (index === 0 && firstShownRound > 0 && !state.fixtureRoundsShown.earlier) fragment.append(foldedRoundsRow("earlier", firstShownRound));
+      if (index === lastShownRound + 1 && !state.fixtureRoundsShown.later) fragment.append(foldedRoundsRow("later", fixtureRounds.length - index));
+      groupRow.hidden = roundFolded(roundKey);
       const weekRows = roundGameRows = [];
       button.className = "fixture-matchweek-toggle";
       button.type = "button";
@@ -378,7 +409,7 @@ function render() {
     const tr = document.createElement("tr");
     if (!playerView) {
       tr.className = `fixture-game-row ${fixtureStripe++ % 2 ? "zebra-light" : "zebra-purple"}`;
-      tr.hidden = !roundOpen(String(row.round || ""));
+      tr.hidden = !roundOpen(String(row.round || "")) || roundFolded(String(row.round || ""));
       roundGameRows.push(tr);
     }
     columns.forEach(([key, , numeric]) => {

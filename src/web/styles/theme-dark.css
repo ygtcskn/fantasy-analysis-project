@@ -303,6 +303,12 @@
   background: var(--matchweek-bg);
   color: var(--matchweek-text);
 }
+:root[data-theme="dark"] :is(main, dialog) tbody > tr.fixture-more-row > td,
+:root[data-theme="dark"] :is(main, dialog) tbody > tr.fixture-more-row:hover > td {
+  border-color: var(--line);
+  background: var(--surface);
+  color: var(--muted);
+}
 
 /* Row states stay visible on top of the stripes. */
 :root[data-theme="dark"] :is(main, dialog) tbody > tr.statistics-row-selected > td,
@@ -328,6 +334,9 @@
 :root[data-theme="dark"] :is(.home-panel, .detailed-standings, .fixtures-view #workspace, .tier-ranking-table, .history-table) :is(th, td):not(.no-results) {
   padding: var(--cell-pad);
 }
+/* Oyuncu Listesi has fifteen columns: narrower sides let it fit without a
+   scrollbar. #tier-board outweighs the #workspace inside the rule above. */
+:root[data-theme="dark"] #tier-board .tier-ranking-table :is(th, td):not(.no-results) { padding-left: 9px; padding-right: 9px; }
 :root[data-theme="dark"] :is(.statistics-table, .builder-table, .builder-recommendations table, .matchweek-standings table) :is(th, td):not(.no-results) {
   padding: var(--cell-pad-compact);
 }

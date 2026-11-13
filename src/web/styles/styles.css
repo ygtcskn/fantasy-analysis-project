@@ -108,16 +108,17 @@ html:not([data-language]) main { visibility: hidden; }
 .form-unknown { background: var(--surface-raised); color: var(--muted); }
 .standings-legend { padding: 12px 24px 18px; color: var(--muted); font-size: 11px; line-height: 1.8; }
 .tier-board { display: block; }
-.tier-ranking-scroll { border-top: 1px solid var(--line); border-radius: 8px; max-height: 72vh; }
+/* The whole list shows at once, with no scrollbars of its own: headings wrap
+   to two lines and cells keep 9px at the sides so every column fits. Only a
+   screen narrower than the table still scrolls sideways inside the box. */
+.tier-ranking-scroll { border-top: 1px solid var(--line); border-radius: 8px; }
 .tier-ranking-table th {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  padding: 15px 13px;
+  padding: 15px 9px;
   font-size: 11px;
   font-weight: 600;
+  white-space: normal;
 }
-.tier-ranking-table td { padding: 15px 13px; height: 65px; }
+.tier-ranking-table td { padding: 15px 9px; height: 65px; }
 .tier-ranking-table .rank-cell { color: var(--muted); min-width: 55px; }
 .tier-ranking-table .role-cell { white-space: normal; min-width: 110px; max-width: 160px; font-size: 11px; color: var(--muted); }
 .tier-ranking-table .player-cell { min-width: 190px; }
@@ -138,7 +139,6 @@ html:not([data-language]) main { visibility: hidden; }
   main { width: calc(100% - 40px); margin: 0 auto; padding: 0; }
   .topbar { padding-left: 48px; min-height: 76px; gap: 10px; }
   .sidebar-toggle { top: 18px; left: 16px; }
-  .tier-ranking-scroll { max-height: 68vh; }
 }
 @media (prefers-reduced-motion: reduce) { .rail { transition: none; } }
 
@@ -251,6 +251,20 @@ a.team-link:hover { color: #507624; text-decoration: underline; text-underline-o
 .fixture-matchweek-toggle::after { content: "⌄"; font-size: 16px; line-height: 1; transition: transform .15s ease; }
 .fixture-matchweek-toggle[aria-expanded="false"]::after { transform: rotate(-90deg); }
 .fixture-matchweek-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
+.fixture-more-row td { padding: 0; border-bottom: 1px solid var(--line); background: var(--paper); color: var(--muted); }
+.fixture-more-toggle {
+  width: 100%;
+  padding: 9px 16px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+.fixture-more-toggle:hover { color: var(--ink); }
+.fixture-more-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
 .fixture-game-row td { padding-top: 12px; padding-bottom: 12px; }
 .fixture-game-row.zebra-purple,
 #detailed-standings-body > tr:nth-child(odd) { background: var(--zebra-purple); }
@@ -297,13 +311,12 @@ a.team-link:hover { color: #507624; text-decoration: underline; text-underline-o
   border-radius: 9px;
   background: var(--surface-soft);
 }
+/* Drawn like Kadro Kur's position buttons (.builder-role-filters in
+   panels.css): no background behind the icons, an outline on the chosen one. */
 .tier-role-filter {
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  padding: 4px;
-  border-radius: 7px;
-  background: #241e45;
 }
 .tier-role-button {
   display: grid;
@@ -311,12 +324,11 @@ a.team-link:hover { color: #507624; text-decoration: underline; text-underline-o
   width: 38px;
   height: 38px;
   padding: 5px;
-  border: 0;
+  border: 1px solid transparent;
   border-radius: 5px;
   background: transparent;
 }
-.tier-role-button:hover { background: #3c356c; }
-.tier-role-button[aria-pressed="true"] { background: #514781; box-shadow: inset 0 0 0 1px #8b83cc66; }
+.tier-role-button[aria-pressed="true"] { border-color: var(--accent); background: var(--line); }
 .tier-role-button img { display: block; width: 24px; height: 24px; }
 .tier-team-filter { display: block; }
 .tier-team-filter select { min-width: 190px; min-height: 48px; }
