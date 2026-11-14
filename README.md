@@ -20,13 +20,13 @@ Picking a fantasy XI means comparing players with different prices, positions, o
 
 | Area | My work | Code and details |
 | --- | --- | --- |
-| Data collection | Collected Sportmonks season data with pagination, raw CSV captures, caching, and audits. | [Downloader](src/fetch/download_season.py) · [Audit](src/fetch/audit_season.py) |
-| Live API data | Built a separate local feed for match scores and events with bounded polling and explicit unavailable states. | [Live feed](src/web/live.py) · [Match centre](src/web/features/matchweek/live-centre.js) |
-| Cleaning and analysis | Prepared season CSVs, reviewed player identity matches across sources, reconstructed fantasy points, and built player projections and XI selection. | [Pipeline](src/run_pipeline.py) · [Identity matching](src/fetch/update_tff_players.py) · [Projections](src/player_projections/run.py) |
-| Match probabilities and odds | Implemented and evaluated Poisson and XGBoost models; converted outcome probabilities into implied fair odds. | [Models](src/odds/models.py) · [Implementation](src/odds/run.py) |
-| Visualizations | Created player peer distributions, team comparisons, radar charts, and match-flow views. | [Distribution panel](src/web/features/statistics/distribution.js) · [Team charts](src/web/lib/team-analysis.js) |
-| Dashboards | Built a bilingual website with light and dark modes for matches, players, clubs, forecasts, and fantasy squad building. | [Page source](src/web/index.html) · [Site code](src/web/core/site.js) |
-| AI assistant | Built local and public chat endpoints that answer statistics questions using database tools. | [Assistant](src/chat/assistant.py) · [Tools](src/chat/tools.py) · [Public endpoint](functions/api/chat.js) |
+| Data collection | Collected Sportmonks season data with pagination, raw CSV captures, caching, and audits. | [README](docs/portfolio/data-collection/README.md) |
+| Live API data | Built a separate local feed for match scores and events with bounded polling and explicit unavailable states. | [README](docs/portfolio/live-api/README.md) |
+| Cleaning and analysis | Prepared season CSVs, reviewed player identity matches across sources, reconstructed fantasy points, and built player projections and XI selection. | [README](docs/portfolio/cleaning-analysis/README.md) |
+| Match probabilities and odds | Implemented and evaluated Poisson and XGBoost models; converted outcome probabilities into implied fair odds. | [README](docs/portfolio/odds-model/README.md) |
+| Visualizations | Created player peer distributions, team comparisons, radar charts, and match-flow views. | [README](docs/portfolio/visualizations/README.md) |
+| Dashboards | Built a bilingual website with light and dark modes for matches, players, clubs, forecasts, and fantasy squad building. | [README](docs/portfolio/dashboards/README.md) |
+| AI assistant | Built local and public chat endpoints that answer statistics questions using database tools. | [README](docs/portfolio/ai-assistant/README.md) |
 
 ## Data flow
 
