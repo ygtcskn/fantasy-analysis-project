@@ -25,7 +25,6 @@ Two data conventions, both verified against the exports rather than assumed:
 from __future__ import annotations
 
 import argparse
-import csv
 import hashlib
 import math
 import re
@@ -42,7 +41,8 @@ if str(ROOT) not in sys.path:  # Run as a file, the project root is not on the p
     sys.path.insert(0, str(ROOT))
 
 from src.shared import (  # noqa: E402
-    in_progress, is_played, number_or, read_csv, season_folder, utc_now, utc_stamp, write_csv,
+    in_progress, is_played, number_or, published_generation, read_csv, season_folder, utc_now, utc_stamp,
+    warn_if_unpublishing, write_csv,
 )
 
 if __package__:
@@ -307,43 +307,6 @@ def components_report(ledger: list[dict]) -> list[dict]:
         entry["points_per_player_match"] = total / len(selected)
         rows.append(entry)
     return rows
-
-
-def published_generation(path) -> str:
-    """The pipeline generation stamped on a file this run is about to replace.
-
-    ``run_pipeline.py`` tags every published file with one ``pipeline_run_id``,
-    and the website refuses to display a set whose stamps disagree. A standalone
-    rebuild writes the same path without that column, which silently invalidates
-    the whole published set: the browser reports that the analysis is being
-    updated and every projection vanishes, with nothing pointing at the cause.
-    Reading the stamp before overwriting it turns that into one line of output.
-    """
-    path = Path(path)
-    if not path.is_file():
-        return ""
-    try:
-        with path.open(encoding="utf-8-sig", newline="") as stream:
-            reader = csv.DictReader(stream)
-            if "pipeline_run_id" not in (reader.fieldnames or []):
-                return ""
-            for row in reader:
-                return row.get("pipeline_run_id", "") or ""
-    except (OSError, UnicodeError, csv.Error):
-        return ""
-    return ""
-
-
-def warn_if_unpublishing(generations, season: str = "<season>") -> None:
-    live = sorted({value for value in generations if value})
-    if not live:
-        return
-    print(f"\nWARNING: this replaced published files carrying pipeline generation "
-          f"{', '.join(live)} with untagged output.")
-    print("         The website will now reject the whole fantasy dataset and show "
-          "'Fantasy analysis is being updated'.")
-    print(f"         Run: python src/run_pipeline.py --season {season}")
-    print("         to republish points, projections and the marker together.")
 
 
 def unfinished_clubs(season: str, input_root: Path = INPUT) -> set[str]:

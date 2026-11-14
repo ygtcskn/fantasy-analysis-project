@@ -52,8 +52,6 @@ BASE_FEATURE_NAMES = (
     "away_rest_days",
     "neutral_venue",
 )
-# Retained for callers that only want the goal-and-schedule block.
-FEATURE_NAMES = BASE_FEATURE_NAMES
 
 ELO_START = 1500.0
 ELO_K = 20.0

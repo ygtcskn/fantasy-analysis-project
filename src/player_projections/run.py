@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import argparse
-import csv
 from collections import defaultdict
 from datetime import datetime, timedelta
 import hashlib
@@ -30,7 +29,8 @@ from src.player_projections.availability import (
 from src.player_projections.team_goals import SOURCE_INTERNAL, SOURCE_ODDS, load_odds_goals
 from src.shared import (
     CALLED_OFF_STATES, UTC, fixture_state, integer_or, is_finished, is_played, is_scheduled,
-    number_or, parse_utc, read_csv, season_folder, utc_now, utc_stamp, write_csv,
+    number_or, parse_utc, published_generation, read_csv, season_folder, utc_now, utc_stamp,
+    warn_if_unpublishing, write_csv,
 )
 POSITIONS = ("KL", "DEF", "OS", "FOR")
 OUTPUT_COLUMNS = [
@@ -109,43 +109,6 @@ def expected_floor_poisson(rate: float, divisor: int) -> float:
         if 1 - cumulative < 1e-12 and goal > rate:
             break
     return total
-
-
-def published_generation(path) -> str:
-    """The pipeline generation stamped on a file this run is about to replace.
-
-    ``run_pipeline.py`` tags every published file with one ``pipeline_run_id``,
-    and the website refuses to display a set whose stamps disagree. A standalone
-    rebuild writes the same path without that column, which silently invalidates
-    the whole published set: the browser reports that the analysis is being
-    updated and every projection vanishes, with nothing pointing at the cause.
-    Reading the stamp before overwriting it turns that into one line of output.
-    """
-    path = Path(path)
-    if not path.is_file():
-        return ""
-    try:
-        with path.open(encoding="utf-8-sig", newline="") as stream:
-            reader = csv.DictReader(stream)
-            if "pipeline_run_id" not in (reader.fieldnames or []):
-                return ""
-            for row in reader:
-                return row.get("pipeline_run_id", "") or ""
-    except (OSError, UnicodeError, csv.Error):
-        return ""
-    return ""
-
-
-def warn_if_unpublishing(generations, season: str = "<season>") -> None:
-    live = sorted({value for value in generations if value})
-    if not live:
-        return
-    print(f"\nWARNING: this replaced published files carrying pipeline generation "
-          f"{', '.join(live)} with untagged output.")
-    print("         The website will now reject the whole fantasy dataset and show "
-          "'Fantasy analysis is being updated'.")
-    print(f"         Run: python src/run_pipeline.py --season {season}")
-    print("         to republish points, projections and the marker together.")
 
 
 def load_fixture_results(seasons: list[str], forecast: datetime, input_root: Path = SPORTMONKS):

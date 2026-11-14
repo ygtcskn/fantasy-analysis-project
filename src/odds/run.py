@@ -19,6 +19,7 @@ if str(ROOT) not in sys.path:  # Run as a file, the project root is not on the p
 from src.shared import parse_utc, season_folder, utc_now, write_csv  # noqa: E402
 from src.shared import utc_stamp as stamp  # noqa: E402
 from data_loader import load_seasons  # noqa: E402
+from diagnostics import log_loss  # noqa: E402
 
 SHARED_MODULE = ROOT / "src" / "shared.py"
 INPUT = ROOT / "data" / "final" / "sportmonks"
@@ -364,11 +365,6 @@ def _folds(count, total, minimum_train):
         yield train_end, (train_end + step if index < count - 1 else total)
 
 
-def _fold_log_loss(probabilities, labels):
-    return sum(-math.log(max(float(row[label]), 1e-15))
-               for row, label in zip(probabilities, labels)) / len(labels)
-
-
 def _suggest(trial):
     """Ranges kept conservative: each fold trains on well under a thousand rows."""
     return {
@@ -421,7 +417,7 @@ def tune_xgboost(matches, as_of, args, folder, config=None):
             ordered = np.zeros_like(raw)
             for position, label in enumerate(classifier.classes_):
                 ordered[:, int(label)] = raw[:, position]
-            scores.append(_fold_log_loss(ordered, y[train_end:validate_end]))
+            scores.append(log_loss(ordered, y[train_end:validate_end]))
         return sum(scores) / len(scores)
 
     optuna.logging.set_verbosity(optuna.logging.WARNING)

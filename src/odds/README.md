@@ -3,7 +3,7 @@
 Working area requested for research before website integration. This directory
 holds analysis source code and notes. Raw provider captures remain under
 `data/raw/sportmonks`; generated research CSVs and reports belong under
-`data/src/odds`. Nothing is published to `data/final` by this research stage.
+`data/temp/odds`. Only the `forecast` command publishes, to `data/final/odds/predictions.csv`.
 
 The research pipeline is implemented. It reads existing Sportmonks season CSVs;
 it does not download data or update the website. The current user instruction
@@ -19,7 +19,7 @@ python src/odds/run.py coverage --seasons 2021/2022 2022/2023 2023/2024 2024/202
 
 Missing, unfinished, or changing downloads are reported and skipped. Omit
 `--seasons` to inspect all available season folders. Each invocation creates a
-new directory under `data/src/odds` with a UTC timestamp and unique suffix.
+new directory under `data/temp/odds/runs` with a UTC timestamp and unique suffix.
 Previous reports are preserved. Read `run_status.csv` before using any outputs;
 an interrupted or blocked run is not a completed backtest.
 

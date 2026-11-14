@@ -4,7 +4,8 @@ const params = new URLSearchParams(location.search);
 const clubId = params.get("id") || "";
 const validClub = /^\d+$/.test(clubId);
 const el = (id) => document.getElementById(id);
-const num = (value) => value === undefined || value === null || String(value).trim() === "" || !Number.isFinite(Number(value)) ? null : Number(value);
+// A blank is not a zero: the site's one rule for numbers (core/match-rules.js).
+const num = ruleNumber;
 const node = (tag, className = "", text) => {
   const item = document.createElement(tag);
   item.className = className;
@@ -47,9 +48,8 @@ function crest(id) {
   const fallback = node("span", "club-logo-fallback", club.teams.get(id)?.short_code || clubName(id).split(/\s+/).map((part) => part[0]).join("").slice(0, 3));
   const img = node("img");
   img.alt = `${clubName(id)} logo`; img.width = 32; img.height = 32;
-  let png = false;
   img.addEventListener("load", () => { fallback.hidden = true; img.classList.add("loaded"); });
-  img.addEventListener("error", () => { if (!png) { png = true; img.src = `assets/team-logos/${encodeURIComponent(id)}.png`; } else img.remove(); });
+  img.addEventListener("error", () => img.remove());
   img.src = `assets/team-logos/${encodeURIComponent(id)}.svg`;
   badge.append(fallback, img);
   return badge;
@@ -248,7 +248,7 @@ function renderClub() {
     if (completed(fixture) || ["CANC", "CANCELLED", "POSTP", "ABANDONED"].includes(status(fixture))) return false;
     const timestamp = num(fixture.starting_at_timestamp);
     if (timestamp !== null) return timestamp >= now;
-    return ["NS", "TBA"].includes(status(fixture)) && (!fixture.kickoff || fixture.kickoff.slice(0, 10) >= today);
+    return fixtureScheduled(fixture) && (!fixture.kickoff || fixture.kickoff.slice(0, 10) >= today);
   });
   renderMatchList("team-upcoming", upcoming.slice(0, 5), t("Kaydedilen veride planlanmış maç yok."));
   renderLineup(fixtures[index]); renderSelected(fixtures[index]); renderOverall();
@@ -341,9 +341,8 @@ async function loadClubData(files) {
 setClubName(validClub ? (params.get("name") || t("Takım {id}", { id: clubId })).slice(0, 160) : t("Takım bulunamadı"));
 if (validClub) {
   const img = el("team-crest");
-  let png = false;
   img.addEventListener("load", () => { img.hidden = false; });
-  img.addEventListener("error", () => { if (!png) { png = true; img.src = `assets/team-logos/${clubId}.png`; } else img.hidden = true; });
+  img.addEventListener("error", () => { img.hidden = true; });
   img.src = `assets/team-logos/${clubId}.svg`;
 }
 el("team-match").addEventListener("change", (event) => chooseMatch(event.target.value));

@@ -14,13 +14,6 @@ const SQUAD_FEED_FIELDS = "*";
 const squadFeedState = { loadedKey: "", request: 0, status: "idle", error: "", squads: [] };
 const squadFeedTimeFormat = new Intl.DateTimeFormat(LOCALE, { timeZone: MATCH_TIME_ZONE, dateStyle: "medium", timeStyle: "short" });
 
-function squadFeedNode(tag, className, text) {
-  const node = document.createElement(tag);
-  node.className = className;
-  if (text !== undefined) node.textContent = text;
-  return node;
-}
-
 function squadFeedErrorText(error) {
   // The database refused a delete: a session that has ended, or someone else's squad.
   if (error?.code === "42501") return t("Bu kadroyu yalnızca sahibi silebilir. Giriş yaptığından emin ol, sonra tekrar dene.");
@@ -114,11 +107,11 @@ function squadActualPoints(squad) {
 
 // "Gerçekleşen FP" and how much of the week it covers.
 function squadActualBlock(squad) {
-  const block = squadFeedNode("div", "squad-actual");
+  const block = element("div", "squad-actual");
   const actual = squadActualPoints(squad);
   const started = actual && actual.finished > 0;
-  block.append(squadFeedNode("span", "", t("Gerçekleşen FP")), squadFeedNode("strong", "", started ? displayNumber(actual.total) : "—"),
-    squadFeedNode("small", "", !actual ? t("Puanlar yüklenmedi") : started ? t("{finished} / {total} maç", { finished: actual.finished, total: actual.fixtures }) : t("Maçlar başlamadı")));
+  block.append(element("span", "", t("Gerçekleşen FP")), element("strong", "", started ? displayNumber(actual.total) : "—"),
+    element("small", "", !actual ? t("Puanlar yüklenmedi") : started ? t("{finished} / {total} maç", { finished: actual.finished, total: actual.fixtures }) : t("Maçlar başlamadı")));
   block.title = t("İlk 11'in bu haftaki fantezi puanları; her maç bitip site verisi yenilendikçe artar. Kaptan ve yedek değişikliği yok.");
   return block;
 }
@@ -126,7 +119,7 @@ function squadActualBlock(squad) {
 // The author's own squads carry a "Sil" button; the database refuses anyone
 // else's delete in any case.
 function squadDeleteButton(squad, className = "squad-delete") {
-  const button = squadFeedNode("button", className, t("Sil"));
+  const button = element("button", className, t("Sil"));
   button.type = "button";
   button.setAttribute("aria-label", t("Kadronu sil"));
   button.title = t("Kadronu sil");
@@ -161,9 +154,9 @@ async function deleteSharedSquad(squad, button) {
 }
 
 function squadFeedCard(squad) {
-  const card = squadFeedNode("article", "squad-card");
+  const card = element("article", "squad-card");
   // The name is the link; it stretches over the whole card, under the button.
-  const link = squadFeedNode("a", "squad-card-link", squad.author_nickname);
+  const link = element("a", "squad-card-link", squad.author_nickname);
   link.href = `index.html?view=squads&squad=${encodeURIComponent(squad.id)}`;
   link.setAttribute("aria-label", t("{name} kadrosunu aç", { name: squad.author_nickname }));
   link.addEventListener("click", (event) => {
@@ -171,17 +164,17 @@ function squadFeedCard(squad) {
     event.preventDefault();
     openSharedSquadPage(squad.id);
   });
-  const text = squadFeedNode("div", "squad-card-text");
-  const name = squadFeedNode("h3", "squad-card-name");
+  const text = element("div", "squad-card-text");
+  const name = element("h3", "squad-card-name");
   name.append(link);
-  const time = squadFeedNode("time", "squad-card-date", squadFeedTimeFormat.format(new Date(squad.shared_at)));
+  const time = element("time", "squad-card-date", squadFeedTimeFormat.format(new Date(squad.shared_at)));
   time.dateTime = squad.shared_at;
-  const points = squadFeedNode("p", "squad-card-points");
+  const points = element("p", "squad-card-points");
   const projected = number(squad.projected_starters) ?? 0;
-  points.append(squadFeedNode("span", "", t("Beklenen FP")), squadFeedNode("strong", "", squadPointsText(squad)));
+  points.append(element("span", "", t("Beklenen FP")), element("strong", "", squadPointsText(squad)));
   if (number(squad.expected_points) !== null && projected < 11) points.title = t("{count} / 11 oyuncu tahminli; toplam eksik.", { count: projected });
   text.append(name, time, points);
-  const side = squadFeedNode("div", "squad-card-side");
+  const side = element("div", "squad-card-side");
   if (siteAuth.user?.id && siteAuth.user.id === squad.user_id) side.append(squadDeleteButton(squad));
   side.append(squadActualBlock(squad));
   card.append(squadAvatar(squad), text, side);
@@ -208,17 +201,17 @@ function openSharedSquadPage(id = "") {
 }
 
 function squadFeedWeek(name, squads, current) {
-  const section = squadFeedNode("section", "squad-week");
-  const header = squadFeedNode("header", "squad-week-header");
-  const title = squadFeedNode("h2", "", name);
-  if (current) title.append(squadFeedNode("span", "squad-week-current", t("Bu hafta")));
-  header.append(title, squadFeedNode("span", "squad-week-count", t("{count} kadro", { count: squads.length }, squads.length)));
+  const section = element("section", "squad-week");
+  const header = element("header", "squad-week-header");
+  const title = element("h2", "", name);
+  if (current) title.append(element("span", "squad-week-current", t("Bu hafta")));
+  header.append(title, element("span", "squad-week-count", t("{count} kadro", { count: squads.length }, squads.length)));
   section.append(header);
   if (!squads.length) {
-    section.append(squadFeedNode("p", "squad-empty", t("Bu hafta henüz kadro paylaşılmadı.")));
+    section.append(element("p", "squad-empty", t("Bu hafta henüz kadro paylaşılmadı.")));
     return section;
   }
-  const grid = squadFeedNode("div", "squad-grid");
+  const grid = element("div", "squad-grid");
   grid.append(...[...squads].sort(compareSharedSquads).map(squadFeedCard));
   section.append(grid);
   return section;
@@ -236,21 +229,21 @@ function renderSharedSquads() {
   container.replaceChildren();
   const rounds = squadFeedRounds();
   if (!rounds.length) {
-    container.append(squadFeedNode("p", "squad-empty", t("Henüz fikstür yüklenmedi. Sezon verileri yüklendiğinde paylaşılan kadrolar haftalara göre burada görünecek.")));
+    container.append(element("p", "squad-empty", t("Henüz fikstür yüklenmedi. Sezon verileri yüklendiğinde paylaşılan kadrolar haftalara göre burada görünecek.")));
     return;
   }
   if (!authEnabled()) {
-    container.append(squadFeedNode("p", "squad-empty", t("Kadrolar şu anda gösterilemiyor.")));
+    container.append(element("p", "squad-empty", t("Kadrolar şu anda gösterilemiyor.")));
     return;
   }
   const loadKey = `season:${state.seasonSlug}`;
   if (loadKey !== squadFeedState.loadedKey) loadSharedSquads(loadKey);
   if (squadFeedState.status === "loading") {
-    container.append(squadFeedNode("p", "squad-empty", t("Kadrolar yükleniyor…")));
+    container.append(element("p", "squad-empty", t("Kadrolar yükleniyor…")));
     return;
   }
   if (squadFeedState.status === "error") {
-    container.append(squadFeedNode("p", "squad-empty squad-load-error", squadFeedState.error));
+    container.append(element("p", "squad-empty squad-load-error", squadFeedState.error));
     return;
   }
   const byRound = new Map();

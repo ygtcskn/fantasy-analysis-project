@@ -68,14 +68,9 @@ function createTeamLogo(id, teams, clickable = true) {
     img.height = 32;
     img.loading = "lazy";
     img.decoding = "async";
-    const base = `assets/team-logos/${encodeURIComponent(id)}`;
-    let triedPng = false;
     img.addEventListener("load", () => { img.classList.add("loaded"); fallback.hidden = true; });
-    img.addEventListener("error", () => {
-      if (!triedPng) { triedPng = true; img.src = `${base}.png`; }
-      else img.remove();
-    });
-    img.src = `${base}.svg`;
+    img.addEventListener("error", () => img.remove());
+    img.src = `assets/team-logos/${encodeURIComponent(id)}.svg`;
     badge.append(fallback, img);
     if (!clickable) return badge;
     const link = createTeamLink(id, name, "team-logo-link");

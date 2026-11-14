@@ -139,7 +139,7 @@ function builderFantasyData(player) {
   // No forecast once the round's fantasy deadline has passed.
   const projection = rows.find((row) => {
     const fixture = fixtures.find((item) => item.fixture_id === row.fixture_id);
-    if (!fixture || !["NS", "TBA"].includes(String(fixture.state).toUpperCase())) return false;
+    if (!fixture || !fixtureScheduled(fixture)) return false;
     const kickoff = fantasyKickoff(fixture), projectedKickoff = fantasyTime(row.kickoff_utc);
     if (!Number.isFinite(kickoff) || kickoff <= now || kickoff !== projectedKickoff) return false;
     if (player.squadTeam && row.team_id !== player.squadTeam) return false;

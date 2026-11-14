@@ -52,10 +52,7 @@ function profileCrest(teamId, size) {
   img.height = size;
   img.alt = "";
   img.decoding = "async";
-  let png = false;
-  img.addEventListener("error", () => {
-    if (!png) { png = true; img.src = `assets/team-logos/${encodeURIComponent(teamId)}.png`; } else img.remove();
-  });
+  img.addEventListener("error", () => img.remove());
   img.src = `assets/team-logos/${encodeURIComponent(teamId)}.svg`;
   return img;
 }

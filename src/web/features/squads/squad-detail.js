@@ -59,16 +59,16 @@ function squadDetailLines(formation, starters) {
 // is still to finish), or undefined to show none, as for the bench.
 function squadDetailPlayer(id, goalkeeper, points) {
   const player = buildTierPlayers().byId.get(String(id));
-  const item = squadFeedNode("div", "squad-pitch-player");
-  const shirt = squadFeedNode("span", "pitch-shirt");
+  const item = element("div", "squad-pitch-player");
+  const shirt = element("span", "pitch-shirt");
   const keeper = goalkeeper || (player && playerPrimaryRole(player) === "goalkeeper");
   const name = player?.name || t("Oyuncu {id}", { id });
   shirt.innerHTML = shirtSVG(player?.squadTeam || [...(player?.teams || [])][0] || null, { size: 64, number: player?.jersey, surname: name, goalkeeper: keeper });
-  const rating = squadFeedNode("span", "pitch-rating", ratingText(player?.average ?? null));
+  const rating = element("span", "pitch-rating", ratingText(player?.average ?? null));
   rating.title = t("Sezon reyting ortalaması");
-  item.append(shirt, squadFeedNode("span", "pitch-player-name", name), rating);
+  item.append(shirt, element("span", "pitch-player-name", name), rating);
   if (points !== undefined) {
-    const chip = squadFeedNode("span", "squad-player-points", points === null ? "— FP" : `${displayNumber(points)} FP`);
+    const chip = element("span", "squad-player-points", points === null ? "— FP" : `${displayNumber(points)} FP`);
     chip.title = points === null ? t("Maçı henüz bitmedi") : t("Bu haftaki fantezi puanı");
     item.append(chip);
   }
@@ -76,23 +76,23 @@ function squadDetailPlayer(id, goalkeeper, points) {
 }
 
 function squadDetailHeader(squad, roundName) {
-  const header = squadFeedNode("header", "squad-detail-head");
+  const header = element("header", "squad-detail-head");
   const avatar = squadAvatar(squad, 84);
   avatar.classList.add("squad-avatar-large");
-  const identity = squadFeedNode("div", "squad-detail-identity");
-  const title = squadFeedNode("h2", "", squad.author_nickname);
-  if (siteAuth.user?.id === squad.user_id) title.append(squadFeedNode("span", "squad-detail-own", t("Senin kadron")));
-  const time = squadFeedNode("time", "", squadFeedTimeFormat.format(new Date(squad.shared_at)));
+  const identity = element("div", "squad-detail-identity");
+  const title = element("h2", "", squad.author_nickname);
+  if (siteAuth.user?.id === squad.user_id) title.append(element("span", "squad-detail-own", t("Senin kadron")));
+  const time = element("time", "", squadFeedTimeFormat.format(new Date(squad.shared_at)));
   time.dateTime = squad.shared_at;
   // The time is its own element, wherever the sentence puts it: "… kaydedildi"
   // in Turkish, "saved …" in English.
   const [before, after] = t("{time} kaydedildi").split("{time}");
-  const meta = squadFeedNode("p", "squad-detail-meta", `${roundName} · ${before}`);
+  const meta = element("p", "squad-detail-meta", `${roundName} · ${before}`);
   meta.append(time, document.createTextNode(after));
   identity.append(title, meta);
-  const side = squadFeedNode("div", "squad-detail-side");
-  const points = squadFeedNode("div", "squad-detail-points");
-  points.append(squadFeedNode("span", "", t("Beklenen FP")), squadFeedNode("strong", "", squadPointsText(squad)));
+  const side = element("div", "squad-detail-side");
+  const points = element("div", "squad-detail-points");
+  points.append(element("span", "", t("Beklenen FP")), element("strong", "", squadPointsText(squad)));
   side.append(points, squadActualBlock(squad));
   if (siteAuth.user?.id && siteAuth.user.id === squad.user_id) side.append(squadDeleteButton(squad, "squad-delete squad-detail-delete"));
   header.append(avatar, identity, side);
@@ -101,66 +101,66 @@ function squadDetailHeader(squad, roundName) {
 
 function squadDetailPitch(squad) {
   const starters = (squad.starters || []).map(String), bench = (squad.bench || []).map(String);
-  const panel = squadFeedNode("section", "squad-pitch-panel");
+  const panel = element("section", "squad-pitch-panel");
   panel.setAttribute("aria-label", t("Kadro sahası"));
-  const heading = squadFeedNode("div", "squad-pitch-heading");
-  const identity = squadFeedNode("div");
-  identity.append(squadFeedNode("p", "eyebrow", t("KADRO")), squadFeedNode("h3", "", t("İlk 11")));
-  const totals = squadFeedNode("dl", "squad-pitch-totals");
+  const heading = element("div", "squad-pitch-heading");
+  const identity = element("div");
+  identity.append(element("p", "eyebrow", t("KADRO")), element("h3", "", t("İlk 11")));
+  const totals = element("dl", "squad-pitch-totals");
   const budget = number(squad.budget_million);
   for (const [label, value, title] of [
     [t("Bütçe · ₺M"), budget === null ? "—" : `${displayNumber(budget)} / 100`, t("Kaydedildiği günün fiyatlarıyla")],
     [t("Kadro"), `${starters.length + bench.length} / 15`, ""],
   ]) {
-    const item = squadFeedNode("div");
+    const item = element("div");
     if (title) item.title = title;
-    item.append(squadFeedNode("dt", "", label), squadFeedNode("dd", "", value));
+    item.append(element("dt", "", label), element("dd", "", value));
     totals.append(item);
   }
-  heading.append(identity, totals, squadFeedNode("span", "badge squad-formation", squad.formation));
+  heading.append(identity, totals, element("span", "badge squad-formation", squad.formation));
 
-  const pitch = squadFeedNode("div", "squad-pitch");
+  const pitch = element("div", "squad-pitch");
   pitch.innerHTML = '<div class="pitch-markings" aria-hidden="true"><span class="pitch-circle"></span><span class="pitch-box pitch-box-top"></span><span class="pitch-box pitch-box-bottom"></span></div>';
-  const lines = squadFeedNode("div", "squad-pitch-lines");
+  const lines = element("div", "squad-pitch-lines");
   // Each starter's points once the week has begun; none before it.
   const actual = squadActualPoints(squad);
   const pointsFor = (id) => (actual && actual.finished > 0 ? actual.byPlayer.get(id) : undefined);
   for (const line of squadDetailLines(squad.formation, starters)) {
-    const row = squadFeedNode("div", "squad-pitch-line");
-    const players = squadFeedNode("div", "squad-pitch-line-players");
+    const row = element("div", "squad-pitch-line");
+    const players = element("div", "squad-pitch-line-players");
     players.append(...line.ids.map((id) => squadDetailPlayer(id, line.goalkeeper, pointsFor(id))));
-    row.append(squadFeedNode("span", "pitch-line-label", line.label), players);
+    row.append(element("span", "pitch-line-label", line.label), players);
     lines.append(row);
   }
   pitch.append(lines);
 
-  const benchSection = squadFeedNode("section", "squad-bench");
-  benchSection.append(squadFeedNode("h3", "", t("Yedekler")));
-  const benchPlayers = squadFeedNode("div", "squad-pitch-line-players");
+  const benchSection = element("section", "squad-bench");
+  benchSection.append(element("h3", "", t("Yedekler")));
+  const benchPlayers = element("div", "squad-pitch-line-players");
   benchPlayers.append(...bench.map((id) => squadDetailPlayer(id, false)));
-  if (!bench.length) benchPlayers.append(squadFeedNode("p", "squad-empty", t("Yedek seçilmemiş.")));
+  if (!bench.length) benchPlayers.append(element("p", "squad-empty", t("Yedek seçilmemiş.")));
   benchSection.append(benchPlayers);
   panel.append(heading, pitch, benchSection);
   return panel;
 }
 
 function squadDetailMetric(label, value, detail = "") {
-  const item = squadFeedNode("div", "squad-metric");
-  item.append(squadFeedNode("dt", "", label), squadFeedNode("dd", "", value));
-  if (detail) item.append(squadFeedNode("dd", "squad-metric-detail", detail));
+  const item = element("div", "squad-metric");
+  item.append(element("dt", "", label), element("dd", "", value));
+  if (detail) item.append(element("dd", "squad-metric-detail", detail));
   return item;
 }
 
 function squadDetailSummary(squad) {
-  const section = squadFeedNode("section", "squad-details");
+  const section = element("section", "squad-details");
   const projected = number(squad.projected_starters) ?? 0;
-  const heading = squadFeedNode("div", "squad-details-heading");
-  const title = squadFeedNode("div");
-  title.append(squadFeedNode("p", "eyebrow", t("KAYDEDİLDİĞİNDE")), squadFeedNode("h3", "", t("Kadro beklentisi")));
-  heading.append(title, squadFeedNode("span", "badge", t("{covered} / {count} oyuncu tahminli", { covered: projected, count: 11 })));
+  const heading = element("div", "squad-details-heading");
+  const title = element("div");
+  title.append(element("p", "eyebrow", t("KAYDEDİLDİĞİNDE")), element("h3", "", t("Kadro beklentisi")));
+  heading.append(title, element("span", "badge", t("{covered} / {count} oyuncu tahminli", { covered: projected, count: 11 })));
 
   // Formatted as Kadro Kur formats its own summary.
-  const metrics = squadFeedNode("dl", "squad-metrics");
+  const metrics = element("dl", "squad-metrics");
   for (const [field, label] of SQUAD_DETAIL_METRICS) {
     const value = number(squad[field]);
     const partial = value !== null && projected < 11;
@@ -171,7 +171,7 @@ function squadDetailSummary(squad) {
   const bench = number(squad.bench_expected_points), benchCount = (squad.bench || []).length;
   metrics.append(squadDetailMetric(t("Yedekler · beklenen FP"), bench === null ? "—" : displayNumber(bench), benchCount ? t("{count} yedek", { count: benchCount }, benchCount) : t("Yedek yok")));
 
-  const note = squadFeedNode("p", "squad-details-note");
+  const note = element("p", "squad-details-note");
   const detailsSaved = ["expected_goals", "expected_minutes", "budget_million"].some((field) => number(squad[field]) !== null);
   note.textContent = !detailsSaved && number(squad.expected_points) !== null
     ? t("Bu kadro, ayrıntılar kaydedilmeye başlamadan önce kaydedildi; yalnızca beklenen FP var. Kadro Kur'da yeniden kaydedilince hepsi görünür.")
@@ -185,13 +185,13 @@ function squadDetailSummary(squad) {
     const club = player?.squadTeam || player?.club;
     if (club) counts.set(club, (counts.get(club) || 0) + 1);
   }
-  const clubsHeading = squadFeedNode("div", "squad-details-heading");
-  clubsHeading.append(squadFeedNode("h3", "", t("Takımlara göre")), squadFeedNode("span", "badge", t("Takım başına en fazla 3")));
-  const clubs = squadFeedNode("ul", "squad-clubs");
+  const clubsHeading = element("div", "squad-details-heading");
+  clubsHeading.append(element("h3", "", t("Takımlara göre")), element("span", "badge", t("Takım başına en fazla 3")));
+  const clubs = element("ul", "squad-clubs");
   clubs.append(...[...counts].sort((a, b) => b[1] - a[1] || teamName(a[0], teams).localeCompare(teamName(b[0], teams), LOCALE)).map(([id, count]) => {
-    const item = squadFeedNode("li", "squad-club");
+    const item = element("li", "squad-club");
     item.style.setProperty("--club-color", teamColor(id));
-    item.append(squadFeedNode("span", "", teamName(id, teams)), createTeamLogo(id, teams, false), squadFeedNode("span", "squad-club-count", `– ${count}`));
+    item.append(element("span", "", teamName(id, teams)), createTeamLogo(id, teams, false), element("span", "squad-club-count", `– ${count}`));
     return item;
   }));
   section.append(heading, metrics, note, clubsHeading, clubs);
@@ -200,7 +200,7 @@ function squadDetailSummary(squad) {
 
 function renderSharedSquadDetail(id) {
   const container = document.getElementById("squads-detail");
-  const back = squadFeedNode("a", "secondary squad-back", t("← Tüm kadrolar"));
+  const back = element("a", "secondary squad-back", t("← Tüm kadrolar"));
   back.href = "index.html?view=squads";
   back.addEventListener("click", (event) => {
     if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button !== 0) return;
@@ -209,28 +209,28 @@ function renderSharedSquadDetail(id) {
   });
   container.replaceChildren(back);
   if (!authEnabled()) {
-    container.append(squadFeedNode("p", "squad-empty", t("Kadrolar şu anda gösterilemiyor.")));
+    container.append(element("p", "squad-empty", t("Kadrolar şu anda gösterilemiyor.")));
     return;
   }
   if (id !== squadDetailState.id) loadSharedSquad(id);
   if (squadDetailState.status === "loading") {
-    container.append(squadFeedNode("p", "squad-empty", t("Kadro yükleniyor…")));
+    container.append(element("p", "squad-empty", t("Kadro yükleniyor…")));
     return;
   }
   if (squadDetailState.status === "error") {
-    container.append(squadFeedNode("p", "squad-empty squad-load-error", squadDetailState.error));
+    container.append(element("p", "squad-empty squad-load-error", squadDetailState.error));
     return;
   }
   const squad = squadDetailState.squad;
   // Names, shirts and ratings come from the season files, read on page load.
   if (!squad || !state.tables["players.csv"]) {
-    container.append(squadFeedNode("p", "squad-empty", t("Oyuncular yükleniyor…")));
+    container.append(element("p", "squad-empty", t("Oyuncular yükleniyor…")));
     return;
   }
   const round = squadFeedRounds().find((item) => item.id === String(squad.round_id));
-  const layout = squadFeedNode("div", "squad-detail-layout");
+  const layout = element("div", "squad-detail-layout");
   layout.append(squadDetailPitch(squad), squadDetailSummary(squad));
-  const status = squadFeedNode("p", "squad-detail-status");
+  const status = element("p", "squad-detail-status");
   status.id = "squads-detail-status";
   status.setAttribute("role", "status");
   container.append(squadDetailHeader(squad, round?.name || t("Haftası bilinmiyor")), status, layout);

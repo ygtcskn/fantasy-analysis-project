@@ -153,17 +153,14 @@ function renderTeamAnalysis(list, names) {
     const basis = rows.length ? t("{teams} takım, takım başına en az {matches} maç.", { teams: rows.length, matches: Math.min(...rows.map((row) => row.matches)) })
       : spec.id === "fantasy" && !fantasyReady ? fantasyState.note
         : t("Bu karşılaştırma için veri yok.");
-    return `<figure id="team-analysis-panel-compare-${spec.id}" class="ta-compare-card" role="tabpanel" aria-labelledby="team-analysis-tab-compare-${spec.id}" data-analysis-panel="compare-${spec.id}" tabindex="0"><figcaption>${escapeTeamAnalysis(spec.title)}</figcaption>`
+    return `<figure id="team-analysis-panel-compare-${spec.id}" class="ta-compare-card" role="tabpanel" aria-labelledby="team-analysis-tab-compare-${spec.id}" data-analysis-panel="compare-${spec.id}" tabindex="0"><figcaption>${statisticsEscape(spec.title)}</figcaption>`
       + `${rows.length ? `<div class="ta-chart">${TeamAnalysis.scatter(rows, spec, names, selected, teamColor)}</div>` : ""}`
-      + `<p class="builder-rating-note">${escapeTeamAnalysis(`${spec.note} ${basis}`)}</p></figure>`;
+      + `<p class="builder-rating-note">${statisticsEscape(`${spec.note} ${basis}`)}</p></figure>`;
   });
   $("ta-compare-chart").innerHTML = cards.join("");
   $("ta-compare-note").textContent = statsMissing + t("Her nokta bir takım, kulübün kendi renginde, bu sezonun bitmiş maçlarından. Eşit ölçekli çiftlerde (puan–xPts, gol–xG, yenilen–xGA) kesikli çizgi iki değerin eşit olduğu yer; diğerlerinde lig ortalamaları. Köşe yazıları o bölgenin ne anlama geldiğini söyler.");
   showTeamAnalysisTab(teamAnalysisSelectedTab);
 }
-
-const escapeTeamAnalysis = (value) => String(value ?? "").replace(/[&<>"']/g,
-  (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
 
 function setupTeamAnalysis() {
   const tabs = [

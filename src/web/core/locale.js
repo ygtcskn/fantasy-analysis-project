@@ -23,7 +23,7 @@ const FIXTURE_STATES = {
 };
 
 function fixtureStateLabel(fixture) {
-  const code = String(fixture?.["state.developer_name"] || fixture?.state || "").toUpperCase();
+  const code = fixtureState(fixture);
   return FIXTURE_STATES[code] || code || t("Durum yok");
 }
 

@@ -19,7 +19,7 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from src.fetch.sportmonks import BASE, token
-from src.shared import COVERAGE_COLUMNS, number, utc_now, utc_stamp
+from src.shared import COVERAGE_COLUMNS, nonnegative, utc_now, utc_stamp
 
 
 LIVE_SECONDS = 30
@@ -69,11 +69,6 @@ class LiveUnavailable(Exception):
 def positive_id(value):
     text = str(value or "")
     return text if text.isascii() and text.isdigit() and int(text) > 0 else ""
-
-
-def numeric(value):
-    result = number(value)
-    return result if result is not None and result >= 0 else None
 
 
 def records(value):
@@ -190,7 +185,7 @@ def fetch_optional_fixtures(endpoint, params, relation, lineup_details=True):
 
 
 def score_for_period(fixture, team_id, description):
-    values = [numeric((row.get("score") or {}).get("goals"))
+    values = [nonnegative((row.get("score") or {}).get("goals"))
               for row in records(fixture.get("scores"))
               if row.get("description") == description and positive_id(row.get("participant_id")) == team_id]
     return values[0] if len(values) == 1 and values[0] is not None and values[0].is_integer() else None
@@ -202,8 +197,8 @@ def match_minute(fixture):
     if len(ticking) != 1 or int(fixture["state_id"]) not in {2, 6, 9, 22}:
         return "", ""
     period = ticking[0]
-    minute = numeric(period.get("minutes"))
-    start, length = numeric(period.get("counts_from")), numeric(period.get("period_length"))
+    minute = nonnegative(period.get("minutes"))
+    start, length = nonnegative(period.get("counts_from")), nonnegative(period.get("period_length"))
     if minute is None:
         return "", ""
     # time_added is announced stoppage time, not elapsed stoppage time.
@@ -218,8 +213,8 @@ def period_code(period):
         return "1ST_HALF"
     if code in {"2ND_HALF", "SECOND_HALF"}:
         return "2ND_HALF"
-    if numeric(period.get("period_length")) == 45:
-        return {0: "1ST_HALF", 45: "2ND_HALF"}.get(numeric(period.get("counts_from")), code)
+    if nonnegative(period.get("period_length")) == 45:
+        return {0: "1ST_HALF", 45: "2ND_HALF"}.get(nonnegative(period.get("counts_from")), code)
     return code
 
 
@@ -273,14 +268,14 @@ def normalize(fixtures, league_id, season_id, include_finished=False):
                 kind = mapping(stat.get("type"))
                 rows.append(dict(record_type="statistic", fixture_id=fixture_id, team_id=team_id, source=source,
                                  type_id=stat.get("type_id"), code=kind.get("developer_name") or kind.get("code"),
-                                 label=kind.get("name"), value=numeric(mapping(stat.get("data")).get("value"))))
+                                 label=kind.get("name"), value=nonnegative(mapping(stat.get("data")).get("value"))))
         for period in periods:
             rows.append(dict(record_type="period", fixture_id=fixture_id, code=period_code(period),
-                             minute=numeric(period.get("minutes")), ticking=int(period.get("ticking") is True)))
+                             minute=nonnegative(period.get("minutes")), ticking=int(period.get("ticking") is True)))
         for sample in pressure or []:
             team_id = positive_id(sample.get("participant_id"))
-            sample_minute = numeric(sample.get("minute"))
-            value = numeric(sample.get("pressure"))
+            sample_minute = nonnegative(sample.get("minute"))
+            value = nonnegative(sample.get("pressure"))
             if team_id in {home, away} and sample_minute and sample_minute.is_integer() and value is not None:
                 rows.append(dict(record_type="pressure", fixture_id=fixture_id, team_id=team_id,
                                  minute=sample_minute, value=value))
@@ -311,7 +306,7 @@ def normalize(fixtures, league_id, season_id, include_finished=False):
                     # Conflicting/duplicate player metrics remain unavailable.
                     data = detail.get("data")
                     value = data.get("value") if isinstance(data, dict) else detail.get("value")
-                    details[code] = None if code in details else numeric(value)
+                    details[code] = None if code in details else nonnegative(value)
             rows.append(dict(record_type="lineup", fixture_id=fixture_id, team_id=team_id,
                              player_id=player["player_id"], player_name=player.get("player_name"),
                              started={"11": 1, "12": 0}.get(positive_id(player.get("type_id"))),

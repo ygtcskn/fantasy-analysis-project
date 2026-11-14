@@ -3,9 +3,10 @@
 # has reached a checkpoint (or a day has passed); only then does it download,
 # export TFF (about once a day), forecast, rebuild and upload the site. The TFF
 # export and the forecast are optional: if either fails, the site still updates
-# and the run shows a warning. So is sending the chat's data to Cloudflare D1. Cloudflare R2 holds the data between
-# runs (src/sync_data.py). The secrets it needs are the secrets.* names below,
-# set under Settings -> Secrets and variables -> Actions.
+# and the run shows a warning. So is sending the chat's data to Cloudflare D1.
+# Cloudflare R2 holds the data between runs (src/sync_data.py). The secrets it
+# needs are the secrets.* names below, set under Settings -> Secrets and
+# variables -> Actions.
 name: Update fantezianaliz.com
 
 on:
@@ -81,7 +82,8 @@ jobs:
             --path data/temp/site_update/update_runs.csv \
             --path data/final/sportmonks/$SEASON_FOLDER/fixtures.csv \
             --path data/final/sportmonks/$SEASON_FOLDER/download_status.csv \
-            --path data/final/odds/predictions.csv             --path data/final/tff_fantasy/tff_players.csv
+            --path data/final/odds/predictions.csv \
+            --path data/final/tff_fantasy/tff_players.csv
 
       - name: Is an update due?
         id: due
@@ -122,7 +124,8 @@ jobs:
       - name: Save the new data to R2
         if: steps.update.outcome == 'success'
         run: |
-          python src/sync_data.py push --path data/final --path data/raw/sportmonks/$SEASON_FOLDER             --path data/raw/tff_fantasy --path data/temp/tff_fantasy
+          python src/sync_data.py push --path data/final --path data/raw/sportmonks/$SEASON_FOLDER \
+            --path data/raw/tff_fantasy --path data/temp/tff_fantasy
 
       - name: Keep the log of a failed update
         if: failure() && steps.due.outputs.due == 'true'

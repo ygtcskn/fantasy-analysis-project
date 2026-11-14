@@ -10,6 +10,8 @@
 const FINISHED_STATES = new Set(["FT", "AET", "FT_PEN", "AWARDED", "WO"]);
 // Not kicked off, or never will be: no score is shown even if one is saved.
 const UNPLAYED_STATES = new Set(["NS", "TBA", "PENDING", "DELAYED", "POSTP", "POSTPONED", "CANC", "CANCELLED", "DELETED"]);
+// On the calendar and not yet kicked off: a fixture a forecast may target.
+const SCHEDULED_STATES = new Set(["NS", "TBA"]);
 // A match the statistics feed described at all. One of these present means a
 // blank elsewhere in the row is none; without them a blank stays unknown.
 const COVERAGE_COLUMNS = ["touches", "passes", "total_duels", "shots_total", "fouls", "possession_lost"];
@@ -27,6 +29,10 @@ function fixtureFinished(fixture) {
 
 function fixtureUnplayed(fixture) {
   return UNPLAYED_STATES.has(fixtureState(fixture));
+}
+
+function fixtureScheduled(fixture) {
+  return SCHEDULED_STATES.has(fixtureState(fixture));
 }
 
 // A player row is an appearance when he was on the pitch. Lineups also list
@@ -66,7 +72,8 @@ function currentRoundIndex(rounds, now = Date.now()) {
 }
 
 // The same rule for a team's match statistics (team_metrics.csv), covered when
-// any of these is recorded - TEAM_COVERAGE_COLUMNS in src/shared.py.
+// any of these is recorded. Only the pages total team statistics, so this list
+// has no copy in src/shared.py.
 // Team card counts come only from here, on every page: Sportmonks counts a
 // second yellow as a yellow card, and any dismissal as a red card.
 const TEAM_COVERAGE_COLUMNS = ["passes", "shots_total", "fouls", "ball_possession", "duels_won"];
@@ -98,6 +105,6 @@ function profileName(profile) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { FINISHED_STATES, fixtureState, fixtureFinished, fixtureUnplayed, playerAppeared, rowCovered,
+  module.exports = { FINISHED_STATES, fixtureState, fixtureFinished, fixtureUnplayed, fixtureScheduled, playerAppeared, rowCovered,
     countedValue, validMatchRating, currentRoundIndex, teamCountedValue, profileName };
 }

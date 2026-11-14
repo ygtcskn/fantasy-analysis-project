@@ -14,7 +14,8 @@ const expected = {
   "fixture_scores.csv": ["fixture_id", "participant_id", "description", "score.goals"],
 };
 const $ = (id) => document.getElementById(id);
-const number = (value) => value === undefined || value === null || String(value).trim() === "" ? null : Number.isFinite(Number(value)) ? Number(value) : null;
+// A blank is not a zero: the site's one rule for numbers (core/match-rules.js).
+const number = ruleNumber;
 const displayNumber = (value) => number(value) === null ? "—" : new Intl.NumberFormat(LOCALE, { maximumFractionDigits: 2 }).format(Number(value));
 const teamName = (id, teams) => teams.get(id)?.name || (id ? t("Takım {id}", { id }) : "—");
 

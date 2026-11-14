@@ -22,15 +22,8 @@ const socialState = {
 const socialTimeFormat = new Intl.DateTimeFormat(LOCALE, { timeZone: MATCH_TIME_ZONE, dateStyle: "medium", timeStyle: "short" });
 const socialDayFormat = new Intl.DateTimeFormat(LOCALE, { timeZone: MATCH_TIME_ZONE, day: "numeric", month: "short" });
 
-function socialNode(tag, className, text) {
-  const node = document.createElement(tag);
-  node.className = className;
-  if (text !== undefined) node.textContent = text;
-  return node;
-}
-
 function socialButton(label, handler, className = "social-button") {
-  const button = socialNode("button", className, label);
+  const button = element("button", className, label);
   button.type = "button";
   button.addEventListener("click", handler);
   return button;
@@ -102,7 +95,7 @@ async function startSocialDraft(key, topicId) {
 }
 
 function socialField(form, label, name, multiline, maxLength, value = "") {
-  const wrapper = socialNode("label", "", label);
+  const wrapper = element("label", "", label);
   const input = document.createElement(multiline ? "textarea" : "input");
   input.name = name;
   input.maxLength = maxLength;
@@ -115,18 +108,18 @@ function socialField(form, label, name, multiline, maxLength, value = "") {
 
 function socialForm(draftKey, isTopic, onSubmit) {
   const draft = socialState.drafts.get(draftKey) || {};
-  const form = socialNode("form", "social-form");
+  const form = element("form", "social-form");
   form.noValidate = true;
   form.dataset.draft = draftKey;
-  const author = socialNode("p", "social-form-author", `${t("Yazan:")} `);
+  const author = element("p", "social-form-author", `${t("Yazan:")} `);
   author.append(profileAvatar(siteProfile.data, 20), siteProfile.data?.nickname || "—");
   form.append(author);
   const title = isTopic ? socialField(form, t("Konu başlığı"), "title", false, 120, draft.title) : null;
   const body = socialField(form, isTopic ? t("Ne düşünüyorsun?") : t("Yanıtın"), "body", true, 3000, draft.body);
-  const error = socialNode("p", "social-form-error");
+  const error = element("p", "social-form-error");
   error.hidden = true;
-  const actions = socialNode("div", "social-actions");
-  const submit = socialNode("button", "social-button social-submit", isTopic ? t("Konuyu aç") : t("Yanıtla"));
+  const actions = element("div", "social-actions");
+  const submit = element("button", "social-button social-submit", isTopic ? t("Konuyu aç") : t("Yanıtla"));
   submit.type = "submit";
   actions.append(submit, socialButton(t("Vazgeç"), () => { socialState.drafts.delete(draftKey); renderSocial(); }));
   form.append(error, actions);
@@ -183,38 +176,38 @@ function socialAuthorAvatar(post, size) {
 }
 
 function socialPost(post, table, removeLocally) {
-  const article = socialNode("article", "social-post");
-  const meta = socialNode("p", "social-post-meta");
+  const article = element("article", "social-post");
+  const meta = element("p", "social-post-meta");
   meta.append(socialAuthorAvatar(post, 22));
-  const time = socialNode("time", "", socialTimeFormat.format(new Date(post.created_at)));
+  const time = element("time", "", socialTimeFormat.format(new Date(post.created_at)));
   time.dateTime = post.created_at;
-  meta.append(socialNode("strong", "", post.author_nickname), document.createTextNode(" · "), time);
+  meta.append(element("strong", "", post.author_nickname), document.createTextNode(" · "), time);
   if (siteAuth.user?.id === post.user_id) {
     meta.append(socialButton(t("Sil"), () => deleteSocialPost(table, post, removeLocally), "social-delete"));
   }
-  article.append(meta, socialNode("p", "social-post-body", post.body));
+  article.append(meta, element("p", "social-post-body", post.body));
   return article;
 }
 
 function socialTopicRow(topic, siblings) {
-  const details = socialNode("details", "social-topic");
+  const details = element("details", "social-topic");
   const draftKey = `topic:${topic.id}`;
   details.open = socialState.open.has(topic.id) || socialState.drafts.has(draftKey);
   details.addEventListener("toggle", () => {
     if (details.open) socialState.open.add(topic.id); else socialState.open.delete(topic.id);
   });
-  const summary = socialNode("summary", "social-topic-row");
-  const identity = socialNode("span", "social-topic-identity");
-  const byline = socialNode("small", "social-topic-byline");
+  const summary = element("summary", "social-topic-row");
+  const identity = element("span", "social-topic-identity");
+  const byline = element("small", "social-topic-byline");
   byline.append(socialAuthorAvatar(topic, 18), `${topic.author_nickname} · ${socialDayFormat.format(new Date(topic.created_at))}`);
-  identity.append(socialNode("strong", "", topic.title), byline);
-  summary.append(socialNode("span", "social-topic-icon", "↳"), identity, socialNode("span", "social-reply-count", t("{count} yanıt", { count: topic.replies.length }, topic.replies.length)));
-  const content = socialNode("div", "social-discussion");
-  const replies = socialNode("div", "social-replies");
+  identity.append(element("strong", "", topic.title), byline);
+  summary.append(element("span", "social-topic-icon", "↳"), identity, element("span", "social-reply-count", t("{count} yanıt", { count: topic.replies.length }, topic.replies.length)));
+  const content = element("div", "social-discussion");
+  const replies = element("div", "social-replies");
   for (const reply of topic.replies) {
     replies.append(socialPost(reply, "match_replies", () => topic.replies.splice(topic.replies.indexOf(reply), 1)));
   }
-  const replyArea = socialNode("div", "");
+  const replyArea = element("div", "");
   if (socialState.drafts.has(draftKey)) {
     replyArea.append(socialForm(draftKey, false, async ({ body }) => {
       const client = await loadAuth();
@@ -253,31 +246,31 @@ function renderSocial() {
   select.value = socialState.round || "";
   container.replaceChildren();
   if (!fixtures.length) {
-    container.append(socialNode("p", "social-empty", t("Henüz fikstür yüklenmedi. Sezon verileri yüklendiğinde haftanın maçları ve her maçın konu alanı burada görünecek.")));
+    container.append(element("p", "social-empty", t("Henüz fikstür yüklenmedi. Sezon verileri yüklendiğinde haftanın maçları ve her maçın konu alanı burada görünecek.")));
     return;
   }
   if (!authEnabled()) {
-    container.append(socialNode("p", "social-empty", t("Maç Tribünü şu anda kullanılamıyor.")));
+    container.append(element("p", "social-empty", t("Maç Tribünü şu anda kullanılamıyor.")));
     return;
   }
   const roundFixtures = rounds.get(socialState.round)?.fixtures || [];
   const loadKey = `${state.seasonSlug}|${socialState.round}`;
   if (loadKey !== socialState.loadedKey) loadSocialRound(roundFixtures.map((fixture) => fixture.fixture_id), loadKey);
   const loading = socialState.status === "loading";
-  if (socialState.status === "error") container.append(socialNode("p", "social-empty social-load-error", socialState.error));
+  if (socialState.status === "error") container.append(element("p", "social-empty social-load-error", socialState.error));
   for (const fixture of roundFixtures) {
     if (!socialState.topics.has(String(fixture.fixture_id))) socialState.topics.set(String(fixture.fixture_id), []);
     const topics = socialState.topics.get(String(fixture.fixture_id));
-    const match = socialNode("article", "social-match");
-    const header = socialNode("header", "social-match-header");
-    const heading = socialNode("div", "social-match-heading");
+    const match = element("article", "social-match");
+    const header = element("header", "social-match-header");
+    const heading = element("div", "social-match-heading");
     const home = teams.get(fixture.home_team_id) || t("Takım {id}", { id: fixture.home_team_id || "—" });
     const away = teams.get(fixture.away_team_id) || t("Takım {id}", { id: fixture.away_team_id || "—" });
-    heading.append(socialNode("p", "social-match-date", kickoffText(fixture)), socialNode("h3", "", `${home} — ${away}`));
+    heading.append(element("p", "social-match-date", kickoffText(fixture)), element("h3", "", `${home} — ${away}`));
     const draftKey = `fixture:${fixture.fixture_id}`;
-    header.append(heading, socialNode("span", "social-topic-count", loading ? "…" : t("{count} konu", { count: topics.length }, topics.length)),
+    header.append(heading, element("span", "social-topic-count", loading ? "…" : t("{count} konu", { count: topics.length }, topics.length)),
       socialButton(t("+ Konu aç"), () => startSocialDraft(draftKey)));
-    const composer = socialNode("div", "social-composer");
+    const composer = element("div", "social-composer");
     if (socialState.drafts.has(draftKey)) {
       composer.append(socialForm(draftKey, true, async ({ title, body }) => {
         const client = await loadAuth();
@@ -290,10 +283,10 @@ function renderSocial() {
         setSocialStatus(t("Konun açıldı."));
       }));
     }
-    const topicList = socialNode("div", "social-topic-list");
-    if (loading) topicList.append(socialNode("p", "social-empty", t("Konular yükleniyor…")));
-    else if (socialState.status === "error") topicList.append(socialNode("p", "social-empty", t("Konular yüklenemedi.")));
-    else if (!topics.length) topicList.append(socialNode("p", "social-empty", t("Tribün henüz sessiz. Bu maçın ilk konusunu sen aç.")));
+    const topicList = element("div", "social-topic-list");
+    if (loading) topicList.append(element("p", "social-empty", t("Konular yükleniyor…")));
+    else if (socialState.status === "error") topicList.append(element("p", "social-empty", t("Konular yüklenemedi.")));
+    else if (!topics.length) topicList.append(element("p", "social-empty", t("Tribün henüz sessiz. Bu maçın ilk konusunu sen aç.")));
     else topicList.append(...topics.map((topic) => socialTopicRow(topic, topics)));
     match.append(header, composer, topicList);
     container.append(match);
