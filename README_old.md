@@ -22,11 +22,11 @@ Picking a fantasy XI means comparing players with different prices, positions, o
 | --- | --- | --- |
 | Data collection | Collected Sportmonks season data with pagination, raw CSV captures, caching, and audits. | [Downloader](src/fetch/download_season.py) · [Audit](src/fetch/audit_season.py) |
 | Live API data | Built a separate local feed for match scores and events with bounded polling and explicit unavailable states. | [Live feed](src/web/live.py) · [Match centre](src/web/features/matchweek/live-centre.js) |
-| Cleaning and analysis | Prepared season CSVs, reviewed player identity matches across sources, reconstructed fantasy points, and built player projections and XI selection. | [Pipeline](src/run_pipeline.py) · [Identity matching](src/fetch/update_tff_players.py) · [Projections](src/player_projections/README.md) |
-| Match probabilities and odds | Implemented and evaluated Poisson and XGBoost models; converted outcome probabilities into implied fair odds. | [Model and evaluation](src/odds/README.md) · [Implementation](src/odds/run.py) |
-| Visualizations | Created player peer distributions, team comparisons, radar charts, and match-flow views. | [Distribution panel](src/web/features/statistics/distribution.md) · [Team charts](src/web/lib/team-analysis.md) |
-| Dashboards | Built a bilingual website with light and dark modes for matches, players, clubs, forecasts, and fantasy squad building. | [Website guide](src/web/README.md) · [Page source](src/web/index.html) |
-| AI assistant | Built local and public chat endpoints that answer statistics questions using database tools. | [Chatbot guides](docs/chatbot/README.md) · [Tools](src/chat/tools.py) · [Public endpoint](functions/api/chat.js) |
+| Cleaning and analysis | Prepared season CSVs, reviewed player identity matches across sources, reconstructed fantasy points, and built player projections and XI selection. | [Pipeline](src/run_pipeline.py) · [Identity matching](src/fetch/update_tff_players.py) · [Projections](src/player_projections/run.py) |
+| Match probabilities and odds | Implemented and evaluated Poisson and XGBoost models; converted outcome probabilities into implied fair odds. | [Models](src/odds/models.py) · [Implementation](src/odds/run.py) |
+| Visualizations | Created player peer distributions, team comparisons, radar charts, and match-flow views. | [Distribution panel](src/web/features/statistics/distribution.js) · [Team charts](src/web/lib/team-analysis.js) |
+| Dashboards | Built a bilingual website with light and dark modes for matches, players, clubs, forecasts, and fantasy squad building. | [Page source](src/web/index.html) · [Site code](src/web/core/site.js) |
+| AI assistant | Built local and public chat endpoints that answer statistics questions using database tools. | [Assistant](src/chat/assistant.py) · [Tools](src/chat/tools.py) · [Public endpoint](functions/api/chat.js) |
 
 ## Data flow
 
@@ -76,4 +76,4 @@ The stacked bars show each club's recorded fantasy points split by goalkeeper, d
 
 ## Explore the project
 
-Start with the [live website](https://fantezianaliz.com/) to see the dashboards. The [data pipeline](src/run_pipeline.py), [odds model](src/odds/README.md), [website guide](src/web/README.md), and [chatbot guides](docs/chatbot/README.md) explain the main parts of the implementation. Model probabilities and fair odds are estimates, not bookmaker prices or a guarantee of fantasy results.
+Start with the [live website](https://fantezianaliz.com/) to see the dashboards. Explore the [data pipeline](src/run_pipeline.py), [odds model](src/odds/run.py), [website source](src/web/index.html), and [chatbot code](src/chat/assistant.py) for the main parts of the implementation. Model probabilities and fair odds are estimates, not bookmaker prices or a guarantee of fantasy results.
