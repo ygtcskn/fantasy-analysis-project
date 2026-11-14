@@ -3,9 +3,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from src.points.run import (ROOT, build_season, published_generation, tff_positions,
-                           unfinished_clubs, warn_if_unpublishing, write_csv)
+from src.points.run import ROOT, build_season, tff_positions, unfinished_clubs
 from src.points.rules import ScoringRules
+from src.shared import write_csv
 
 
 class PointsTests(unittest.TestCase):
@@ -74,10 +74,6 @@ class PointsTests(unittest.TestCase):
             tff_positions(path)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class UnfinishedFixtureTests(unittest.TestCase):
     """A stale download must not be reported as a scoring error."""
 
@@ -105,42 +101,5 @@ class UnfinishedFixtureTests(unittest.TestCase):
             self.assertEqual(unfinished_clubs("2026-2027", Path(name)), set())
 
 
-class PublishedGenerationTests(unittest.TestCase):
-    """A standalone rebuild must announce that it broke the published set."""
-
-    def write(self, path, header, row):
-        path.write_text(f"{header}\n{row}\n", encoding="utf-8")
-
-    def test_a_stamped_file_reports_its_generation(self):
-        with tempfile.TemporaryDirectory() as name:
-            path = Path(name) / "ledger.csv"
-            self.write(path, "player_id,points_total,pipeline_run_id", "1,5,20260908T200724Z_abc")
-            self.assertEqual(published_generation(path), "20260908T200724Z_abc")
-
-    def test_an_untagged_file_reports_nothing(self):
-        with tempfile.TemporaryDirectory() as name:
-            path = Path(name) / "ledger.csv"
-            self.write(path, "player_id,points_total", "1,5")
-            self.assertEqual(published_generation(path), "")
-
-    def test_a_missing_or_empty_file_reports_nothing(self):
-        with tempfile.TemporaryDirectory() as name:
-            missing = Path(name) / "absent.csv"
-            self.assertEqual(published_generation(missing), "")
-            empty = Path(name) / "empty.csv"
-            empty.write_text("player_id,pipeline_run_id\n", encoding="utf-8")
-            self.assertEqual(published_generation(empty), "")
-
-    def test_the_warning_fires_only_when_a_generation_was_replaced(self):
-        import contextlib
-        import io as stream_io
-        for generations, expected in (([""], False), (["", ""], False),
-                                      (["20260908T200724Z_abc", ""], True)):
-            captured = stream_io.StringIO()
-            with contextlib.redirect_stdout(captured):
-                warn_if_unpublishing(generations, "2026-2027")
-            printed = captured.getvalue()
-            self.assertEqual(bool(printed.strip()), expected)
-            if expected:
-                self.assertIn("20260908T200724Z_abc", printed)
-                self.assertIn("run_pipeline.py --season 2026-2027", printed)
+if __name__ == "__main__":
+    unittest.main()

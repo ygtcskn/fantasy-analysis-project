@@ -1,7 +1,4 @@
-"""What both AI providers share: the bot's rules, its limits, and the shape of a reply.
-
-Step 4 of the chatbot guide (docs/chatbot/04-connect-the-ai.md).
-"""
+"""Instructions, limits, and reply metadata for the football assistant."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -41,7 +38,6 @@ class Reply:
     rounds: int = 0
     input_tokens: int = 0
     output_tokens: int = 0
-    cost_usd: float = 0.0
     stopped: str = ""      # why it ended, for example end_turn, completed, refusal or max_rounds
 
 

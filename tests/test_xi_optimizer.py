@@ -1,17 +1,10 @@
-"""Source-only regression tests; run explicitly with unittest."""
+"""Regression tests for squad constraints, recommendations, and risk."""
 from collections import Counter
 from dataclasses import replace
-import importlib.util
-from pathlib import Path
-import sys
 import unittest
 
-_spec = importlib.util.spec_from_file_location(
-    "xi_optimizer_model", Path(__file__).resolve().parents[1] / "src/xi_optimizer/optimizer.py")
-_model = importlib.util.module_from_spec(_spec)
-sys.modules["xi_optimizer_model"] = _model
-_spec.loader.exec_module(_model)
-Player, optimize, recommend = _model.Player, _model.optimize, _model.recommend
+from src.xi_optimizer import optimizer as _model
+from src.xi_optimizer.optimizer import Player, optimize, recommend
 
 
 def pool():

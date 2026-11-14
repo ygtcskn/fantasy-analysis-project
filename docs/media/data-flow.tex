@@ -1,0 +1,91 @@
+% Compile with pdflatex data-flow.tex. Convert the PDF with pdftocairo -svg
+% data-flow.pdf data-flow.svg to regenerate the README image.
+\documentclass[tikz,border=0pt]{standalone}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usetikzlibrary{arrows.meta}
+
+% Fantezi Analiz dark theme and live match accent from the site's stylesheet.
+\definecolor{Paper}{HTML}{0D0914}
+\definecolor{Surface}{HTML}{171020}
+\definecolor{Raised}{HTML}{21172D}
+\definecolor{Line}{HTML}{3A2C49}
+\definecolor{Ink}{HTML}{F5F1F8}
+\definecolor{Muted}{HTML}{A99CB3}
+\definecolor{Lavender}{HTML}{B785F5}
+\definecolor{Green}{HTML}{3FD89A}
+
+\newcommand{\cardtitle}[1]{{\fontsize{14.5bp}{16bp}\selectfont\bfseries #1}}
+\newcommand{\detail}[1]{{\fontsize{10.8bp}{12bp}\selectfont\color{Muted}#1}}
+
+\begin{document}
+\sffamily
+\begin{tikzpicture}[
+  x=1bp, y=1bp,
+  card/.style={
+    draw=Line, fill=Surface, text=Ink, line width=.8bp, rounded corners=9bp,
+    text width=148bp, minimum height=56bp, inner xsep=8bp, inner ysep=6bp, align=center
+  },
+  source/.style={card, draw=Lavender!72!Line, fill=Raised},
+  output/.style={card, draw=Lavender!72!Line, fill=Raised},
+  live card/.style={card, draw=Green!65!Line},
+  live output/.style={live card, fill=Raised},
+  connector/.style={draw=Lavender, line width=1.15bp, rounded corners=7bp},
+  flow/.style={connector, -{Stealth[length=6bp,width=5.1bp]}},
+  live flow/.style={flow, draw=Green},
+]
+\path[use as bounding box] (0,0) rectangle (782,455);
+\path[fill=Paper, rounded corners=16bp] (0,0) rectangle (782,455);
+\node[anchor=west, inner sep=0, text=Ink, font=\fontsize{27bp}{30bp}\selectfont\bfseries]
+  at (27,421) {Data flow};
+\draw[draw=Line, line width=.7bp] (27,397) -- (755,397);
+
+% Provider data and shared season tables.
+\node[source] (sportmonks) at (109,351) {\cardtitle{Sportmonks API}\\[4bp]\detail{Fixtures and statistics}};
+\node[card] (raw) at (297,351) {\cardtitle{Raw CSV captures}\\[4bp]\detail{Saved provider responses}};
+\node[card] (season) at (485,351) {\cardtitle{Clean season CSVs}\\[4bp]\detail{Fixture, team and player IDs}};
+\node[source] (tff) at (673,351) {\cardtitle{TFF Fantasy snapshot}\\[4bp]\detail{Positions, prices and totals}};
+
+% Processing passes.
+\node[live card] (poller) at (109,247) {\cardtitle{Live API poller}\\[4bp]\detail{Cached CSV snapshots}};
+\node[card] (db) at (297,247) {\cardtitle{SQLite database}\\[4bp]\detail{Match and player records}};
+\node[card] (odds) at (485,247) {\cardtitle{Match probabilities}\\[4bp]\detail{Poisson, Dixon--Coles, XGBoost}};
+\node[card] (matching) at (673,247) {\cardtitle{Player ID matching}\\[4bp]\detail{Reviewed Sportmonks IDs}};
+
+% Product outputs and final fantasy steps.
+\node[live output] (live) at (109,143) {\cardtitle{Live dashboard}\\[4bp]\detail{Local scores and events}};
+\node[output] (assistant) at (297,143) {\cardtitle{AI assistant}\\[4bp]\detail{Answers from SQL tools}};
+\node[output] (site) at (485,143) {\cardtitle{Published dashboard}\\[4bp]\detail{Stats, forecasts and charts}};
+\node[card] (scoring) at (673,143) {\cardtitle{Fantasy scoring}\\[4bp]\detail{Points and player projections}};
+\node[output] (recommendations) at (485,48) {\cardtitle{XI recommendations}\\[4bp]\detail{Local lineup suggestions}};
+\node[card] (optimizer) at (673,48) {\cardtitle{XI optimization}\\[4bp]\detail{Budget and squad limits}};
+
+\draw[flow] (sportmonks.east) -- (raw.west);
+\draw[flow] (raw.east) -- (season.west);
+\draw[live flow] (sportmonks.south) -- (poller.north);
+\draw[live flow] (poller.south) -- (live.north);
+
+% Share the connector for the two direct consumers of the season tables.
+\coordinate (csv-fork) at (391,299);
+\draw[connector] ([xshift=-45bp]season.south) |- (csv-fork);
+\draw[flow] (csv-fork) -| (db.north);
+\draw[flow] (csv-fork) |- (site.west);
+\fill[Lavender] (csv-fork) circle[radius=2.15bp];
+\draw[flow] (db.south) -- (assistant.north);
+
+\draw[flow] (season.south) -- (odds.north);
+\draw[flow] ([xshift=45bp]season.south) -- (530,299) -| ([xshift=-44bp]matching.north);
+\draw[flow] (tff.south) -- (matching.north);
+\draw[flow] (odds.south) -- (site.north);
+\draw[flow] ([xshift=45bp]odds.south) -- (530,195) -| ([xshift=-44bp]scoring.north);
+\draw[flow] (matching.south) -- (scoring.north);
+\draw[flow] (scoring.west) -- (site.east);
+\draw[flow] (scoring.south) -- (optimizer.north);
+\draw[flow] (optimizer.west) -- (recommendations.east);
+
+\draw[flow] (27,48) -- (49,48);
+\node[anchor=west, inner sep=0] at (57,48) {\detail{Season and fantasy data}};
+\draw[live flow] (209,48) -- (231,48);
+\node[anchor=west, inner sep=0] at (239,48) {\detail{Live match data}};
+\end{tikzpicture}
+\end{document}

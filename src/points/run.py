@@ -29,7 +29,6 @@ import hashlib
 import math
 import re
 import statistics
-import sqlite3
 import sys
 import uuid
 from collections import defaultdict
@@ -41,8 +40,7 @@ if str(ROOT) not in sys.path:  # Run as a file, the project root is not on the p
     sys.path.insert(0, str(ROOT))
 
 from src.shared import (  # noqa: E402
-    in_progress, is_played, number_or, published_generation, read_csv, season_folder, utc_now, utc_stamp,
-    warn_if_unpublishing, write_csv,
+    in_progress, is_played, number, number_or, read_csv, season_folder, utc_now, utc_stamp, write_csv,
 )
 
 if __package__:
@@ -52,7 +50,6 @@ else:
 
 INPUT = ROOT / "data" / "final" / "sportmonks"
 RULES = ROOT / "config" / "tff_scoring_rules.csv"
-DATABASE = ROOT / "data" / "superlig.sqlite"
 TFF_PLAYERS = ROOT / "data" / "final" / "tff_fantasy" / "tff_players.csv"
 OUTPUT = ROOT / "data" / "final" / "points"
 RUNS = ROOT / "data" / "temp" / "points" / "runs"
@@ -82,22 +79,6 @@ SUMMARY_COLUMNS = (
 
 # ------------------------------------------------------------- fantasy positions
 
-def load_tff_players(source: Path) -> list[dict]:
-    if source.suffix.lower() == ".csv":
-        if not source.is_file():
-            raise ValueError(f"TFF player CSV is missing: {source}")
-        return read_csv(source)
-    # Explicit legacy --database input only; normal builds consume the current CSV.
-    if not source.is_file():
-        raise ValueError(f"TFF database is missing: {source}")
-    connection = sqlite3.connect(source.resolve().as_uri() + "?mode=ro", uri=True)
-    connection.row_factory = sqlite3.Row
-    try:
-        return [dict(r) for r in connection.execute("select * from tff_players")]
-    finally:
-        connection.close()
-
-
 def tff_positions(source: Path) -> tuple[dict, list[dict]]:
     """Fantasy position per Sportmonks player id, plus the unmatched pool.
 
@@ -105,7 +86,7 @@ def tff_positions(source: Path) -> tuple[dict, list[dict]]:
     it exists. It only covers the current player pool, which is why the
     Sportmonks per-match position remains the fallback for earlier seasons.
     """
-    rows = load_tff_players(source)
+    rows = read_csv(source, required=True)
     mapped, unmatched = {}, []
     for row in rows:
         position = (row.get("position") or "").strip().upper()
@@ -326,7 +307,7 @@ def unfinished_clubs(season: str, input_root: Path = INPUT) -> set[str]:
 
 
 def reconcile(ledger: list[dict], season: str, source: Path,
-              before: str = "") -> list[dict]:
+              before: str = "", *, input_root: Path = INPUT) -> list[dict]:
     """Season totals against the game's own `tp`, for matched players.
 
     ``before`` excludes fixtures from the comparison that kicked off on or
@@ -342,9 +323,9 @@ def reconcile(ledger: list[dict], season: str, source: Path,
     groups is the difference between "rebuild after downloading" and "the rules
     are wrong".
     """
-    players = [row for row in load_tff_players(source)
+    players = [row for row in read_csv(source, required=True)
                if row.get("match_status") == "matched" and row.get("sportmonks_player_id")]
-    unfinished = unfinished_clubs(season)
+    unfinished = unfinished_clubs(season, input_root)
     totals: dict = defaultdict(float)
     minutes: dict = defaultdict(float)
     for row in ledger:
@@ -356,17 +337,21 @@ def reconcile(ledger: list[dict], season: str, source: Path,
         minutes[row["player_id"]] += row["minutes_played"]
     rows = []
     for player in players:
+        official = number(player.get("tp"))
+        if official is None:
+            continue
         key = str(player["sportmonks_player_id"])
         computed = totals.get(key, 0.0)
-        official = number_or(player["tp"])
+        official_minutes = number(player.get("od"))
+        computed_minutes = minutes.get(key, 0.0)
         rows.append({
             "player_name": player["player_name"], "team_name": player["team_name"],
             "position": player["position"], "player_id": key,
             "official_points": official, "computed_points": computed,
             "difference": computed - official,
-            "official_minutes": number_or(player["od"]),
-            "computed_minutes": minutes.get(key, 0.0),
-            "minutes_difference": minutes.get(key, 0.0) - number_or(player.get("od")),
+            "official_minutes": official_minutes,
+            "computed_minutes": computed_minutes,
+            "minutes_difference": computed_minutes - official_minutes if official_minutes is not None else None,
             "snapshot_file": player.get("snapshot_file", ""),
             "club_fixture_unfinished": str(player.get("sportmonks_team_id", "")) in unfinished,
             "comparison_status": "explicit_fixture_cutoff" if before else "provisional_snapshot_alignment",
@@ -385,9 +370,7 @@ def main(argv=None) -> int:
     parser.add_argument("--input-root", type=Path, default=INPUT)
     parser.add_argument("--rules", type=Path, default=RULES)
     parser.add_argument("--tff-players", type=Path, default=TFF_PLAYERS,
-                        help="Current reviewed TFF CSV (normal pipeline input).")
-    parser.add_argument("--database", type=Path,
-                        help="Explicit legacy alternative to --tff-players; read only.")
+                        help="Reviewed TFF player CSV.")
     parser.add_argument("--tff-season", help="Season to which current TFF positions apply; defaults to newest built.")
     parser.add_argument("--output-root", type=Path, default=OUTPUT)
     parser.add_argument("--runs-root", type=Path, default=RUNS)
@@ -418,7 +401,7 @@ def main(argv=None) -> int:
     if not seasons:
         raise ValueError("No downloaded seasons found")
     tff_season = season_folder(args.tff_season) if args.tff_season else seasons[-1]
-    source = args.database or args.tff_players
+    source = args.tff_players
     positions, unmatched = tff_positions(source)
     if args.reconcile_before:
         datetime.strptime(args.reconcile_before, "%Y-%m-%d")
@@ -451,7 +434,7 @@ def main(argv=None) -> int:
     target = season_folder(args.reconcile_season) if args.reconcile_season else tff_season
     if target != tff_season:
         raise ValueError("Reconciliation season must match the current TFF snapshot season")
-    checks = reconcile(ledger, target, source, args.reconcile_before or "")
+    checks = reconcile(ledger, target, source, args.reconcile_before or "", input_root=args.input_root)
 
     run = args.runs_root / (utc_now().strftime("%Y%m%dT%H%M%SZ")
                             + "_ledger_" + uuid.uuid4().hex[:8])
@@ -478,9 +461,6 @@ def main(argv=None) -> int:
         {"path": str(path.resolve()), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
         for path in input_paths
     ])
-    # Read the stamps before they are overwritten, not after.
-    replaced = [published_generation(args.output_root / name) for name in
-                ("player_match_points.csv", "player_season_summary.csv")]
     write_csv(args.output_root / "player_match_points.csv", ledger, LEDGER_COLUMNS)
     write_csv(args.output_root / "player_season_summary.csv", summary, SUMMARY_COLUMNS)
 
@@ -507,11 +487,11 @@ def main(argv=None) -> int:
         if stale:
             print(f"  of which {len(stale)} play for a club whose fixture had not finished "
                   f"when this data was captured, so they are short a match:")
-            print(f"    comparable players: {accuracy(comparable)}")
+            if comparable:
+                print(f"    comparable players: {accuracy(comparable)}")
             print(f"    stale-fixture players: {accuracy(stale)}")
             print("  Re-download the season and rebuild before reading the stale group "
                   "as a scoring error.")
-    warn_if_unpublishing(replaced, target)
     print(f"\nLedger: {args.output_root / 'player_match_points.csv'}")
     print(f"Run record: {run}")
     return 0

@@ -1,7 +1,7 @@
-# Local credentials
+# Local credentials and downloaded or generated data
 .env
 .env.*
-!.env.example
+/data/
 
 # Python environments and caches
 .venv/
@@ -18,9 +18,7 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
-# Downloaded, generated, and local data. Only the top-level folder: the
-# website's src/web/data/ is code and must reach GitHub, which publishes it.
-/data/
+# Local working files
 tmp/
 temp/
 *.sqlite
@@ -29,10 +27,3 @@ temp/
 *.db
 *.db-*
 *.log
-
-# Cloudflare wrangler state
-.wrangler/
-
-# Browser/test output
-playwright-report/
-test-results/

@@ -20,35 +20,19 @@ Picking a fantasy XI means comparing players with different prices, positions, o
 
 | Area | My work | Code and details |
 | --- | --- | --- |
-| Data collection | Collected Sportmonks season data with pagination, raw CSV captures, caching, and audits. | [README](docs/portfolio/data-collection/README.md) |
-| Live API data | Built a separate local feed for match scores and events with bounded polling and explicit unavailable states. | [README](docs/portfolio/live-api/README.md) |
-| Cleaning and analysis | Prepared season CSVs, reviewed player identity matches across sources, reconstructed fantasy points, and built player projections and XI selection. | [README](docs/portfolio/cleaning-analysis/README.md) |
-| Match probabilities and odds | Implemented and evaluated Poisson and XGBoost models; converted outcome probabilities into implied fair odds. | [README](docs/portfolio/odds-model/README.md) |
-| Visualizations | Created player peer distributions, team comparisons, radar charts, and match-flow views. | [README](docs/portfolio/visualizations/README.md) |
-| Dashboards | Built a bilingual website with light and dark modes for matches, players, clubs, forecasts, and fantasy squad building. | [README](docs/portfolio/dashboards/README.md) |
-| AI assistant | Built local and public chat endpoints that answer statistics questions using database tools. | [README](docs/portfolio/ai-assistant/README.md) |
+| Data collection, cleaning, and analysis | Collected Sportmonks data, reviewed TFF player identities, prepared analysis-ready CSVs, reconstructed fantasy points, and generated projections. | [Data pipeline](docs/portfolio/data-pipeline.md) |
+| Live API data | Built a separate local feed for match scores and events with bounded polling and explicit unavailable states. | [Live match data](docs/portfolio/live-match-data.md) |
+| Match probabilities and odds | Implemented and evaluated Poisson and XGBoost models; converted outcome probabilities into implied fair odds. | [Match probabilities and fair odds](docs/portfolio/match-probabilities.md) |
+| Fantasy scoring and XI optimization | Checked reconstructed season totals against TFF and optimized an XI under budget, formation, and club limits. | [Fantasy scoring and XI optimization](docs/portfolio/fantasy-scoring-and-xi-optimization.md) |
+| Visualizations | Created player peer distributions, team comparisons, radar charts, and match-flow views. | [Player analysis and visualizations](docs/portfolio/player-analysis.md) |
+| Dashboards | Built dashboards for matches, players, clubs, forecasts, and fantasy squad building, with light and dark modes. | [Fantasy football dashboards](docs/portfolio/fantasy-football-dashboards.md) |
+| AI assistant | Built local and public chat endpoints that answer statistics questions using database tools. | [AI assistant for football statistics](docs/portfolio/ai-assistant.md) |
 
 ## Data flow
 
-```mermaid
-flowchart TD
-    SM[Sportmonks API] --> RAW[Raw CSV captures]
-    RAW --> CLEAN[Clean season CSVs]
-    TFF[TFF Fantasy snapshot] --> ID[Reviewed player ID matching]
-    CLEAN --> ID
-    ID --> POINTS[Fantasy points and player projections]
-    CLEAN --> ODDS[Poisson and XGBoost probabilities]
-    ODDS --> POINTS
-    POINTS --> XI[XI optimization]
-    CLEAN --> SITE[Published dashboard]
-    ODDS --> SITE
-    POINTS --> SITE
-    XI --> RECS[Local XI recommendations]
-    CLEAN --> CHATDB[Chat database]
-    CHATDB --> CHAT[Tool using AI assistant]
-    SM --> LIVE[Local live feed]
-    LIVE --> LOCAL[Local live dashboard]
-```
+![Sportmonks and TFF Fantasy data feed the forecasts, fantasy scoring, XI recommendations, published dashboard, and AI assistant. The Sportmonks live poller feeds the local match dashboard.](docs/media/data-flow.svg)
+
+[LaTeX source](docs/media/data-flow.tex)
 
 Sportmonks is the primary football data provider. TFF Fantasy supplies separate fantasy prices, positions, and totals. I join the sources through reviewed Sportmonks player IDs; ambiguous name matches stay unresolved until reviewed. The pipeline keeps provider captures in `data/raw`, rebuildable work in `data/temp`, and website-ready CSVs in `data/final`.
 

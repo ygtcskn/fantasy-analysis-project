@@ -28,16 +28,12 @@ import math
 from numbers import Real
 from typing import Any, Iterable
 
-try:
-    import numpy as np
-    from scipy.optimize import minimize
-    from scipy.special import expit, gammaln
-    from scipy.stats import poisson
-except ImportError as exc:
-    raise ImportError(
-        "Odds model fitting requires numpy and scipy. Install the research "
-        "requirements into your working Python environment first."
-    ) from exc
+import numpy as np
+from scipy.optimize import minimize
+from scipy.special import expit, gammaln
+from scipy.stats import poisson
+
+from .features import DEFAULT_CONFIG, training_table
 
 
 MODEL_VERSION = "odds-0.2.0"
@@ -267,8 +263,8 @@ def _safe_rho(theta: np.ndarray, n: int) -> tuple[float, np.ndarray]:
     return rho, gradient
 
 
-def _make_classifier(model: str, params: dict | None = None):
-    """Defaults are conservative; the tuned settings found by run.py override them.
+def _make_classifier(params: dict | None = None):
+    """Build the classifier with conservative defaults for a small training set.
 
     The eligible pool is around a thousand matches, so shallow trees, few leaves
     and a large minimum leaf size matter more than capacity.
@@ -277,7 +273,7 @@ def _make_classifier(model: str, params: dict | None = None):
         from xgboost import XGBClassifier
     except ImportError:
         raise ModelFitError(
-            "xgboost is not installed. Run: python -m pip install xgboost") from None
+            "Install the model dependencies with python -m pip install -r requirements.txt") from None
     settings = dict(objective="multi:softprob", n_estimators=200, learning_rate=0.05,
                     max_depth=3, min_child_weight=10, reg_lambda=5.0, subsample=0.9,
                     colsample_bytree=0.8, random_state=GBDT_SEED, n_jobs=1,
@@ -294,10 +290,6 @@ def _fit_gbdt(eligible, as_of: datetime, *, model: str, half_life_days: float,
     Training rows and the prediction state are both built by ``training_table``,
     which folds a source match in only once its result was available.
     """
-    try:
-        from features import DEFAULT_CONFIG, training_table
-    except ImportError as exc:  # pragma: no cover - import wiring
-        raise ModelFitError(f"Feature module unavailable: {exc}") from None
     config = feature_config or DEFAULT_CONFIG
     rows, labels, weights, state = training_table(
         eligible, as_of, cutoff_hours=cutoff_hours, half_life_days=half_life_days,
@@ -309,7 +301,7 @@ def _fit_gbdt(eligible, as_of: datetime, *, model: str, half_life_days: float,
         raise ModelFitError("Training window does not contain all three outcomes")
     if state.latest_available_at is None:
         raise ModelFitError("No source match was folded into the feature state")
-    classifier = _make_classifier(model, gbdt_params)
+    classifier = _make_classifier(gbdt_params)
     classifier.fit(np.asarray(rows, dtype=float), np.asarray(labels, dtype=int),
                    sample_weight=np.asarray(weights, dtype=float))
     return FittedModel(
@@ -333,6 +325,12 @@ def fit_model(
     feature_config=None,
 ) -> FittedModel:
     """Fit exclusively from eligible completed results before ``as_of``.
+
+    Each match supplies timezone-aware ``kickoff`` and ``available_at``, string
+    ``home_team_id`` and ``away_team_id``, and regulation-time ``home_goals`` and
+    ``away_goals``. ``neutral`` defaults to False. XGBoost also needs a unique
+    ``fixture_id`` for chronological replay and can use ``season`` and
+    ``team_stats`` keyed by team ID.
 
     Weights are 2**(-age_days/half_life_days), with age measured from kickoff.
     ``effective_matches`` is the sum of weights (not Kish effective sample size).

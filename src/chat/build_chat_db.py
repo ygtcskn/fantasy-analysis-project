@@ -1,8 +1,6 @@
 """Build the chatbot's database: past matches and season stats in one SQLite file.
 
-Step 2 of the chatbot guide (docs/chatbot/02-build-the-database.md).
-
-    python src/chat/build_chat_db.py
+    python -m src.chat.build_chat_db
 
 Reads every season folder in data/final/sportmonks/ (2021-2022, 2022-2023, ...)
 and writes data/temp/chat/chat.sqlite. The file is rebuilt from scratch on

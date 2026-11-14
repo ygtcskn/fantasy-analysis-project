@@ -12,10 +12,10 @@ import unicodedata
 
 if __package__:
     from .csv_store import read_table, write_table
-    from .parse_tff_table import ROOT
+    from .sportmonks import ROOT
 else:
     from csv_store import read_table, write_table
-    from parse_tff_table import ROOT
+    from sportmonks import ROOT
 # Importing csv_store above puts the project folder on the path.
 from src.shared import season_folder, utc_now, utc_stamp  # noqa: E402
 
@@ -511,19 +511,19 @@ def main():
     cli.add_argument("--snapshot", type=Path, help="TFF snapshot; default is newest players_*.csv")
     cli.add_argument("--canonical", type=Path,
                      default=ROOT / "data" / "final" / "tff_fantasy" / "tff_players.csv")
-    cli.add_argument("--overrides", type=Path,
-                     default=ROOT / "config" / "tff_player_overrides.csv")
+    cli.add_argument("--overrides", type=Path, help="Reviewed overrides CSV for this season")
     args = cli.parse_args()
     try:
         folder = season_folder(args.season)
         raw_tff_dir = ROOT / "data" / "raw" / "tff_fantasy"
-        temp_tff_dir = ROOT / "data" / "temp" / "tff_fantasy"
+        temp_tff_dir = ROOT / "data" / "temp" / "tff_fantasy" / folder
         snapshot = args.snapshot or latest_snapshot(raw_tff_dir)
         sportmonks_dir = ROOT / "data" / "final" / "sportmonks" / folder
         report = temp_tff_dir / "tff_player_match_report.csv"
         candidates = temp_tff_dir / "tff_player_match_candidates.csv"
+        overrides = args.overrides or temp_tff_dir / "player_overrides.csv"
         total, matched, unresolved = update_from_snapshot(
-            snapshot, sportmonks_dir, args.canonical, args.overrides, report, candidates)
+            snapshot, sportmonks_dir, args.canonical, overrides, report, candidates)
         print(f"Updated {args.canonical.resolve()}: {total} rows, "
               f"{matched} matched, {total - matched - unresolved} left the league, "
               f"{unresolved} awaiting review.")

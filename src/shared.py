@@ -6,8 +6,7 @@ stage and as unknown in the next, two timestamp formats, ten season checks and
 CSV writers of which only some were safe to interrupt.
 
 * Match states. Which Sportmonks states mean a result is final, a match was
-  played out, or a fixture has not been played. The website applies the same
-  lists in src/web/core/match-rules.js; change the two together.
+  played out, or a fixture has not been played.
 * Numbers from CSV cells. A blank is not a zero: ``number`` returns None for
   it. A stage that needs a number regardless says so with ``number_or``, which
   names the fallback where it is used. ``counted`` is the site's rule for match
@@ -16,8 +15,6 @@ CSV writers of which only some were safe to interrupt.
 * Timestamps: written as 2026-10-25T18:30:00Z, read in any ISO form.
 * CSV files: read as UTF-8 with or without a byte-order mark, and written
   through a temporary file, so a reader never sees half a file.
-* Pipeline generation: the stamp run_pipeline.py puts on every published file,
-  read back by the points and projection stages before they overwrite one.
 """
 from __future__ import annotations
 
@@ -42,8 +39,6 @@ PLAYED_STATES = frozenset({"FT", "AET", "FT_PEN"})
 # Not kicked off, or never will be. Sportmonks uses short and long spellings.
 UNPLAYED_STATES = frozenset({"NS", "TBA", "PENDING", "DELAYED", "POSTP", "POSTPONED",
                              "CANC", "CANCELLED", "DELETED"})
-# On the calendar and not yet kicked off: a fixture a forecast may target.
-SCHEDULED_STATES = frozenset({"NS", "TBA"})
 # Will never be played, so nothing is still owed: a later round need not wait.
 CALLED_OFF_STATES = frozenset({"CANC", "CANCELLED", "DELETED"})
 
@@ -63,10 +58,6 @@ def is_played(fixture: dict) -> bool:
 
 def is_unplayed(fixture: dict) -> bool:
     return fixture_state(fixture) in UNPLAYED_STATES
-
-
-def is_scheduled(fixture: dict) -> bool:
-    return fixture_state(fixture) in SCHEDULED_STATES
 
 
 def in_progress(fixture: dict) -> bool:
@@ -99,12 +90,6 @@ def number_or(value, default=0.0):
     """A finite number, else ``default``: for a stage that must have a figure."""
     result = number(value)
     return default if result is None else result
-
-
-def integer_or(value, default=0):
-    """The whole part of a finite number, else ``default``."""
-    result = number(value)
-    return default if result is None else int(result)
 
 
 def nonnegative(value) -> float | None:
@@ -234,43 +219,3 @@ def write_csv(path, rows, columns=None) -> None:
         temporary.replace(path)
     finally:
         temporary.unlink(missing_ok=True)
-
-
-# ------------------------------------------------------- pipeline generation
-
-def published_generation(path) -> str:
-    """The pipeline generation stamped on a file this run is about to replace.
-
-    ``run_pipeline.py`` tags every published file with one ``pipeline_run_id``,
-    and the website refuses to display a set whose stamps disagree. A standalone
-    rebuild writes the same path without that column, which silently invalidates
-    the whole published set: the browser reports that the analysis is being
-    updated and every projection vanishes, with nothing pointing at the cause.
-    Reading the stamp before overwriting it turns that into one line of output.
-    """
-    path = Path(path)
-    if not path.is_file():
-        return ""
-    try:
-        with path.open(encoding="utf-8-sig", newline="") as stream:
-            reader = csv.DictReader(stream)
-            if "pipeline_run_id" not in (reader.fieldnames or []):
-                return ""
-            for row in reader:
-                return row.get("pipeline_run_id", "") or ""
-    except (OSError, UnicodeError, csv.Error):
-        return ""
-    return ""
-
-
-def warn_if_unpublishing(generations, season: str = "<season>") -> None:
-    """Say so when a standalone points or projections run replaced tagged files."""
-    live = sorted({value for value in generations if value})
-    if not live:
-        return
-    print(f"\nWARNING: this replaced published files carrying pipeline generation "
-          f"{', '.join(live)} with untagged output.")
-    print("         The website will now reject the whole fantasy dataset and show "
-          "'Fantasy analysis is being updated'.")
-    print(f"         Run: python src/run_pipeline.py --season {season}")
-    print("         to republish points, projections and the marker together.")

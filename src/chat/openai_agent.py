@@ -1,55 +1,18 @@
-"""Answer a question with ChatGPT's model (OpenAI Responses API), running the tools it asks for.
-
-Step 4 of the chatbot guide (docs/chatbot/04-connect-the-ai.md).
-"""
+"""Answer a football question through the Responses API and SQLite-backed tools."""
 from __future__ import annotations
 
 import json
-from pathlib import Path
-import sys
 
-import openai
-
-ROOT = Path(__file__).resolve().parents[2]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
-
-from src.chat.assistant import (CANNOT_ANSWER, EFFORT, MAX_ROUNDS, MAX_TOKENS, NO_ANSWER,  # noqa: E402
-                                SYSTEM_PROMPT, TOO_MANY_STEPS, Reply, describe)
-from src.chat.tools import definitions, run_tool  # noqa: E402
-from src.fetch.sportmonks import local_setting  # noqa: E402
-
-MODEL = "gpt-6-luna"
-KEY_NAME = "OPENAI_API_KEY"
-ApiError = openai.APIError
-
-# GPT-6 Luna prices in US dollars per million tokens (for prompts up to 272K tokens).
-PRICE_INPUT = 0.10
-PRICE_CACHED_INPUT = 0.01
-PRICE_OUTPUT = 0.50
-
-def make_client() -> openai.OpenAI:
-    key = local_setting(KEY_NAME)
-    if not key:
-        raise SystemExit(f"Add {KEY_NAME}=... to your .env file (see docs/chatbot/04-connect-the-ai.md).")
-    return openai.OpenAI(api_key=key)
+from .assistant import (CANNOT_ANSWER, EFFORT, MAX_ROUNDS, MAX_TOKENS, NO_ANSWER,
+                        SYSTEM_PROMPT, TOO_MANY_STEPS, Reply, describe)
+from .tools import definitions, run_tool
 
 
 def openai_tools() -> list[dict]:
-    """The step 3 tool menu in OpenAI's format. strict is off because some inputs are optional."""
+    """Expose the available tools in the Responses API format."""
     return [{"type": "function", "name": tool["name"], "description": tool["description"],
              "parameters": tool["input_schema"], "strict": False}
             for tool in definitions()]
-
-
-def add_usage(reply: Reply, usage) -> None:
-    """Add one response's tokens and cost to the reply. OpenAI counts cached tokens inside input_tokens."""
-    details = getattr(usage, "input_tokens_details", None)
-    cached = getattr(details, "cached_tokens", 0) or 0
-    reply.input_tokens += usage.input_tokens
-    reply.output_tokens += usage.output_tokens
-    reply.cost_usd += ((usage.input_tokens - cached) * PRICE_INPUT + cached * PRICE_CACHED_INPUT
-                       + usage.output_tokens * PRICE_OUTPUT) / 1_000_000
 
 
 def answer_text(response) -> str:
@@ -69,13 +32,13 @@ def read_arguments(text: str) -> dict | None:
         return None
     return arguments if isinstance(arguments, dict) else None
 
-def ask(client, db, messages: list, question: str) -> Reply:
-    """Answer one question. `messages` is the conversation so far; this adds to it."""
+def ask(client, db, messages: list, question: str, *, model: str) -> Reply:
+    """Answer one question using the supplied client and append to the conversation."""
     messages.append({"role": "user", "content": question})
-    reply = Reply(model=MODEL)
+    reply = Reply(model=model)
     for _ in range(MAX_ROUNDS):
         response = client.responses.create(
-            model=MODEL,
+            model=model,
             instructions=SYSTEM_PROMPT,
             tools=openai_tools(),
             input=messages,
@@ -85,7 +48,9 @@ def ask(client, db, messages: list, question: str) -> Reply:
             include=["reasoning.encrypted_content"],
         )
         reply.rounds += 1
-        add_usage(reply, response.usage)
+        if response.usage is not None:
+            reply.input_tokens += response.usage.input_tokens
+            reply.output_tokens += response.usage.output_tokens
         # Keep every item (reasoning, messages, tool calls) exactly as it came back.
         messages.extend(response.output)
         calls = [item for item in response.output if item.type == "function_call"]

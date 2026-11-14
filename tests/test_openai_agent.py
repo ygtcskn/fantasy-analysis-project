@@ -8,9 +8,8 @@ from src.chat.tools import definitions
 from tests.test_chat_tools import sample_database
 
 
-def usage(input_tokens=100, output_tokens=20, cached=0):
-    return SimpleNamespace(input_tokens=input_tokens, output_tokens=output_tokens,
-                           input_tokens_details=SimpleNamespace(cached_tokens=cached))
+def usage(input_tokens=100, output_tokens=20):
+    return SimpleNamespace(input_tokens=input_tokens, output_tokens=output_tokens)
 
 
 def message(words):
@@ -57,12 +56,12 @@ class OpenAIAgentTests(unittest.TestCase):
         self.db.close()
 
     def ask(self, client, question="Soru"):
-        return openai_agent.ask(client, self.db, self.history, question)
+        return openai_agent.ask(client, self.db, self.history, question, model="test-model")
 
     def test_a_plain_answer_needs_one_round(self):
         reply = self.ask(FakeOpenAI(response(message("Merhaba!"))))
         self.assertEqual((reply.model, reply.text, reply.rounds, reply.tool_calls, reply.stopped),
-                         ("gpt-6-luna", "Merhaba!", 1, [], "completed"))
+                         ("test-model", "Merhaba!", 1, [], "completed"))
         self.assertEqual(self.history[0], {"role": "user", "content": "Soru"})
         self.assertEqual(self.history[1].type, "message")
 
@@ -117,16 +116,17 @@ class OpenAIAgentTests(unittest.TestCase):
         reply = self.ask(FakeOpenAI(response(reasoning(), status="incomplete", reason="max_output_tokens")))
         self.assertEqual((reply.stopped, reply.text), ("max_output_tokens", assistant.NO_ANSWER))
 
-    def test_cached_tokens_are_priced_separately(self):
-        reply = self.ask(FakeOpenAI(response(message("ok"), tokens=usage(1000, 10, cached=900))))
-        self.assertEqual((reply.input_tokens, reply.output_tokens), (1000, 10))
-        self.assertAlmostEqual(reply.cost_usd, (100 * 0.10 + 900 * 0.01 + 10 * 0.50) / 1_000_000, places=12)
+    def test_token_usage_accumulates_across_rounds(self):
+        client = FakeOpenAI(response(call("c1", "list_seasons", {}), tokens=usage(100, 10)),
+                            response(message("ok"), tokens=usage(200, 20)))
+        reply = self.ask(client)
+        self.assertEqual((reply.input_tokens, reply.output_tokens), (300, 30))
 
     def test_every_request_sends_the_model_rules_and_tools(self):
         client = FakeOpenAI(response(message("ok")))
         self.ask(client)
         request = client.requests[0]
-        self.assertEqual(request["model"], "gpt-6-luna")
+        self.assertEqual(request["model"], "test-model")
         self.assertEqual(request["instructions"], assistant.SYSTEM_PROMPT)
         self.assertEqual(request["reasoning"], {"effort": assistant.EFFORT})
         self.assertFalse(request["store"])

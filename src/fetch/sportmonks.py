@@ -17,8 +17,6 @@ else:
 ROOT = Path(__file__).resolve().parents[2]
 RAW_DATA = ROOT / "data" / "raw" / "sportmonks"
 FINAL_DATA = ROOT / "data" / "final" / "sportmonks"
-# Kept as the public analysis-table root used by audit/build utilities.
-DATA = FINAL_DATA
 CACHE = ROOT / "data" / "temp" / "cache_csv"
 BASE = "https://api.sportmonks.com/v3/football"
 

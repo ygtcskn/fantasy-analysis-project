@@ -1,7 +1,4 @@
-"""The chatbot's tools: the only way the AI can read match data.
-
-Step 3 of the chatbot guide (docs/chatbot/03-the-tools.md).
-"""
+"""Validated, read-only SQLite tools for answering questions about football."""
 
 from __future__ import annotations
 

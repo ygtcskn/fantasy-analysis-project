@@ -6,13 +6,11 @@ The rest of the season never overlaps the early window, so the comparison is
 out of sample: a high rank correlation means an N-round figure already says
 where a player will end up, a low one means it is mostly luck.
 
-Both the observed early figure and the small-sample adjusted one the website
-ranks (src/web/lib/radar.js, RadarScoring.adjusted) are scored, so the report
-also shows whether the adjustment helps. The rules mirror the browser's: only
-finished fixtures, unused-substitute rows dropped, a blank counting cell is a
-zero only on a match the statistics feed covered, a column an earlier season
-clearly did not supply is unknown there, broad position by most minutes, the
-seeded minute bar and the scaled attempt requirement.
+The report scores both the observed early figure and the dashboard's adjusted
+figure. It uses finished fixtures, drops unused substitutes, and treats a blank
+counting cell as zero only when the statistics feed covered the match. Players
+are grouped by their position with the most minutes. The adjustment uses minutes
+or attempts, depending on the metric.
 
 Writes one CSV report; reads only saved CSVs. Run it yourself:
 
@@ -35,7 +33,7 @@ OUTPUT = ROOT / "data/temp/radar_reliability.csv"
 WINDOWS = (4, 7, 10, 15)
 # The rest of the season is the answer key, so it needs a stable sample.
 TARGET_MINUTES = 900
-# Mirrors RadarScoring.shrinkage in radar.js.
+# Strength of the position-group prior and sample thresholds.
 PRIOR_PEERS = 10
 PRIOR_MAX_MINUTES = 2700
 PRIOR_ATTEMPT_MULTIPLE = 10
@@ -44,8 +42,7 @@ GROUPS = {"goalkeeper": "GK", "defender": "DEF", "midfielder": "MID", "attacker"
 OUTFIELD = ("DEF", "MID", "FW")
 EVERY = ("GK",) + OUTFIELD
 
-# id: (kind, columns, positions, minimum attempts for a percentage). The same
-# catalogue as RadarScoring.metrics for the per-90 and percentage axes.
+# id: (kind, columns, positions, minimum attempts for a percentage)
 METRICS = {
     "goal_contribution": ("sum", ("goals", "assists"), OUTFIELD, None),
     "goals": ("rate", ("goals",), OUTFIELD, None),
