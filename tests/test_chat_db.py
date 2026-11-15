@@ -55,6 +55,23 @@ def make_season(root: Path, folder="2023-2024"):
          "details.overall_matches": "1", "details.overall_wins": "1", "details.overall_draws": "0",
          "details.overall_lost": "0", "details.overall_scored": "2", "details.overall_conceded": "1"},
     ])
+    write_csv(season / "team_metrics.csv", [
+        {"fixture_id": "1", "team_id": "10", "source": "statistics", "type_id": "42", "value": "17"},
+        {"fixture_id": "1", "team_id": "20", "source": "statistics", "type_id": "42", "value": "9"},
+        {"fixture_id": "1", "team_id": "10", "source": "statistics", "type_id": "80", "value": "100"},
+        {"fixture_id": "1", "team_id": "10", "source": "statistics", "type_id": "81", "value": "74"},
+        {"fixture_id": "1", "team_id": "10", "source": "xgfixture", "type_id": "5304", "value": "1.86"},
+        {"fixture_id": "1", "team_id": "20", "source": "statistics", "type_id": "5304", "value": "10"},
+        {"fixture_id": "1", "team_id": "20", "source": "xgfixture", "type_id": "7944", "value": "0.3"},
+        {"fixture_id": "1", "team_id": "20", "source": "xgfixture", "type_id": "7944", "value": "0.3"},
+        {"fixture_id": "2", "team_id": "10", "source": "statistics", "type_id": "42", "value": "40"},
+    ])
+    write_csv(season / "fixture_periods.csv", [{"fixture_id": "1", "description": "1st-half", "minutes": "48"}])
+    write_csv(season / "fixture_pressure.csv", [
+        {"fixture_id": "1", "minute": "47", "participant_id": "10", "pressure": "60"},
+        {"fixture_id": "1", "minute": "47", "participant_id": "20", "pressure": "40"},
+        {"fixture_id": "1", "minute": "49", "participant_id": "10", "pressure": "30"},
+    ])
 
 
 class BuildTests(unittest.TestCase):
@@ -114,6 +131,19 @@ class BuildTests(unittest.TestCase):
     def test_standings_use_the_overall_totals(self):
         self.assertEqual(self.one("SELECT position, points, played, won, goals_for, goals_against FROM standings"),
                          (1, 3, 1, 1, 2, 1))
+
+    def test_dashboard_stats_use_the_saved_team_feeds(self):
+        self.assertEqual(self.one("SELECT shots_total, xg, pass_accuracy, penalty_and_free_kick_goals "
+                                  "FROM dashboard_team_stats WHERE fixture_id = 1 AND team_id = 10"),
+                         (17, 1.86, 74, 1))
+        self.assertEqual(self.one("SELECT shots_total, xg, set_piece_xg FROM dashboard_team_stats "
+                                  "WHERE fixture_id = 1 AND team_id = 20"), (9, None, None))
+        self.assertIsNone(self.one("SELECT 1 FROM dashboard_team_stats WHERE fixture_id = 2"))
+        self.assertEqual(self.one("SELECT clock, phase, home_pressure, away_pressure FROM dashboard_pressure "
+                                  "WHERE fixture_id = 1"), ("45+2", 2, 60, 40))
+        self.assertEqual(self.one("SELECT home_half_goals FROM dashboard_matches WHERE fixture_id = 1"), (1,))
+        self.assertEqual(self.one("SELECT started FROM dashboard_lineups WHERE player_id = 300"), (0,))
+        self.assertEqual(self.one("SELECT kind, rescinded FROM dashboard_events WHERE event_id = 3"), ("GOAL", 1))
 
     def test_names_take_the_latest_season(self):
         # A later season with no matches yet, where the club has a new name.

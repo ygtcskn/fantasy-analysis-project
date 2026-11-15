@@ -37,6 +37,7 @@ if str(ROOT) not in sys.path:
 
 from src.shared import (counted, fixture_state, is_finished, number, parse_utc,  # noqa: E402
                         read_csv, season_label, utc_stamp, whole)
+from src.chat.dashboard_data import SCHEMA as DASHBOARD_SCHEMA, save_dashboard  # noqa: E402
 
 SOURCE = ROOT / "data" / "final" / "sportmonks"
 OUTPUT = ROOT / "data" / "temp" / "chat" / "chat.sqlite"
@@ -137,7 +138,7 @@ CREATE INDEX idx_matches_away ON matches (away_team_id);
 CREATE INDEX idx_events_player ON events (player_id);
 CREATE INDEX idx_player_matches_player ON player_matches (player_id);
 CREATE INDEX idx_player_matches_season ON player_matches (season);
-"""
+""" + DASHBOARD_SCHEMA
 
 TURKISH = str.maketrans({"ı": "i", "İ": "i", "ş": "s", "Ş": "s", "ğ": "g", "Ğ": "g",
                          "ç": "c", "Ç": "c", "ö": "o", "Ö": "o", "ü": "u", "Ü": "u"})
@@ -210,8 +211,10 @@ def load_season(db: sqlite3.Connection, folder: Path, teams: dict, players: dict
         if integer(row.get("id")) is not None and name:
             players[int(row["id"])] = (name, row.get("common_name") or None)
 
-    scores = final_scores(read_csv(folder / "fixture_scores.csv"), fixtures)
-    match_ids = set()
+    score_rows = read_csv(folder / "fixture_scores.csv")
+    scores = final_scores(score_rows, fixtures)
+    participants = {}
+    finished = set()
     marked_rounds = []
     for row in fixtures:
         fixture_id, home, away = (integer(row.get(name)) for name in ("fixture_id", "home_team_id", "away_team_id"))
@@ -221,21 +224,25 @@ def load_season(db: sqlite3.Connection, folder: Path, teams: dict, players: dict
         kickoff_utc = utc_stamp(kickoff)
         round_name = row.get("round.name") or None
         home_goals, away_goals = scores.get(row["fixture_id"], (None, None))
+        complete = is_finished(row)
         db.execute("INSERT INTO matches VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                    (fixture_id, season, round_name, kickoff_utc or None,
-                    fixture_state(row) or None, int(is_finished(row)), home, away, home_goals, away_goals))
-        match_ids.add(fixture_id)
+                    fixture_state(row) or None, int(complete), home, away, home_goals, away_goals))
+        participants[fixture_id] = (home, away)
+        if complete:
+            finished.add(fixture_id)
         if round_name and str(row.get("round.is_current", "")).strip().lower() == "true":
             marked_rounds.append((kickoff_utc or "9999", fixture_id, round_name))
     if marked_rounds:
         _, _, current_round = min(marked_rounds)
         db.execute("INSERT INTO current_rounds VALUES (?, ?)", (season, current_round))
 
+    event_rows = read_csv(folder / "events.csv")
     event_count = 0
-    for row in read_csv(folder / "events.csv"):
+    for row in event_rows:
         kind = row.get("type.developer_name", "")
         fixture_id, event_id = integer(row.get("fixture_id")), integer(row.get("event_id"))
-        if (kind not in EVENT_TYPES or fixture_id not in match_ids or event_id is None
+        if (kind not in EVENT_TYPES or fixture_id not in participants or event_id is None
                 or str(row.get("rescinded", "")).strip().lower() in {"true", "1"}):
             continue
         db.execute("INSERT INTO events VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -244,10 +251,11 @@ def load_season(db: sqlite3.Connection, folder: Path, teams: dict, players: dict
                     integer(row.get("player_id")), integer(row.get("related_player_id"))))
         event_count += 1
 
+    player_rows = read_csv(folder / "player_match_stats.csv")
     stat_count = 0
-    for row in read_csv(folder / "player_match_stats.csv"):
+    for row in player_rows:
         fixture_id, player_id = integer(row.get("fixture_id")), integer(row.get("player_id"))
-        if fixture_id not in match_ids or player_id is None:
+        if fixture_id not in participants or player_id is None:
             continue
         if player_id not in players and row.get("name"):
             players[player_id] = (row["name"], None)
@@ -272,7 +280,8 @@ def load_season(db: sqlite3.Connection, folder: Path, teams: dict, players: dict
                     integer(row.get("details.overall_lost")), integer(row.get("details.overall_scored")),
                     integer(row.get("details.overall_conceded"))))
         standing_count += 1
-    return {"matches": len(match_ids), "events": event_count,
+    save_dashboard(db, folder, fixtures, participants, finished, score_rows, event_rows, player_rows, players)
+    return {"matches": len(participants), "events": event_count,
             "player_matches": stat_count, "standings": standing_count}
 
 

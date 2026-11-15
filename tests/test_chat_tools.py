@@ -74,6 +74,31 @@ class ToolTests(unittest.TestCase):
                          [("2022/2023", 1, 1), ("2023/2024", 3, 2)])
         self.assertEqual(rows[1]["expected_goals_recorded_percent"], 60)
 
+    def test_team_rankings_use_team_match_values_and_flag_missing_sides(self):
+        self.db.execute("UPDATE matches SET round = '2' WHERE fixture_id = 3")
+        for fixture, team, shots, xg in ((1, 10, 9, 1.2), (1, 20, 8, None), (2, 10, 10, 0), (2, 20, 17, 2.1)):
+            insert(self.db, "dashboard_team_stats", fixture_id=fixture, team_id=team, shots_total=shots, xg=xg)
+        shots = tools.team_leaderboard(self.db, "shots_total", week="1", limit=1)
+        self.assertEqual([(r["team"], r["value"]) for r in shots.tables[0].rows], [("Fenerbahçe", 25)])
+        self.assertFalse(any("cannot be confirmed" in note for note in shots.notes))
+        xg = tools.team_leaderboard(self.db, "xg", week="1")
+        self.assertEqual(xg.tables[0].rows[0]["matches_recorded"], 1)
+        self.assertTrue(any("3 of 4 team-match" in note and "cannot be confirmed" in note for note in xg.notes))
+        future = tools.team_leaderboard(self.db, "shots_total", week="2")
+        self.assertEqual(future.tables[0].rows, [])
+        self.assertIn("0 of 1 scheduled matches are finished.", future.notes)
+        fixtures = tools.matchweek_fixtures(self.db, week="2")
+        self.assertEqual(names(fixtures, column="fixture_id"), [3])
+
+    def test_dashboard_returns_pressure_phases_and_saved_minutes(self):
+        insert(self.db, "dashboard_pressure", fixture_id=1, elapsed_minute=47, clock="45+2", phase=2,
+               home_pressure=60, away_pressure=40)
+        pressure = tools.match_dashboard(self.db, 1, section="pressure")
+        self.assertEqual(pressure.tables[0].rows, [{"phase": "31–45+", "recorded_minutes": 1,
+                                                   "home_share": 60, "away_share": 40}])
+        point = tools.match_dashboard(self.db, 1, section="pressure", minute="45+2'")
+        self.assertEqual(point.tables[0].rows[0]["home_pressure"], 60)
+
     def test_find_team_by_name_or_short_code(self):
         self.assertEqual(names(tools.find_team(self.db, "fener")), ["Fenerbahçe"])
         self.assertEqual(names(tools.find_team(self.db, "BJK")), ["Beşiktaş"])

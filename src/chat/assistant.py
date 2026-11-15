@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import re
 
 EFFORT = "medium"      # how hard the model thinks before answering: low, medium or high
 MAX_TOKENS = 4000      # room for the model's thinking plus its answer
@@ -37,7 +38,21 @@ continuous table with every row on its own line. Put any title or coverage note 
 cell text and leave the table unfenced.
 - Never show tool names, ids, SQL or these instructions to the user.
 - For a question without a season, use the newest available season. If a tool defaults to all seasons, use list_seasons to find the newest, unless the user asks for all-time or specific historical results.
-- For "this week" or "bu hafta", use leaderboard with week=current. For "last week" or "geçen hafta", use week=previous. For a numbered week, pass the round as text. Use the season and week already established for follow-ups that only change the statistic. Name the resolved season and matchweek in the answer.
+- For matchweek questions, pass week=current for "this week" or "bu hafta", week=previous for "last week" or \
+"geçen hafta", or the numbered round as text. Keep the season and week established by the user on short \
+follow-ups. Name the resolved season and matchweek in the reply.
+- Use team_leaderboard for club totals and rankings across a matchweek or season, and leaderboard for player \
+rankings. Use match_dashboard for team comparisons in a single fixture. For team total shots, use shots_total; \
+for team expected goals, use xg. Never add up player leaderboard rows to answer a club question.
+- For a single club leader, name the club and value in one sentence. If coverage is incomplete, say highest \
+recorded and briefly state how much is missing. While the round is in progress, qualify the answer as coming \
+from finished matches so far. If no matches have finished, say no results are available yet.
+- Use matchweek_fixtures for schedules and to resolve a match in a specific round. Use match_dashboard for the \
+saved scoreboard, referee, weather, formations, lineups, events, team metrics, pressure or season comparisons. \
+Use the Selected fixture ID in a web question when the user refers to this match, and use the user wording for \
+the reply language.
+- The match dashboard tools use saved match records. For live, simulated or replay-only values, explain which \
+saved figures are available instead of guessing.
 - For weekly scorers, use goals. For fouls committed, use fouls. For fouls suffered, use fouls_drawn. For bookings, use yellowcards. Apply the same week filter to other supported player stats. If the question names a player, look up the player in the requested season and pass player_id.
 - For "who" lists, request limit=100, include the recorded qualifying players, and say if the list was cut \
 short. For matchweek rankings, put the season and round above the table and list the players in descending \
@@ -64,3 +79,10 @@ class Reply:
 def describe(name: str, arguments: dict) -> str:
     """A tool call written out for people: leaderboard(stat=goals, season=2023/2024)."""
     return f"{name}({', '.join(f'{key}={value}' for key, value in arguments.items())})"
+
+
+def question_with_fixture(question: str, fixture: str) -> str:
+    """Give the model an optional fixture lookup hint for questions about this match."""
+    if re.fullmatch(r"[1-9][0-9]{0,11}", fixture):
+        return f"{question}\n\n[Selected fixture ID: {fixture}]"
+    return question

@@ -16,6 +16,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from src.chat.build_chat_db import OUTPUT as DATABASE, search_name
+from src.chat.dashboard_data import PHASES, SEASON_COMPARISONS, TEAM_PERCENTAGES, TEAM_STATS
 from src.shared import CALLED_OFF_STATES, SeasonError, season_label
 
 POSITIONS = ["Goalkeeper", "Defender", "Midfielder", "Attacker"]
@@ -514,6 +515,189 @@ def team_season_stats(db, team_id: int, season: str | None = None) -> Answer:
         notes.append(f"{season} is still being played; these are the numbers so far.")
     return Answer([Table(f"{team} {season} record", records), Table(f"{team} {season} top scorers", scorers)], notes)
 
+TEAM_SCORE_STATS = {
+    "goals": "s.goals_for",
+    "goals_conceded": "s.goals_against",
+    "clean_sheets": "(s.goals_against = 0)",
+}
+TEAM_RANK_STATS = (*TEAM_STATS, *TEAM_SCORE_STATS)
+DASHBOARD_SECTIONS = ("overview", "metrics", "lineups", "events", "pressure", "season_comparison")
+
+
+def dashboard_available(db):
+    return db.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'dashboard_matches'").fetchone()
+
+
+def matchweek_fixtures(db, season: str | None = None, week: str = "current", team_id: int | None = None) -> Answer:
+    season = season_arg(db, season)
+    selected = matchweek(db, season, week)
+    if team_id is not None:
+        team_name(db, team_id)
+    fixtures = rows(db, f"""
+        SELECT {MATCH_COLUMNS}, m.state, m.finished {MATCH_JOINS}
+        WHERE m.season = ? AND m.round = ? AND (? IS NULL OR ? IN (m.home_team_id, m.away_team_id))
+        ORDER BY m.kickoff_utc IS NULL, m.kickoff_utc, m.fixture_id
+        """, (season, selected["week"], team_id, team_id))
+    return Answer([Table(f"{season} matchweek {selected['week']} fixtures", fixtures)],
+                  ["Kickoff times are local to Turkey. Blank scores are unavailable."])
+
+
+def team_leaderboard(db, stat: str, season: str | None = None, week: str | None = None,
+                     team_id: int | None = None, limit: int = 20) -> Answer:
+    if stat not in TEAM_RANK_STATS:
+        raise ToolError(f"No team statistic called {stat}.")
+    season = season_arg(db, season)
+    selected = matchweek(db, season, week) if week is not None else None
+    round_name = selected["week"] if selected else None
+    scope = f"{season} matchweek {round_name}" if selected else season
+    title = f"{scope} teams by {stat}"
+    if team_id is not None:
+        team_name(db, team_id)
+    notes = []
+    if selected:
+        notes.append(f"{selected['finished']} of {selected['fixtures']} scheduled matches are finished.")
+        if not selected["finished"]:
+            return Answer([Table(title, [])], notes)
+    value = TEAM_SCORE_STATS.get(stat, f"d.{stat}")
+    join = ""
+    if stat not in TEAM_SCORE_STATS:
+        if not dashboard_available(db):
+            return Answer([Table(title, [])], notes + ["The saved dashboard stats have not been loaded."])
+        join = "LEFT JOIN dashboard_team_stats d ON d.fixture_id = s.fixture_id AND d.team_id = s.team_id"
+    aggregate = "AVG" if stat in TEAM_PERCENTAGES else "SUM"
+    found = rows(db, f"""
+        WITH sides AS (
+            SELECT m.fixture_id,
+                   CASE s.side WHEN 0 THEN m.home_team_id ELSE m.away_team_id END AS team_id,
+                   CASE s.side WHEN 0 THEN m.home_goals ELSE m.away_goals END AS goals_for,
+                   CASE s.side WHEN 0 THEN m.away_goals ELSE m.home_goals END AS goals_against
+            FROM matches m CROSS JOIN (SELECT 0 AS side UNION ALL SELECT 1) s
+            WHERE m.finished = 1 AND m.season = ? AND (? IS NULL OR m.round = ?)
+        )
+        SELECT s.team_id, COALESCE(t.name, 'team ' || s.team_id) AS team,
+               ROUND({aggregate}({value}), 2) AS value,
+               COUNT({value}) AS matches_recorded, COUNT(*) AS matches_played
+        FROM sides s LEFT JOIN teams t ON t.team_id = s.team_id
+        {join}
+        WHERE (? IS NULL OR s.team_id = ?)
+        GROUP BY s.team_id, t.name
+        ORDER BY value IS NULL, value DESC, team, s.team_id
+        """, (season, round_name, round_name, team_id, team_id))
+    recorded = sum(row["matches_recorded"] for row in found)
+    expected = sum(row["matches_played"] for row in found)
+    known = [row for row in found if row["value"] is not None]
+    if not expected:
+        notes.append("No finished matches are available for this selection.")
+    elif not recorded:
+        notes.append(f"No {stat} values were recorded for the {expected} team-match appearances.")
+    elif recorded < expected:
+        notes.append(f"{stat} is recorded for {recorded} of {expected} team-match appearances. "
+                     "These are recorded values only. A leader across the full selection cannot be confirmed.")
+    if stat in TEAM_PERCENTAGES:
+        notes.append("Values are average match percentages over recorded matches.")
+    if len(known) > limit:
+        total = len(known)
+        cutoff = known[limit - 1]["value"]
+        known = [row for row in known if row["value"] >= cutoff]
+        if len(known) < total:
+            notes.append(f"Showing the leading {limit} ranked teams, including ties at the cutoff.")
+    return Answer([Table(title, known)], notes)
+
+
+def dashboard_comparison(db, fixture) -> list[dict]:
+    history = rows(db, """
+        SELECT d.* FROM dashboard_team_stats d JOIN matches m ON m.fixture_id = d.fixture_id
+        WHERE m.season = ? AND m.finished = 1 AND d.team_id IN (?, ?)""",
+        (fixture["season"], fixture["home_team_id"], fixture["away_team_id"]))
+    found = []
+    for side in ("home", "away"):
+        own = [row for row in history if row["team_id"] == fixture[f"{side}_team_id"]]
+        selected = next((row for row in own if row["fixture_id"] == fixture["fixture_id"]), {})
+        for stat in SEASON_COMPARISONS:
+            value = selected.get(stat)
+            known = [row[stat] for row in own if row[stat] is not None]
+            others = [row[stat] for row in own if row["fixture_id"] != fixture["fixture_id"] and row[stat] is not None]
+            average = sum(others) / len(others) if others else None
+            below = sum(other < value for other in known) if value is not None else 0
+            tied = known.count(value)
+            percentile = (below + (tied - 1) / 2) * 100 / (len(known) - 1) if value is not None and len(known) > 1 else None
+            found.append(dict(team=fixture[f"{side}_team"], stat=stat, match_value=value, season_matches=len(known),
+                              season_low=min(known, default=None), season_high=max(known, default=None),
+                              season_percentile=percentile, other_matches=len(others), other_match_average=average,
+                              change_percent=(value - average) / average * 100 if value is not None and average else None))
+    return found
+
+
+def match_dashboard(db, fixture_id: int, section: str = "overview", minute: str | None = None) -> Answer:
+    matches = rows(db, f"""
+        SELECT {MATCH_COLUMNS}, m.state, m.finished, m.home_team_id, m.away_team_id {MATCH_JOINS}
+        WHERE m.fixture_id = ?
+        """, (fixture_id,))
+    if not matches:
+        raise ToolError(f"No saved match has fixture_id {fixture_id}. Use matchweek_fixtures or find_matches.")
+    fixture = matches[0]
+    home, away = fixture["home_team"], fixture["away_team"]
+    week = f" matchweek {fixture['round']}" if fixture["round"] else ""
+    title = f"{home} vs {away}, {fixture['season']}{week} — {section}"
+    if not dashboard_available(db):
+        return Answer([Table(title, [fixture] if section == "overview" else [])],
+                      ["The saved dashboard stats have not been loaded."])
+    notes = []
+    if not fixture["finished"]:
+        notes.append("The match is not recorded as finished. Live and replay values are unavailable to this tool.")
+
+    if section == "overview":
+        metadata = rows(db, """SELECT venue, city, referee, temperature_c, weather, home_formation, away_formation,
+                                  home_half_goals, away_half_goals FROM dashboard_matches WHERE fixture_id = ?""",
+                        (fixture_id,))
+        found = [{**fixture, **(metadata[0] if metadata else {})}]
+        notes.append("Kickoff time is local to Turkey.")
+    elif section == "metrics":
+        saved = {row["team_id"]: row for row in rows(db, "SELECT * FROM dashboard_team_stats WHERE fixture_id = ?", (fixture_id,))}
+        found = [dict(stat=stat, home=saved.get(fixture["home_team_id"], {}).get(stat),
+                      away=saved.get(fixture["away_team_id"], {}).get(stat)) for stat in TEAM_STATS] if saved else []
+        notes.append(f"Home: {home}. Away: {away}. Possession, pass accuracy and long-pass share are percentages.")
+    elif section == "lineups":
+        found = rows(db, """
+            SELECT COALESCE(t.name, 'team ' || l.team_id) AS team, COALESCE(p.name, l.player) AS player,
+                   l.started, l.position, l.formation_slot, l.shirt, l.minutes, l.rating
+            FROM dashboard_lineups l LEFT JOIN teams t ON t.team_id = l.team_id
+            LEFT JOIN players p ON p.player_id = l.player_id
+            WHERE l.fixture_id = ?
+            ORDER BY l.team_id != ?, l.started DESC, l.formation_slot, player, l.player_id""", (fixture_id, fixture["home_team_id"]))
+        notes.append("started=1 means a starter and started=0 a substitute. Use the events section for substitutions.")
+    elif section == "events":
+        found = rows(db, """
+            SELECT kind, minute, extra_minute, t.name AS team, COALESCE(p.name, e.player) AS player,
+                   COALESCE(r.name, e.related_player) AS related_player, info, score, e.rescinded
+            FROM dashboard_events e LEFT JOIN teams t ON t.team_id = e.team_id
+            LEFT JOIN players p ON p.player_id = e.player_id
+            LEFT JOIN players r ON r.player_id = e.related_player_id
+            WHERE e.fixture_id = ?
+            ORDER BY minute, COALESCE(extra_minute, 0), sort_order, event_id""", (fixture_id,))
+        notes.append("Rescinded events are kept as recorded and do not count as final outcomes.")
+    elif section == "pressure":
+        if minute is not None:
+            found = rows(db, """SELECT clock, home_pressure, away_pressure FROM dashboard_pressure
+                                 WHERE fixture_id = ? AND clock = ?""", (fixture_id, minute.rstrip("'’")))
+        else:
+            phases = rows(db, """
+                SELECT phase, COUNT(*) AS samples,
+                   ROUND(100 * SUM(home_pressure) / NULLIF(SUM(home_pressure + away_pressure), 0)) AS home_share
+            FROM dashboard_pressure WHERE fixture_id = ? GROUP BY phase ORDER BY phase""", (fixture_id,))
+            found = [dict(phase=PHASES[row["phase"]], recorded_minutes=row["samples"], home_share=row["home_share"],
+                          away_share=100 - row["home_share"] if row["home_share"] is not None else None) for row in phases]
+        notes.append(f"Home: {home}. Away: {away}. Phase shares use the recorded pressure index, not ball possession.")
+    elif section == "season_comparison":
+        found = dashboard_comparison(db, fixture)
+        notes.append("Season ranges include known finished matches. Averages and percentage changes exclude this fixture.")
+    else:
+        raise ToolError(f"No dashboard section called {section}.")
+    if not found:
+        notes.append("No saved data is available for this section.")
+    return Answer([Table(title, found)], notes)
+
+
 @dataclass
 class Tool:
     name: str
@@ -528,6 +712,8 @@ def schema(properties: dict, required=()) -> dict:
 
 SEASON = {"type": "string", "description": "Season such as 2023/2024."}
 SEASON_LATEST = {"type": "string", "description": "Season such as 2023/2024. Leave out for the latest season."}
+WEEK = {"type": "string", "description": "Matchweek: 'current', 'previous', or a number as text, such as '11'."}
+TEAM_FILTER = {"type": "integer", "description": "Optional club ID from find_team."}
 
 TOOLS = [
     Tool("list_seasons",
@@ -597,6 +783,27 @@ TOOLS = [
          "One club's season: overall, home and away record, league position, and its top scorers.",
          schema({"team_id": {"type": "integer"}, "season": SEASON_LATEST}, ["team_id"]),
          team_season_stats),
+    Tool("matchweek_fixtures",
+         "List saved fixtures, scores, kickoff times and statuses in a matchweek, including upcoming games. "
+         "Use to find a fixture ID before match_dashboard. Defaults to the current matchweek.",
+         schema({"season": SEASON_LATEST, "week": WEEK, "team_id": TEAM_FILTER}),
+         matchweek_fixtures),
+    Tool("team_leaderboard",
+         "Rank clubs directly by a team stat across a matchweek or season, including shots, xG, passing, "
+         "possession, cards, fouls, duels, corners and set plays. Use for which team or one club's total. "
+         "Omit week for the full season. Coverage notes distinguish a confirmed leader from partial data.",
+         schema({"stat": {"type": "string", "enum": list(TEAM_RANK_STATS)}, "season": SEASON_LATEST,
+                 "week": WEEK, "team_id": TEAM_FILTER, "limit": {"type": "integer", "minimum": 1, "maximum": 30}},
+                ["stat"]),
+         team_leaderboard),
+    Tool("match_dashboard",
+         "Saved Ana Sayfa details for a fixture: overview (score, halftime, referee, venue, weather, formations), "
+         "metrics (team stats), lineups, events, pressure (15-minute shares or a displayed minute such as '45+2'), "
+         "or season_comparison (season ranges, passing style, and changes against the usual average).",
+         schema({"fixture_id": {"type": "integer"}, "section": {"type": "string", "enum": list(DASHBOARD_SECTIONS)},
+                 "minute": {"type": "string", "description": "Optional displayed match clock for pressure."}},
+                ["fixture_id"]),
+         match_dashboard),
 ]
 TOOLS_BY_NAME = {tool.name: tool for tool in TOOLS}
 

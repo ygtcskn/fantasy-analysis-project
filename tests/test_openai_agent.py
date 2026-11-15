@@ -142,6 +142,15 @@ class OpenAIAgentTests(unittest.TestCase):
                      if isinstance(item, dict) and item.get("role") == "user"]
         self.assertEqual(questions, ["Gol kralı kim?", "Kaç gol attı?"])
 
+    def test_selected_fixture_is_available_to_the_model(self):
+        client = FakeOpenAI(
+            response(call("match", "match_dashboard", {"fixture_id": 2, "section": "overview"})),
+            response(message("Fenerbahçe won 3–0.")),
+        )
+        openai_agent.ask(client, self.db, self.history, "Who won this match?", model="test-model", fixture_id=2)
+        self.assertEqual(client.requests[0]["input"][0]["content"], "Who won this match?\n\n[Selected fixture ID: 2]")
+        self.assertIn("Fenerbahçe", client.requests[1]["input"][-1]["output"])
+
     def test_the_weekly_follow_up_receives_the_previous_matchweek_context(self):
         self.db.execute("UPDATE matches SET round = '2' WHERE fixture_id = 2")
         self.db.execute("INSERT INTO current_rounds VALUES ('2023/2024', '2')")

@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 
 from .assistant import (CANNOT_ANSWER, EFFORT, MAX_ROUNDS, MAX_TOKENS, NO_ANSWER,
-                        SYSTEM_PROMPT, TOO_MANY_STEPS, Reply, describe)
+                        SYSTEM_PROMPT, TOO_MANY_STEPS, Reply, describe, question_with_fixture)
 from .tools import definitions, run_tool
 
 
@@ -32,9 +32,10 @@ def read_arguments(text: str) -> dict | None:
         return None
     return arguments if isinstance(arguments, dict) else None
 
-def ask(client, db, messages: list, question: str, *, model: str) -> Reply:
-    """Answer one question using the supplied client and append to the conversation."""
-    messages.append({"role": "user", "content": question})
+def ask(client, db, messages: list, question: str, *, model: str, fixture_id: int | None = None) -> Reply:
+    """Answer one question, optionally giving the model context for "this match"."""
+    content = question_with_fixture(question, str(fixture_id))
+    messages.append({"role": "user", "content": content})
     reply = Reply(model=model)
     for _ in range(MAX_ROUNDS):
         response = client.responses.create(
