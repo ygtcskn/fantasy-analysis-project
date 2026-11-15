@@ -12,6 +12,8 @@ The live website is the product demo. This repository shows how I collect and pr
 
 *Local dashboard simulation from the first 39 seconds of a recording, played at 2.5× speed. This is a demonstration, not a real live match.*
 
+![The AI assistant answering questions about team shots and expected goals at 2.5× speed](docs/media/ai-assistant-demo.gif)
+
 ## The problem
 
 Picking a fantasy XI means comparing players with different prices, positions, opponents, playing-time risks, and incomplete statistics. Season totals alone do not show who is likely to help in the next matchweek. I built Fantezi Analiz to connect the underlying data to that decision while showing missing coverage and model uncertainty.
@@ -58,6 +60,11 @@ The stacked bars show each club's recorded fantasy points split by goalkeeper, d
 
 ![Fantasy points by club and player position](docs/media/fantasy-points-by-position.png)
 
-## Explore the project
+## Portfolio scope
 
-Start with the [live website](https://fantezianaliz.com/) to see the dashboards. Explore the [data pipeline](src/run_pipeline.py), [odds model](src/odds/run.py), [website source](src/web/index.html), and [chatbot code](src/chat/assistant.py) for the main parts of the implementation. Model probabilities and fair odds are estimates, not bookmaker prices or a guarantee of fantasy results.
+I included selected Python code from the original project to demonstrate the data pipeline. The production website code is private.
+
+## Data sources
+
+- Süper Lig fixtures, scores, and match statistics from the [Sportmonks Football API](https://www.sportmonks.com/football-api/)
+- Fantasy player prices, positions, and points from [TFF Fantezi Lig](https://tfffantezilig.com/)
