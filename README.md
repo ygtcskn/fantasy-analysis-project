@@ -12,9 +12,15 @@ The live website is the product demo. This repository shows how I collect and pr
 
 *Local dashboard simulation from the first 39 seconds of a recording, played at 2.5× speed. This is a demonstration, not a real live match.*
 
-<p align="center">
-  <img src="docs/media/ai-assistant-demo.gif" width="157" alt="The AI assistant answering questions about team shots and expected goals at 2.5× speed">
-</p>
+<table>
+  <tr>
+    <td width="224"><img src="docs/media/ai-assistant-demo.gif" width="196" alt="The AI assistant answering questions about team shots and expected goals at 2.5× speed"></td>
+    <td valign="middle">
+      <p><strong>AI assistant</strong><br>Ask about Süper Lig players, clubs, or matchweeks. The assistant queries a SQLite database built from saved Sportmonks data and carries the matchweek into follow-up questions.</p>
+      <p><strong>Live match dashboard</strong><br>The local dashboard polls the Sportmonks API for scores, events, and available match statistics, then updates the scoreboard and match timeline.</p>
+    </td>
+  </tr>
+</table>
 
 ## The problem
 
