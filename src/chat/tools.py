@@ -34,14 +34,21 @@ STATS = {
     "key_passes":         ("SUM(pm.key_passes)", "key_passes"),
     "big_chances_created": ("SUM(pm.big_chances_created)", "big_chances_created"),
     "passes":             ("SUM(pm.passes)", "passes"),
+    "accurate_passes":    ("SUM(pm.accurate_passes)", "accurate_passes"),
     "tackles":            ("SUM(pm.tackles)", "tackles"),
     "interceptions":      ("SUM(pm.interceptions)", "interceptions"),
     "clearances":         ("SUM(pm.clearances)", "clearances"),
     "saves":              ("SUM(pm.saves)", "saves"),
+    "goals_conceded":     ("SUM(pm.goals_conceded)", "goals_conceded"),
+    "fouls":              ("SUM(pm.fouls)", "fouls"),
+    "fouls_drawn":        ("SUM(pm.fouls_drawn)", "fouls_drawn"),
     "yellowcards":        ("SUM(pm.yellowcards)", "yellowcards"),
     "redcards":           ("SUM(pm.redcards)", "redcards"),
+    "yellowred_cards":    ("SUM(pm.yellowred_cards)", "yellowred_cards"),
     "penalties_scored":   ("SUM(pm.penalties_scored)", "penalties_scored"),
+    "penalties_misses":   ("SUM(pm.penalties_misses)", "penalties_misses"),
     "own_goals":          ("SUM(pm.own_goals)", "own_goals"),
+    "touches":           ("SUM(pm.touches)", "touches"),
     "minutes":            ("SUM(pm.minutes)", None),
     "appearances":        ("COUNT(*)", None),
     "starts":             ("SUM(pm.started = 1)", None),
@@ -360,16 +367,66 @@ def player_season_stats(db, player_id: int, season: str | None = None, last_matc
         tables.append(Table(f"{player}: last {last_matches} matches", recent))
     return Answer(tables, notes)
 
+def matchweek(db, season: str, week: str) -> dict:
+    called_off = sorted(CALLED_OFF_STATES)
+    placeholders = ", ".join("?" for _ in called_off)
+    rounds = rows(db, f"""
+        SELECT m.round AS week, MIN(m.kickoff_utc) AS first_kickoff,
+               MAX(m.kickoff_utc >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now')) AS upcoming,
+               SUM(m.finished) AS finished,
+               SUM(COALESCE(m.state, '') NOT IN ({placeholders})) AS fixtures
+        FROM matches m
+        WHERE m.season = ? AND m.round IS NOT NULL
+        GROUP BY m.round
+        ORDER BY first_kickoff IS NULL, first_kickoff, MIN(m.fixture_id)
+        """, (*called_off, season))
+    if not rounds:
+        raise ToolError(f"No matchweek schedule is available for {season}.")
+    if week not in {"current", "previous"}:
+        for row in rounds:
+            if row["week"] == week:
+                return row
+        raise ToolError(f"Matchweek {week} is not available in {season}.")
+
+    # Older caches have the fixtures but have yet to save Sportmonks' marker.
+    marker = None
+    if db.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'current_rounds'").fetchone():
+        marked = db.execute("SELECT round FROM current_rounds WHERE season = ?", (season,)).fetchone()
+        marker = marked[0] if marked else None
+    current = next((index for index, row in enumerate(rounds) if row["week"] == marker), None)
+    if current is None:
+        current = next((index for index, row in enumerate(rounds) if row["upcoming"]), len(rounds) - 1)
+    if week == "current":
+        return rounds[current]
+    if current == 0:
+        raise ToolError(f"There is no previous matchweek in {season}.")
+    return rounds[current - 1]
+
+
 def leaderboard(db, stat: str, season: str | None = None, position: str | None = None,
-                team_id: int | None = None, min_minutes: int | None = None, limit: int = 10) -> Answer:
+                team_id: int | None = None, min_minutes: int | None = None, limit: int = 10,
+                week: str | None = None, player_id: int | None = None) -> Answer:
     expression, recorded_column = STATS[stat]
     season = season_arg(db, season)
     notes = []
+    selected_week = matchweek(db, season, week) if week is not None else None
+    scope = season
+    if selected_week:
+        scope = f"{season} matchweek {selected_week['week']}"
+        notes.append(f"{selected_week['finished']} of {selected_week['fixtures']} "
+                     "scheduled matches in this matchweek are finished in the database.")
     if min_minutes is None:
-        min_minutes = RATING_MIN_MINUTES if stat == "average_rating" else 0
+        min_minutes = RATING_MIN_MINUTES if stat == "average_rating" and not selected_week and player_id is None else 0
         if min_minutes:
             notes.append(f"Only players with at least {min_minutes} minutes are ranked.")
     where, params = ["pm.season = ?"], [season]
+    if selected_week:
+        where.append("m.round = ?")
+        params.append(selected_week["week"])
+    if player_id is not None:
+        player_name(db, player_id)
+        where.append("pm.player_id = ?")
+        params.append(player_id)
     if position:
         where.append("pm.position = ?")
         params.append(position)
@@ -377,6 +434,7 @@ def leaderboard(db, stat: str, season: str | None = None, position: str | None =
         where.append("pm.team_id = ?")
         params.append(team_id)
         notes.append(f"Only appearances for {team_name(db, team_id)}.")
+    minimum_stat = f"AND ({expression}) > 0" if selected_week and player_id is None else ""
     found = rows(db, f"""
         SELECT pm.player_id, p.name AS player, GROUP_CONCAT(DISTINCT t.name) AS teams,
                {expression} AS {stat}, COUNT(*) AS appearances, SUM(pm.minutes) AS minutes
@@ -385,18 +443,34 @@ def leaderboard(db, stat: str, season: str | None = None, position: str | None =
         LEFT JOIN teams t ON t.team_id = pm.team_id
         {APPEARANCES} AND {' AND '.join(where)}
         GROUP BY pm.player_id
-        HAVING ({expression}) IS NOT NULL AND SUM(pm.minutes) >= ?
-        ORDER BY {stat} DESC, minutes ASC, player LIMIT ?""", (*params, min_minutes, limit))
-    if recorded_column:
+        HAVING ({expression}) IS NOT NULL AND SUM(pm.minutes) >= ? {minimum_stat}
+        ORDER BY {stat} DESC, minutes ASC, player, pm.player_id LIMIT ?""", (*params, min_minutes, limit + 1))
+    if len(found) > limit:
+        notes.append("More players qualify. Only the requested number of rows is shown.")
+        found = found[:limit]
+    if selected_week:
+        coverage_column = "pm." + recorded_column if recorded_column else "pm.player_id"
+        coverage = db.execute(f"""
+            SELECT COUNT(*) AS appearances, COUNT({coverage_column}) AS recorded,
+                   COUNT(DISTINCT CASE WHEN {coverage_column} IS NOT NULL THEN pm.fixture_id END) AS matches
+            FROM player_matches pm {APPEARANCES} AND {' AND '.join(where)}""", params).fetchone()
+        if not coverage["recorded"]:
+            notes.append(f"No {stat} data is recorded for this selection.")
+        elif coverage["recorded"] < coverage["appearances"] or (
+            player_id is None and team_id is None and position is None
+            and coverage["matches"] < selected_week["finished"]
+        ):
+            notes.append(f"{stat} coverage is incomplete for this selection. Report recorded totals only.")
+    elif recorded_column:
         share = db.execute(f"SELECT 100.0 * SUM(pm.{recorded_column} IS NOT NULL) / COUNT(*) "
                            f"FROM player_matches pm {APPEARANCES} AND pm.season = ?", (season,)).fetchone()[0]
         if share is not None and share < 90:
             notes.append(f"{stat} is recorded in only {round(share)}% of appearances in {season}, "
                          "so these totals undercount.")
-    if unfinished_count(db, season):
+    if not selected_week and unfinished_count(db, season):
         notes.append(f"{season} is still being played; these are the totals so far.")
     position_text = f" {position.lower()}s" if position else ""
-    return Answer([Table(f"{season}{position_text} by {stat}", found)], notes)
+    return Answer([Table(f"{scope}{position_text} by {stat}", found)], notes)
 
 def standings(db, season: str | None = None) -> Answer:
     season = season_arg(db, season)
@@ -498,16 +572,20 @@ TOOLS = [
                 ["player_id"]),
          player_season_stats),
     Tool("leaderboard",
-         "Rank players in one season by a stat, for questions like 'top scorers' or 'most assists by a "
-         "defender'. Can be limited to one position or one team.",
+         "Rank players by a recorded stat across a season or matchweek. Can be limited to one player, position "
+         "or team. Use week for matchweek questions. Use limit 100 to list players with a positive count, "
+         "or a shorter limit for a ranking.",
          schema({"stat": {"type": "string", "enum": list(STATS)},
                  "season": SEASON_LATEST,
+                 "week": {"type": "string", "description": "Current matchweek ('current'), previous ('previous'), "
+                          "or a round number like '8'. Omit for the whole season."},
+                 "player_id": {"type": "integer", "description": "Optional. Find the player in the requested season first."},
                  "position": {"type": "string", "enum": POSITIONS},
                  "team_id": {"type": "integer", "description": "Optional: only appearances for this team."},
                  "min_minutes": {"type": "integer", "minimum": 0,
-                                 "description": f"Optional minimum minutes played (default 0; "
-                                                f"{RATING_MIN_MINUTES} for average_rating)."},
-                 "limit": {"type": "integer", "minimum": 1, "maximum": 30,
+                                 "description": f"Optional minimum minutes played (default 0; {RATING_MIN_MINUTES} "
+                                                "for full-season average_rating rankings)."},
+                 "limit": {"type": "integer", "minimum": 1, "maximum": 100,
                            "description": "How many players to list (default 10)."}},
                 ["stat"]),
          leaderboard),

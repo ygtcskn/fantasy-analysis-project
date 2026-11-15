@@ -127,6 +127,38 @@ class ToolTests(unittest.TestCase):
                          [("Ciro Immobile", 1.7), ("Edin Džeko", 0.9)])
         self.assertTrue(any("only 60%" in note for note in answer.notes))
 
+    def test_player_leaderboard_uses_the_marked_matchweek(self):
+        self.db.execute("UPDATE matches SET round = '2' WHERE fixture_id = 2")
+        self.db.execute("UPDATE matches SET round = '3' WHERE fixture_id = 3")
+        self.db.execute("INSERT INTO current_rounds VALUES ('2023/2024', '2')")
+        self.db.execute("UPDATE player_matches SET fouls = 3 WHERE fixture_id = 2 AND player_id = 200")
+        self.db.execute("UPDATE player_matches SET fouls = 0 WHERE fixture_id = 2 AND player_id = 100")
+
+        current = tools.leaderboard(self.db, "goals", week="current")
+        self.assertEqual(current.tables[0].title, "2023/2024 matchweek 2 by goals")
+        self.assertEqual(names(current, column="player"), ["Edin Džeko", "Mert Hakan Yandaş"])
+        previous = tools.leaderboard(self.db, "goals", week="previous")
+        self.assertEqual(names(previous, column="player"), ["Ciro Immobile", "Edin Džeko"])
+        self.assertEqual(tools.leaderboard(self.db, "goals").tables[0].rows[0]["goals"], 3)
+
+        fouls = tools.leaderboard(self.db, "fouls", week="current")
+        self.assertEqual(names(fouls, column="player"), ["Edin Džeko"])
+        self.assertTrue(any("coverage is incomplete" in note for note in fouls.notes))
+        player = tools.leaderboard(self.db, "fouls", week="current", player_id=100)
+        self.assertEqual(player.tables[0].rows[0]["fouls"], 0)
+
+    def test_week_queries_work_before_the_cache_has_a_current_round_table(self):
+        self.db.execute("UPDATE matches SET round = '2' WHERE fixture_id = 3")
+        self.db.execute("UPDATE matches SET kickoff_utc = '2999-05-01T17:00:00Z' WHERE fixture_id = 3")
+        self.db.execute("DROP TABLE current_rounds")
+
+        upcoming = tools.leaderboard(self.db, "goals", week="current")
+        self.assertEqual(upcoming.tables[0].title, "2023/2024 matchweek 2 by goals")
+        self.assertEqual(upcoming.tables[0].rows, [])
+        self.assertIn("0 of 1 scheduled matches", upcoming.notes[0])
+        played = tools.leaderboard(self.db, "goals", week="1")
+        self.assertEqual(played.tables[0].rows[0]["goals"], 3)
+
     def test_leaderboard_position_and_minimum_minutes(self):
         answer = tools.leaderboard(self.db, "goals", season="2022/2023", position="Defender")
         self.assertEqual(names(answer, column="player"), ["Mert Müldür"])

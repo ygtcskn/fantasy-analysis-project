@@ -142,6 +142,26 @@ class OpenAIAgentTests(unittest.TestCase):
                      if isinstance(item, dict) and item.get("role") == "user"]
         self.assertEqual(questions, ["Gol kralı kim?", "Kaç gol attı?"])
 
+    def test_the_weekly_follow_up_receives_the_previous_matchweek_context(self):
+        self.db.execute("UPDATE matches SET round = '2' WHERE fixture_id = 2")
+        self.db.execute("INSERT INTO current_rounds VALUES ('2023/2024', '2')")
+        client = FakeOpenAI(
+            response(call("weekly-goals", "leaderboard", {"stat": "goals", "week": "current"})),
+            response(message("2023/2024 sezonunun 2. haftasında Edin Džeko 2 gol attı.")),
+            response(call("weekly-assists", "leaderboard", {"stat": "assists", "season": "2023/2024", "week": "2"})),
+            response(message("Aynı hafta Edin Džeko 1 asist yaptı.")),
+        )
+        self.ask(client, "Bu hafta kimler gol attı?")
+        self.ask(client, "Peki asistlerde?")
+
+        previous_output = next(item for item in client.requests[2]["input"]
+                               if isinstance(item, dict) and item.get("call_id") == "weekly-goals")
+        self.assertIn("2023/2024 matchweek 2 by goals", previous_output["output"])
+        follow_up_output = client.requests[3]["input"][-1]
+        self.assertEqual(follow_up_output["call_id"], "weekly-assists")
+        self.assertIn("2023/2024 matchweek 2 by assists", follow_up_output["output"])
+        self.assertIn("Edin Džeko,Fenerbahçe,1", follow_up_output["output"])
+
 
 if __name__ == "__main__":
     unittest.main()

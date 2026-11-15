@@ -15,7 +15,7 @@ def make_season(root: Path, folder="2023-2024"):
         {"fixture_id": "1", "season_id": "22057", "kickoff": "2023-08-14 18:00:00", "state.developer_name": "FT",
          "home_team_id": "10", "away_team_id": "20", "round.name": "1"},
         {"fixture_id": "2", "season_id": "22057", "kickoff": "2023-08-21 18:00:00", "state.developer_name": "NS",
-         "home_team_id": "20", "away_team_id": "10", "round.name": "2"},
+         "home_team_id": "20", "away_team_id": "10", "round.name": "2", "round.is_current": "True"},
     ])
     write_csv(season / "fixture_scores.csv", [
         {"fixture_id": "1", "participant_id": "10", "description": "CURRENT", "score.goals": "2"},
@@ -83,6 +83,9 @@ class BuildTests(unittest.TestCase):
     def test_unplayed_match_has_no_score(self):
         self.assertEqual(self.one("SELECT finished, home_goals, away_goals FROM matches WHERE fixture_id = 2"),
                          (0, None, None))
+
+    def test_current_matchweek_is_loaded_from_the_fixture_marker(self):
+        self.assertEqual(self.one("SELECT season, round FROM current_rounds"), ("2023/2024", "2"))
 
     def test_conflicting_scores_are_unknown(self):
         scores = build_chat_db.final_scores(

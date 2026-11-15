@@ -9,6 +9,7 @@ is changed.
 
 Tables:
     seasons         one row per season
+    current_rounds  the matchweek Sportmonks marks current
     teams           every club, with the name from its latest season
     players         every player, with the name from their latest season
     matches         every fixture: date, round, teams, final score
@@ -61,6 +62,10 @@ SCHEMA = f"""
 CREATE TABLE seasons (
     season      TEXT PRIMARY KEY,      -- 2023/2024
     season_id   INTEGER
+);
+CREATE TABLE current_rounds (
+    season TEXT PRIMARY KEY REFERENCES seasons(season),
+    round TEXT NOT NULL
 );
 CREATE TABLE teams (
     team_id     INTEGER PRIMARY KEY,
@@ -207,16 +212,24 @@ def load_season(db: sqlite3.Connection, folder: Path, teams: dict, players: dict
 
     scores = final_scores(read_csv(folder / "fixture_scores.csv"), fixtures)
     match_ids = set()
+    marked_rounds = []
     for row in fixtures:
         fixture_id, home, away = (integer(row.get(name)) for name in ("fixture_id", "home_team_id", "away_team_id"))
         if fixture_id is None or home is None or away is None:
             continue
         kickoff = parse_utc(row.get("kickoff") or row.get("starting_at"), required=False)
+        kickoff_utc = utc_stamp(kickoff)
+        round_name = row.get("round.name") or None
         home_goals, away_goals = scores.get(row["fixture_id"], (None, None))
         db.execute("INSERT INTO matches VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                   (fixture_id, season, row.get("round.name") or None, utc_stamp(kickoff) or None,
+                   (fixture_id, season, round_name, kickoff_utc or None,
                     fixture_state(row) or None, int(is_finished(row)), home, away, home_goals, away_goals))
         match_ids.add(fixture_id)
+        if round_name and str(row.get("round.is_current", "")).strip().lower() == "true":
+            marked_rounds.append((kickoff_utc or "9999", fixture_id, round_name))
+    if marked_rounds:
+        _, _, current_round = min(marked_rounds)
+        db.execute("INSERT INTO current_rounds VALUES (?, ?)", (season, current_round))
 
     event_count = 0
     for row in read_csv(folder / "events.csv"):
