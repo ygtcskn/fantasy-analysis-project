@@ -12,7 +12,9 @@ The live website is the product demo. This repository shows how I collect and pr
 
 *Local dashboard simulation from the first 39 seconds of a recording, played at 2.5× speed. This is a demonstration, not a real live match.*
 
-![The AI assistant answering questions about team shots and expected goals at 2.5× speed](docs/media/ai-assistant-demo.gif)
+<p align="center">
+  <img src="docs/media/ai-assistant-demo.gif" width="157" alt="The AI assistant answering questions about team shots and expected goals at 2.5× speed">
+</p>
 
 ## The problem
 
