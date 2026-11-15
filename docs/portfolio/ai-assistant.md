@@ -16,7 +16,18 @@ For “Who scored this week?”, the assistant sends `week="current"` to `leader
 
 The leaderboard counts appearances in finished matches and reports how many scheduled fixtures are complete. It flags partial coverage and output limits, and a player-specific lookup can return a recorded zero. This lets the assistant distinguish a confirmed zero from a missing statistic or an unplayed matchweek.
 
-The chat window uses plain text. The prompt asks for a short opening, blank lines between groups, and one result per bullet. Weekly scorer lists group players by goal total and place any recorded club next to its player.
+### Formatting answers for a narrow chat window
+
+Short answers use plain text. Rankings, stat lists, and comparisons use a Markdown table with two or three columns and one row per player or club. The website renders that table in the chat window, with the season, round, and any coverage note outside the table.
+
+Example using the test database for “Who scored in matchweek 2?”
+
+**2023/2024, matchweek 2**
+
+| Player | Club | Goals |
+| --- | --- | ---: |
+| Edin Džeko | Fenerbahçe | 2 |
+| Mert Hakan Yandaş | Fenerbahçe | 1 |
 
 ### Try a tool without an API key
 
@@ -42,6 +53,7 @@ I tested round selection with a saved marker and with a legacy cache that only h
 
 ## Read the code
 
+- The system prompt defines the table layout and the rules for reporting incomplete data. [System prompt](../../src/chat/assistant.py#L14)
 - `ask()` passes the tool schemas to the model, runs requested tools, and appends the results to the conversation. [Assistant loop](../../src/chat/openai_agent.py#L35)
 - `matchweek()` resolves a round and `leaderboard()` queries the matching appearances and checks coverage. [Round resolution](../../src/chat/tools.py#L370) · [Leaderboard query](../../src/chat/tools.py#L406)
 - `run_tool()` dispatches to a defined tool after checking its arguments. [Tool dispatch](../../src/chat/tools.py#L635)
